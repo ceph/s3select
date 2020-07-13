@@ -46,7 +46,8 @@ enum class s3select_func_En_t {ADD,
                                LENGTH,
                                LOWER,
                                UPPER,
-			       VERSION
+                               VERSION,
+                               NULLIF
                               };
 
 
@@ -79,7 +80,8 @@ private:
     {"characterlength", s3select_func_En_t::LENGTH},
     {"lower", s3select_func_En_t::LOWER},
     {"upper", s3select_func_En_t::UPPER},
-    {"version", s3select_func_En_t::VERSION}
+    {"version", s3select_func_En_t::VERSION},
+    {"nullif", s3select_func_En_t::NULLIF}
   };
 
 public:
@@ -972,6 +974,51 @@ struct _fn_upper : public base_function {
     }
 };
 
+struct _fn_nullif : public base_function {
+
+    value x;
+    value y;
+
+    bool operator()(bs_stmt_vec_t* args, variable* result)
+    {
+        bs_stmt_vec_t::iterator iter = args->begin();
+
+        int args_size = args->size();
+        if (args_size != 2)
+        {
+          throw base_s3select_exception("nullif accept only 2 arguments");
+        }
+        base_statement *first = *iter;
+        x = first->eval();
+        iter++;
+        base_statement *second = *iter;
+        y = second->eval();
+        if (x.is_null() && y.is_null())
+        {
+          result->set_null();
+          return true;
+        }
+        if (x.is_null())
+        {
+          result->set_null();
+          return true;
+        }
+        if (!(x.is_number() && y.is_number()))
+        {
+          if (x.type != y.type)
+          {
+            throw base_s3select_exception("Error:type should be same");
+          }
+        }
+        if (x != y) {
+          *result = x;
+        } else {
+          result->set_null();
+        }
+        return true;
+      }
+    };
+
 base_function* s3select_functions::create(std::string fn_name)
 {
   const FunctionLibrary::const_iterator iter = m_functions_library.find(fn_name);
@@ -1055,6 +1102,10 @@ base_function* s3select_functions::create(std::string fn_name)
 
   case s3select_func_En_t::VERSION:
     return S3SELECT_NEW(this,_fn_version);
+    break;
+
+  case s3select_func_En_t::NULLIF:
+    return S3SELECT_NEW(this,_fn_nullif);
     break;
 
   default:
