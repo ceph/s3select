@@ -759,7 +759,7 @@ public:
 
       arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] |  (number)[BOOST_BIND_ACTION(push_number)] | (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
                             (string)[BOOST_BIND_ACTION(push_string)] |
-                            (function)[BOOST_BIND_ACTION(push_debug_1)]  | (variable)[BOOST_BIND_ACTION(push_variable)] ;//function is pushed by right-term
+                            (function)[BOOST_BIND_ACTION(push_debug_1)]  | (variable)[BOOST_BIND_ACTION(push_variable)]  | (null_var)[BOOST_BIND_ACTION(push_variable)] ;//function is pushed by right-term
 
 
       number = bsc::int_p;
@@ -779,11 +779,13 @@ public:
 
       log_op = bsc::str_p("and") | bsc::str_p("or");
 
+      null_var = bsc::str_p("null") | bsc::str_p("NULL");
+
       variable =  bsc::lexeme_d[(+bsc::alpha_p >> *bsc::digit_p)];
     }
 
 
-    bsc::rule<ScannerT> variable, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor;
+    bsc::rule<ScannerT> variable, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor, null_var;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
     bsc::rule<ScannerT> projections, projection_expression, alias_name, column_pos;
