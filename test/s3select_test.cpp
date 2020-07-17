@@ -234,6 +234,30 @@ TEST(TestS3selectFunctions, timestamp)
     ASSERT_EQ(s3select_res, out_timestamp);
 }
 
+TEST(TestS3selectFunctions, nonleapyeartimestamp)
+{
+    // TODO: support formats listed here:
+    // https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-date.html#s3-glacier-select-sql-reference-to-timestamp
+    const std::string timestamp = "2007-02-29:14:33:01";
+    // TODO: out_simestamp should be the same as timestamp
+    const std::string out_timestamp = "2007-Feb-29 14:33:01";
+    const std::string input_query = "select timestamp(\"" + timestamp + "\") from stdin;" ;
+    const auto s3select_res = run_s3select(input_query);
+    ASSERT_NE(s3select_res, out_timestamp);
+}
+
+TEST(TestS3selectFunctions, leapyeartimestamp)
+{
+    // TODO: support formats listed here:
+    // https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-date.html#s3-glacier-select-sql-reference-to-timestamp
+    const std::string timestamp = "2008-02-29:14:33:01";
+    // TODO: out_simestamp should be the same as timestamp
+    const std::string out_timestamp = "2008-Feb-29 14:33:01";
+    const std::string input_query = "select timestamp(\"" + timestamp + "\") from stdin;" ;
+    const auto s3select_res = run_s3select(input_query);
+    ASSERT_EQ(s3select_res, out_timestamp);
+}
+
 TEST(TestS3selectFunctions, utcnow)
 {
     const boost::posix_time::ptime now(boost::posix_time::second_clock::universal_time());

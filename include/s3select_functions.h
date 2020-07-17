@@ -423,10 +423,13 @@ struct _fn_to_timestamp : public base_function
 
   value v_str;
 
+  bool isLeap(int year) 
+{
+  return (((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0));            
+} 
 
   bool datetime_validation()
   {
-    //TODO temporary , should check for leap year
 
     if(yr<1700 || yr>2050)
     {
@@ -440,6 +443,21 @@ struct _fn_to_timestamp : public base_function
     {
       return false;
     }
+
+    if (mo == 2)
+    {
+      if (isLeap(yr)) {
+        return (dy <= 29);
+      } else {
+        return (dy <= 28);
+      }
+    }
+
+    if (mo == 4 || mo == 6 || mo == 9 || mo == 11)
+    {
+      return (dy <= 30);
+    }
+
     if (hr>23)
     {
       return false;
