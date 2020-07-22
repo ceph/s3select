@@ -332,6 +332,14 @@ struct push_compare_operator : public base_action
     {
       c = arithmetic_operand::cmp_t::LT;
     }
+    else if (token.compare("IS NULL") == 0)
+    {
+      c = arithmetic_operand::cmp_t::IN;
+    }
+    else if (token.compare("IS NOT NULL") == 0)
+    {
+      c = arithmetic_operand::cmp_t::NN;
+    }
     else
     {
       c = arithmetic_operand::cmp_t::NA;

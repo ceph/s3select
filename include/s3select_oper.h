@@ -1124,7 +1124,7 @@ class arithmetic_operand : public base_statement
 
 public:
 
-  enum class cmp_t {NA, EQ, LE, LT, GT, GE, NE} ;
+  enum class cmp_t {NA, EQ, LE, LT, GT, GE, NE, IN, NN} ;
 
 private:
   base_statement* l;
@@ -1184,6 +1184,14 @@ public:
 
     case cmp_t::LT:
       return var_value = bool( (l->eval() < r->eval()) ^ negation_result );
+      break;
+
+    case cmp_t::IN:
+      return var_value = bool((!(l->eval())) ^ negation_result);
+      break;
+
+    case cmp_t::NN:
+      return var_value = bool(l->eval() ^ negation_result);
       break;
 
     default:
