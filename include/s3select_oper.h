@@ -327,7 +327,11 @@ struct binop_plus
 {
   double operator()(double a, double b)
   {
-    return a+b;
+    if (isnan(a) || isnan(b)){
+      return std::numeric_limits<double>::quiet_NaN();
+    } else {
+      return a+b;
+    }
   }
 };
 
@@ -335,7 +339,11 @@ struct binop_minus
 {
   double operator()(double a, double b)
   {
-    return a-b;
+    if (isnan(a) || isnan(b)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    } else {
+      return a-b;
+    }
   }
 };
 
@@ -343,19 +351,25 @@ struct binop_mult
 {
   double operator()(double a, double b)
   {
-    return a * b;
+    if (isnan(a) || isnan(b)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    } else {
+      return a * b;
+    }
   }
-};
+};   
 
 struct binop_div
 {
   double operator()(double a, double b)
   {
-    if(b == 0)
-    {
+    if (b == 0) {
       throw base_s3select_exception("division by zero is not allowed");
+    } else if (isnan(a) || isnan(b)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    } else {
+      return a / b;
     }
-    return a / b;
   }
 };
 
@@ -459,6 +473,11 @@ public:
   bool is_timestamp() const
   {
     return type == value_En_t::TIMESTAMP;
+  }
+
+  bool is_null() const
+  {
+    return type == value_En_t::S3NULL;
   }
 
 
@@ -569,6 +588,10 @@ public:
 
   bool operator<(const value& v)//basic compare operator , most itensive runtime operation
   {
+    if (is_null() || v.is_null())
+    {
+      return false;
+    }
     //TODO NA possible?
     if (is_string() && v.is_string())
     {
@@ -613,6 +636,10 @@ public:
 
   bool operator>(const value& v) //basic compare operator , most itensive runtime operation
   {
+    if (is_null() || v.is_null())
+    {
+      return false;
+    }
     //TODO NA possible?
     if (is_string() && v.is_string())
     {
@@ -657,6 +684,10 @@ public:
 
   bool operator==(const value& v) //basic compare operator , most itensive runtime operation
   {
+    if (is_null() || v.is_null())
+    {
+      return false;
+    }
     //TODO NA possible?
     if (is_string() && v.is_string())
     {
@@ -703,19 +734,31 @@ public:
   {
     return !(*this>v);
   }
+  
   bool operator>=(const value& v)
   {
     return !(*this<v);
   }
+  
   bool operator!=(const value& v)
   {
-    return !(*this == v);
+    if (is_null() || v.is_null()) {
+      return true;
+    } else {
+      return !(*this == v);
+      } 
   }
-
+  
   template<typename binop> //conversion rules for arithmetical binary operations
   value& compute(value& l, const value& r) //left should be this, it contain the result
   {
     binop __op;
+    if (l.is_null() || r.is_null())
+    {
+      l.__val.dbl = NAN;
+      l.type = value_En_t::FLOAT;
+      return l;
+    }
 
     if (l.is_string() || r.is_string())
     {
@@ -776,12 +819,12 @@ public:
   {
     return compute<binop_mult>(*this, v);
   }
-
+  
   value& operator/(const value& v)  // TODO  handle division by zero
   {
     return compute<binop_div>(*this, v);
   }
-
+  
   value& operator^(const value& v)
   {
     return compute<binop_pow>(*this, v);
@@ -996,6 +1039,11 @@ public:
   void set_value(boost::posix_time::ptime* p)
   {
     var_value = p;
+  }
+
+  void set_null()
+  {
+    var_value.type = value::value_En_t::S3NULL;
   }
 
   virtual ~variable() {}
