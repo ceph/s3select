@@ -51,6 +51,8 @@ public:
 
 };
 
+static s3select_reserved_word g_s3select_reserve_word;//read-only
+
 struct actionQ
 {
 // upon parser is accepting a token (lets say some number),
@@ -510,8 +512,25 @@ void push_variable::operator()(s3select* self, const char* a, const char* b) con
 {
   std::string token(a, b);
 
-  variable* v = S3SELECT_NEW(self, variable, token);
+  variable* v = 0;
 
+  if (g_s3select_reserve_word.is_reserved_word(token))
+  {
+    if (g_s3select_reserve_word.get_reserved_word(token) == s3select_reserved_word::reserve_word_en_t::S3S_NULL)
+    {
+      v = S3SELECT_NEW(self, variable, s3select_reserved_word::reserve_word_en_t::S3S_NULL);
+    }
+    else
+    {
+      v = S3SELECT_NEW(self, variable, s3select_reserved_word::reserve_word_en_t::NA);
+    }
+    
+  }
+  else
+  {
+    v = S3SELECT_NEW(self, variable, token);
+  }
+  
   self->getAction()->exprQ.push_back(v);
 }
 

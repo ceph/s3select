@@ -277,6 +277,44 @@ public:
   }
 };
 
+class s3select_reserved_word
+{
+  public:
+
+  enum class reserve_word_en_t
+  {
+    NA,
+    S3S_NULL,//TODO check AWS defintions for reserve words, its a long list , what about functions-names? 
+    S3S_NAN 
+  } ;
+
+  using reserved_words = std::map<std::string,reserve_word_en_t>;
+
+  const reserved_words m_reserved_words=
+  {
+    {"null",reserve_word_en_t::S3S_NULL},{"NULL",reserve_word_en_t::S3S_NULL},
+    {"nan",reserve_word_en_t::S3S_NAN},{"NaN",reserve_word_en_t::S3S_NAN}
+  };
+
+  bool is_reserved_word(std::string & token)
+  {
+    return m_reserved_words.find(token) != m_reserved_words.end() ;
+  }
+
+  reserve_word_en_t get_reserved_word(std::string & token)
+  {
+    if (is_reserved_word(token)==true)
+    {
+      return m_reserved_words.find(token)->second;
+    }
+    else
+    {
+      return reserve_word_en_t::NA;
+    }
+  }
+
+};
+
 class base_statement;
 class projection_alias
 {
@@ -420,6 +458,7 @@ public:
     FLOAT,
     STRING,
     TIMESTAMP,
+    S3NULL,
     NA
   } ;
   value_En_t type;
@@ -1012,6 +1051,22 @@ public:
     {
       _name = "#";
       m_var_type = tp;
+      column_pos = -1;
+    }
+  }
+
+  variable(s3select_reserved_word::reserve_word_en_t reserve_word)
+  {
+    if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_NULL)
+    {
+      m_var_type = variable::var_t::COL_VALUE;
+      column_pos = -1;
+      var_value.type = value::value_En_t::S3NULL;//TODO use set_null
+    }
+    else
+    {
+      _name = "#";
+      m_var_type = var_t::NA;
       column_pos = -1;
     }
   }
