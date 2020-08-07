@@ -365,11 +365,7 @@ struct binop_plus
 {
   double operator()(double a, double b)
   {
-    if (isnan(a) || isnan(b)){
-      return std::numeric_limits<double>::quiet_NaN();
-    } else {
-      return a+b;
-    }
+    return a + b;
   }
 };
 
@@ -377,11 +373,7 @@ struct binop_minus
 {
   double operator()(double a, double b)
   {
-    if (isnan(a) || isnan(b)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    } else {
-      return a-b;
-    }
+    return a - b;
   }
 };
 
@@ -389,11 +381,7 @@ struct binop_mult
 {
   double operator()(double a, double b)
   {
-    if (isnan(a) || isnan(b)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    } else {
-      return a * b;
-    }
+    return a * b;
   }
 };   
 
@@ -403,8 +391,6 @@ struct binop_div
   {
     if (b == 0) {
       throw base_s3select_exception("division by zero is not allowed");
-    } else if (isnan(a) || isnan(b)) {
-      return std::numeric_limits<double>::quiet_NaN();
     } else {
       return a / b;
     }
@@ -459,6 +445,7 @@ public:
     STRING,
     TIMESTAMP,
     S3NULL,
+    S3NAN,
     NA
   } ;
   value_En_t type;
@@ -519,6 +506,10 @@ public:
     return type == value_En_t::S3NULL;
   }
 
+  bool is_nan() const
+  {
+    return type == value_En_t::S3NAN;
+  }
 
   std::string to_string()  //TODO very intensive , must improve this
   {
@@ -627,7 +618,7 @@ public:
 
   bool operator<(const value& v)//basic compare operator , most itensive runtime operation
   {
-    if (is_null() || v.is_null())
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
     {
       return false;
     }
@@ -675,7 +666,7 @@ public:
 
   bool operator>(const value& v) //basic compare operator , most itensive runtime operation
   {
-    if (is_null() || v.is_null())
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
     {
       return false;
     }
@@ -723,7 +714,7 @@ public:
 
   bool operator==(const value& v) //basic compare operator , most itensive runtime operation
   {
-    if (is_null() || v.is_null())
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
     {
       return false;
     }
@@ -771,17 +762,25 @@ public:
   }
   bool operator<=(const value& v)
   {
-    return !(*this>v);
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan())) {
+      return false;
+    } else {
+      return !(*this>v);
+    } 
   }
   
   bool operator>=(const value& v)
   {
-    return !(*this<v);
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan())) {
+      return false;
+    } else {
+      return !(*this<v);
+    } 
   }
   
   bool operator!=(const value& v)
   {
-    if (is_null() || v.is_null()) {
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan())) {
       return true;
     } else {
       return !(*this == v);
@@ -792,7 +791,7 @@ public:
   value& compute(value& l, const value& r) //left should be this, it contain the result
   {
     binop __op;
-    if (l.is_null() || r.is_null())
+    if ((l.is_null() || r.is_null()) || (l.is_nan() || r.is_nan()))
     {
       l.__val.dbl = NAN;
       l.type = value_En_t::FLOAT;
@@ -1063,7 +1062,13 @@ public:
       column_pos = -1;
       var_value.type = value::value_En_t::S3NULL;//TODO use set_null
     }
-    else
+    else if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_NAN)
+    {
+      m_var_type = variable::var_t::COL_VALUE;
+      column_pos = -1;
+      var_value.type = value::value_En_t::S3NAN;
+    }
+    else 
     {
       _name = "#";
       m_var_type = var_t::NA;

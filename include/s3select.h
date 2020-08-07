@@ -520,6 +520,10 @@ void push_variable::operator()(s3select* self, const char* a, const char* b) con
     {
       v = S3SELECT_NEW(self, variable, s3select_reserved_word::reserve_word_en_t::S3S_NULL);
     }
+    else if (g_s3select_reserve_word.get_reserved_word(token) == s3select_reserved_word::reserve_word_en_t::S3S_NAN)
+    {
+      v = S3SELECT_NEW(self, variable, s3select_reserved_word::reserve_word_en_t::S3S_NAN);
+    }
     else
     {
       v = S3SELECT_NEW(self, variable, s3select_reserved_word::reserve_word_en_t::NA);
