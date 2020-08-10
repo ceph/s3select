@@ -1376,15 +1376,23 @@ public:
     return std::string("#");//TBD
   }
   virtual value& eval()
-  {bool res;
+  {
+    bool res;
+    value a = l->eval();
+    value b = r->eval();
     if (_oplog == oplog_t::AND)
     {
       if (!l || !r)
       {
         throw base_s3select_exception("missing operand for logical and", base_s3select_exception::s3select_exp_en_t::FATAL);
       }
-       res =  (l->eval().i64() && r->eval().i64()) ^ negation_result ;
-
+      if (a.i64() == false || b.i64() == false) {
+        res = false ^ negation_result;
+      } else if (a.is_null() || b.is_null()) {
+        var_value.type = value::value_En_t::S3NULL;
+      } else {
+       res =  (a.i64() && b.i64()) ^ negation_result ;
+      }
     }
     else
     {
@@ -1392,12 +1400,16 @@ public:
       {
         throw base_s3select_exception("missing operand for logical or", base_s3select_exception::s3select_exp_en_t::FATAL);
       }
-       res =  (l->eval().i64() || r->eval().i64()) ^ negation_result;
+      if (a.i64() == true || b.i64() == true) {
+        res = true ^ negation_result;
+      } else if (a.is_null() || b.is_null()) {
+        var_value.type = value::value_En_t::S3NULL;
+      } else {
+       res =  (a.i64() || b.i64()) ^ negation_result;
     }
-
+  }
     return var_value = res;
   }
-
 };
 
 class mulldiv_operation : public base_statement
