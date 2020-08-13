@@ -1003,11 +1003,10 @@ struct _fn_nullif : public base_function {
           result->set_null();
           return true;
         }
-        if (!(x.is_number() && y.is_number()))
-        {
-          if (x.type != y.type)
-          {
-            throw base_s3select_exception("Error:type should be same");
+        if (!(x.is_number() && y.is_number())) {
+          if (x.type != y.type) {
+            *result = x;
+            return true;
           }
         }
         if (x != y) {

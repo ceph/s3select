@@ -390,7 +390,11 @@ struct binop_div
   double operator()(double a, double b)
   {
     if (b == 0) {
-      throw base_s3select_exception("division by zero is not allowed");
+      if( isnan(a)) {
+        return a;
+      } else {
+        throw base_s3select_exception("division by zero is not allowed");
+      } 
     } else {
       return a / b;
     }
@@ -508,7 +512,21 @@ public:
 
   bool is_nan() const
   {
-    return type == value_En_t::S3NAN;
+    if (type == value_En_t::FLOAT) {
+      return std::isnan(this->__val.dbl);
+    }
+    return type == value_En_t::S3NAN; 
+  }
+
+  void set_nan() 
+  {
+    __val.dbl = NAN;
+    type = value_En_t::FLOAT;
+  }
+
+  void setnull()
+  {
+    type = value_En_t::S3NULL;
   }
 
   std::string to_string()  //TODO very intensive , must improve this
@@ -527,6 +545,10 @@ public:
       else if (type == value_En_t::TIMESTAMP)
       {
         m_to_string =  to_simple_string( *__val.timestamp );
+      }
+      else if (type == value_En_t::S3NULL)
+      {
+        m_to_string.assign("null");
       }
     }
     else
@@ -617,11 +639,7 @@ public:
   }
 
   bool operator<(const value& v)//basic compare operator , most itensive runtime operation
-  {
-    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
-    {
-      return false;
-    }
+  { 
     //TODO NA possible?
     if (is_string() && v.is_string())
     {
@@ -661,15 +679,16 @@ public:
       return *timestamp() < *(v.timestamp());
     }
 
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
+    {
+      return false;
+    }
+
     throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
   }
 
   bool operator>(const value& v) //basic compare operator , most itensive runtime operation
   {
-    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
-    {
-      return false;
-    }
     //TODO NA possible?
     if (is_string() && v.is_string())
     {
@@ -709,15 +728,16 @@ public:
       return *timestamp() > *(v.timestamp());
     }
 
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
+    {
+      return false;
+    }
+
     throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
   }
 
   bool operator==(const value& v) //basic compare operator , most itensive runtime operation
   {
-    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
-    {
-      return false;
-    }
     //TODO NA possible?
     if (is_string() && v.is_string())
     {
@@ -758,6 +778,11 @@ public:
       return *timestamp() == *(v.timestamp());
     }
 
+    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan()))
+    {
+      return false;
+    }
+
     throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
   }
   bool operator<=(const value& v)
@@ -791,19 +816,14 @@ public:
   value& compute(value& l, const value& r) //left should be this, it contain the result
   {
     binop __op;
-    if ((l.is_null() || r.is_null()) || (l.is_nan() || r.is_nan()))
-    {
-      l.__val.dbl = NAN;
-      l.type = value_En_t::FLOAT;
-      return l;
-    }
 
     if (l.is_string() || r.is_string())
     {
       throw base_s3select_exception("illegal binary operation with string");
     }
-
-    if (l.type != r.type)
+    if (l.is_number() && r.is_number())
+    {
+      if (l.type != r.type)
     {
       //conversion
 
@@ -833,6 +853,13 @@ public:
         l.type = value_En_t::FLOAT;
       }
     }
+  }
+    
+    if ((l.is_null() || r.is_null()) || (l.is_nan() || r.is_nan()))
+    {
+      l.set_nan();
+      return l;
+    }
 
     return l;
   }
@@ -858,9 +885,14 @@ public:
     return compute<binop_mult>(*this, v);
   }
   
-  value& operator/(const value& v)  // TODO  handle division by zero
+  value& operator/(value& v)  // TODO  handle division by zero
   {
-    return compute<binop_div>(*this, v);
+    if (v.is_null() || this->is_null()) {
+      v.set_nan();
+      return v;
+    } else {
+      return compute<binop_div>(*this, v);
+    }
   }
   
   value& operator^(const value& v)
@@ -1066,7 +1098,7 @@ public:
     {
       m_var_type = variable::var_t::COL_VALUE;
       column_pos = -1;
-      var_value.type = value::value_En_t::S3NAN;
+      var_value.set_nan();
     }
     else 
     {
@@ -1103,7 +1135,7 @@ public:
 
   void set_null()
   {
-    var_value.type = value::value_En_t::S3NULL;
+    var_value.setnull();
   }
 
   virtual ~variable() {}
@@ -1378,36 +1410,39 @@ public:
   virtual value& eval()
   {
     bool res;
+    if (!l || !r)
+    {
+      throw base_s3select_exception("missing operand for logical ", base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
     value a = l->eval();
-    value b = r->eval();
     if (_oplog == oplog_t::AND)
     {
-      if (!l || !r)
+      if (a.i64() == false)
       {
-        throw base_s3select_exception("missing operand for logical and", base_s3select_exception::s3select_exp_en_t::FATAL);
-      }
-      if (a.i64() == false || b.i64() == false) {
         res = false ^ negation_result;
-      } else if (a.is_null() || b.is_null()) {
-        var_value.type = value::value_En_t::S3NULL;
+        return var_value = res;
+      } 
+      value b = r->eval();
+      if (a.is_null() || b.is_null()) {
+        var_value.setnull();
       } else {
-       res =  (a.i64() && b.i64()) ^ negation_result ;
+        res =  (a.i64() && b.i64()) ^ negation_result ;
       }
     }
     else
     {
-      if (!l || !r)
+      if (a.i64() == true)
       {
-        throw base_s3select_exception("missing operand for logical or", base_s3select_exception::s3select_exp_en_t::FATAL);
-      }
-      if (a.i64() == true || b.i64() == true) {
         res = true ^ negation_result;
-      } else if (a.is_null() || b.is_null()) {
-        var_value.type = value::value_En_t::S3NULL;
+        return var_value = res;
+      }
+      value b = r->eval();
+      if (a.is_null() || b.is_null()) {
+        var_value.setnull();
       } else {
-       res =  (a.i64() || b.i64()) ^ negation_result;
+        res =  (a.i64() || b.i64()) ^ negation_result;
+      }
     }
-  }
     return var_value = res;
   }
 };

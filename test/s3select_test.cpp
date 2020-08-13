@@ -225,65 +225,97 @@ TEST(TestS3SElect, arithmetic_operator)
 TEST(TestS3SElect, intnull_compare_operator)
 {
   value a10(10), b11(11), c10(10), d, e;
-  d.type = value::value_En_t::S3NULL;
-  e.type = value::value_En_t::S3NULL;
+  d.setnull();
+  e.setnull();
   ASSERT_EQ( d > b11, false );
   ASSERT_EQ( d >= c10, false );
-  ASSERT_EQ( a10 >= c10, true );
   ASSERT_EQ( d < a10, false );
   ASSERT_EQ( d <= b11, false );
   ASSERT_EQ( d != a10, true );
   ASSERT_EQ( d != e, true );
   ASSERT_EQ( d == a10, false );
-  ASSERT_EQ( a10 == c10, true );
 }
 
 TEST(TestS3SElect, floatnull_compare_operator)
 {
   value a10(10.1), b11(11.2), c10(10.1), d, e;
-  d.type = value::value_En_t::S3NULL;
-  e.type = value::value_En_t::S3NULL;
+  d.setnull();
+  e.setnull();
   ASSERT_EQ( d > b11, false );
   ASSERT_EQ( d >= c10, false );
-  ASSERT_EQ( a10 >= c10, true );
   ASSERT_EQ( d < a10, false );
   ASSERT_EQ( d <= b11, false );
   ASSERT_EQ( d != a10, true );
   ASSERT_EQ( d != e, true );
   ASSERT_EQ( d == a10, false );
-  ASSERT_EQ( a10 == c10, true );
 }
 
 TEST(TestS3SElect, intnan_compare_operator)
 {
   value a10(10), b11(11), c10(10), d, e;
-  d.type = value::value_En_t::S3NAN;
-  e.type = value::value_En_t::S3NAN;
+  d.set_nan();
+  e.set_nan();
   ASSERT_EQ( d > b11, false );
   ASSERT_EQ( d >= c10, false );
-  ASSERT_EQ( a10 >= c10, true );
   ASSERT_EQ( d < a10, false );
   ASSERT_EQ( d <= b11, false );
   ASSERT_EQ( d != a10, true );
   ASSERT_EQ( d != e, true );
   ASSERT_EQ( d == a10, false );
-  ASSERT_EQ( a10 == c10, true );
 }
 
 TEST(TestS3SElect, floatnan_compare_operator)
 {
   value a10(10.1), b11(11.2), c10(10.1), d, e;
-  d.type = value::value_En_t::S3NAN;
-  e.type = value::value_En_t::S3NAN;
+  d.set_nan();
+  e.set_nan();
   ASSERT_EQ( d > b11, false );
   ASSERT_EQ( d >= c10, false );
-  ASSERT_EQ( a10 >= c10, true );
   ASSERT_EQ( d < a10, false );
   ASSERT_EQ( d <= b11, false );
   ASSERT_EQ( d != a10, true );
   ASSERT_EQ( d != e, true );
   ASSERT_EQ( d == a10, false );
-  ASSERT_EQ( a10 == c10, true );
+}
+
+TEST(TestS3SElect, null_arithmetic_operator)
+{
+  value a(7), d, e(0);
+  d.setnull();
+  ASSERT_EQ((a + d).to_string(), "nan" );
+  ASSERT_EQ((a - d).to_string(), "nan" );
+  ASSERT_EQ((a * d).to_string(), "nan" );
+  ASSERT_EQ((a / d).to_string(), "nan" ); 
+  ASSERT_EQ((a / e).to_string(), "nan" ); 
+  ASSERT_EQ((d + a).to_string(), "nan" );
+  ASSERT_EQ((d - a).to_string(), "nan" );
+  ASSERT_EQ((d * a).to_string(), "nan" );
+  ASSERT_EQ((d / a).to_string(), "nan" ); 
+  ASSERT_EQ((e / a).to_string(), "nan" );
+}
+
+TEST(TestS3SElect, nan_arithmetic_operator)
+{
+  value a(7), d, y(0);
+  d.set_nan();
+  float b = ((a + d).dbl() );
+  float c = ((a - d).dbl() );
+  float v = ((a * d).dbl() );
+  float w = ((a / d).dbl() );
+  float x = ((d / y).dbl() );
+  float r = ((d + a).dbl() );
+  float z = ((d - a).dbl() );
+  float u = ((d * a).dbl() );
+  float t = ((d / a).dbl() );
+  EXPECT_FALSE(b <= b); 
+  EXPECT_FALSE(c <= c);
+  EXPECT_FALSE(v <= v);
+  EXPECT_FALSE(w <= w);
+  EXPECT_FALSE(x <= x);
+  EXPECT_FALSE(r <= r); 
+  EXPECT_FALSE(z <= z);
+  EXPECT_FALSE(u <= u);
+  EXPECT_FALSE(t <= t);
 }
 
 TEST(TestS3selectFunctions, timestamp)
@@ -730,7 +762,7 @@ TEST(TestS3selectFunctions, nullifeq)
         true   // aggregate call
         ); 
     ASSERT_EQ(status, 0); 
-    ASSERT_EQ(s3select_result, std::string(",\n"));
+    ASSERT_EQ(s3select_result, std::string("null,\n"));
 } 
 
 TEST(TestS3selectFunctions, nullifnull)
@@ -750,7 +782,47 @@ TEST(TestS3selectFunctions, nullifnull)
         true   // aggregate call
         ); 
     ASSERT_EQ(status, 0); 
-    ASSERT_EQ(s3select_result, std::string(",\n"));
+    ASSERT_EQ(s3select_result, std::string("null,\n"));
+} 
+
+TEST(TestS3selectFunctions, nullifintnull)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select nullif(7, null) from stdin;";
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("7,\n"));
+} 
+
+TEST(TestS3selectFunctions, nullifintstring)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select nullif(5, \"hello\") from stdin;";
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("5,\n"));
 } 
 
 TEST(TestS3selectFunctions, nullifstring)
@@ -790,7 +862,27 @@ TEST(TestS3selectFunctions, nullifeqstring)
         true   // aggregate call
         ); 
     ASSERT_EQ(status, 0); 
-    ASSERT_EQ(s3select_result, std::string(",\n"));
+    ASSERT_EQ(s3select_result, std::string("null,\n"));
+} 
+
+TEST(TestS3selectFunctions, nullifnumericeq)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select nullif(1, 1.0) from stdin;";
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("null,\n"));
 } 
 
 TEST(TestS3selectFunctions, nulladdition)
@@ -813,25 +905,7 @@ TEST(TestS3selectFunctions, nulladdition)
     ASSERT_EQ(s3select_result, std::string("nan,\n"));
 } 
 
-TEST(TestS3selectFunctions, nullnanarithmetic)
-{
-    s3select s3select_syntax;
-    const std::string input_query = "select 3 * null + nan/5 - 4 * null from stdin;";
-    auto status = s3select_syntax.parse_query(input_query.c_str());
-    ASSERT_EQ(status, 0);
-    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
-    std::string s3select_result;
-    std::string input;
-    size_t size = 1;
-    generate_csv(input, size);
-    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
-        false, // dont skip first line 
-        false, // dont skip last line
-        true   // aggregate call
-        ); 
-    ASSERT_EQ(status, 0); 
-    ASSERT_EQ(s3select_result, std::string("nan,\n"));
-} 
+
 
 
 
