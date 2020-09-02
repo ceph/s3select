@@ -66,14 +66,17 @@ struct actionQ
   std::vector<base_statement*> exprQ;
   std::vector<base_statement*> funcQ;
   std::vector<base_statement*> condQ;
+  std::vector<base_statement*> whenThenQ;
   projection_alias alias_map;
   std::string from_clause;
   std::vector<std::string> schema_columns;
   s3select_projections  projections;
   uint64_t in_set_count;
 
-  actionQ():in_set_count(0){}
+  size_t when_than_count;
 
+  actionQ():when_than_count(0), in_set_count(0){}
+  
 };
 
 class s3select;
@@ -239,6 +242,18 @@ struct push_is_null_predicate
   void operator()(s3select* self, const char* a, const char* b) const;
 };
 static push_is_null_predicate g_push_is_null_predicate;
+
+struct push_case_when_else
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_case_when_else g_push_case_when_else;
+
+struct push_when_than
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_when_than g_push_when_than;
 
 struct push_debug_1
 {
@@ -430,12 +445,16 @@ public:
 
       projections = projection_expression >> *( ',' >> projection_expression) ;
 
-      projection_expression = (arithmetic_expression >> bsc::str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] | (arithmetic_expression)[BOOST_BIND_ACTION(push_projection)]  ;
+      projection_expression = (when_case_else_projection) [BOOST_BIND_ACTION(push_projection)] | (arithmetic_expression >> bsc::str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] | (arithmetic_expression)[BOOST_BIND_ACTION(push_projection)];
 
       alias_name = bsc::lexeme_d[(+bsc::alpha_p >> *bsc::digit_p)] ;
 
 
-      s3_object = bsc::str_p("stdin") | object_path ;
+      when_case_else_projection = (bsc::str_p("case")  >> (+when_stmt) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
+
+      when_stmt = (bsc::str_p("when") >> condition_expression >> bsc::str_p("than") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_than)];
+
+      s3_object = bsc::str_p("stdin") | bsc::str_p("s3object")  | object_path ;
 
       object_path = "/" >> *( fs_type >> "/") >> fs_type;
 
@@ -501,6 +520,7 @@ public:
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
     bsc::rule<ScannerT> projections, projection_expression, alias_name, column_pos;
+    bsc::rule<ScannerT> when_case_else_projection, when_stmt;
     bsc::rule<ScannerT> const& start() const
     {
       return select_expr;
@@ -969,7 +989,57 @@ void push_is_null_predicate::operator()(s3select* self, const char* a, const cha
   func->push_argument(expr);
 
   self->getAction()->condQ.push_back(func);
+}
 
+void push_when_than::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  __function* func = S3SELECT_NEW(self, __function, "#when-than#", self->getS3F());
+
+ base_statement* than_expr = self->getAction()->exprQ.back();
+ self->getAction()->exprQ.pop_back();
+
+ base_statement* when_expr = self->getAction()->condQ.back();
+ self->getAction()->condQ.pop_back();
+
+ func->push_argument(than_expr);
+ func->push_argument(when_expr);
+
+ self->getAction()->whenThenQ.push_back(func);
+
+ self->getAction()->when_than_count ++;
+}
+
+void push_case_when_else::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  base_statement* else_expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  __function* func = S3SELECT_NEW(self, __function, "#case-when-else#", self->getS3F());
+
+  func->push_argument(else_expr);
+
+  while(self->getAction()->when_than_count)
+  {
+    base_statement* when_then_func = self->getAction()->whenThenQ.back();
+    self->getAction()->whenThenQ.pop_back();
+
+    func->push_argument(when_then_func);
+
+    self->getAction()->when_than_count--;
+  }
+
+// condQ is cleared explicitly, because of "leftover", due to double scanning upon accepting
+// the following rule '(' condition-expression ')' , i.e. (3*3 == 12)
+// Because of the double-scan (bug in spirit?defintion?), a sub-tree for the left side is created, twice.
+// thus, it causes wrong calculation.
+
+  self->getAction()->condQ.clear();
+
+  self->getAction()->exprQ.push_back(func);
 }
 
 void push_debug_1::operator()(s3select* self, const char* a, const char* b) const

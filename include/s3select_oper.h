@@ -559,7 +559,7 @@ public:
 
   value& operator=(value& o)
   {
-    if(this->type == value_En_t::STRING)
+    if(o.type == value_En_t::STRING)
     {
       m_str_value.assign(o.str());
       __val.str = m_str_value.data();
