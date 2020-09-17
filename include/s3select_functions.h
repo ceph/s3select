@@ -54,7 +54,8 @@ enum class s3select_func_En_t {ADD,
                                LIKE,
                                VERSION,
                                CASE_WHEN_ELSE,
-                               WHEN_THAN
+                               WHEN_THAN,
+                               COALESCE
                               };
 
 
@@ -94,7 +95,8 @@ private:
     {"#like_predicate#", s3select_func_En_t::LIKE},
     {"version", s3select_func_En_t::VERSION},
     {"#when-than#", s3select_func_En_t::WHEN_THAN},
-    {"#case-when-else#", s3select_func_En_t::CASE_WHEN_ELSE}
+    {"#case-when-else#", s3select_func_En_t::CASE_WHEN_ELSE},
+    {"coalesce", s3select_func_En_t::COALESCE}
   };
 
 public:
@@ -1248,6 +1250,31 @@ struct _fn_case_when_else : public base_function {
   }
 };
 
+struct _fn_coalesce : public base_function
+{
+
+  value res;
+
+  bool operator()(bs_stmt_vec_t* args, variable* result)
+  {
+    bs_stmt_vec_t::iterator iter_begin = args->begin();
+    int args_size = args->size();
+    while (args_size >= 1)
+    {
+      base_statement* expr = *iter_begin;
+      value expr_val = expr->eval();
+      iter_begin++;
+      if ( !(expr_val.is_null())) {
+          *result = expr_val;
+          return true;
+        } 
+      args_size--;
+    }
+    result->set_null();
+    return true;
+  }
+};
+
 base_function* s3select_functions::create(std::string fn_name,bs_stmt_vec_t arguments)
 {
   const FunctionLibrary::const_iterator iter = m_functions_library.find(fn_name);
@@ -1351,6 +1378,9 @@ base_function* s3select_functions::create(std::string fn_name,bs_stmt_vec_t argu
 
   case s3select_func_En_t::LIKE:  
     return S3SELECT_NEW(this,_fn_like, arguments[0]->eval());
+    break;
+  case s3select_func_En_t::COALESCE:
+    return S3SELECT_NEW(this,_fn_coalesce);
     break;
 
   case s3select_func_En_t::WHEN_THAN:
