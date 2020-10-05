@@ -211,59 +211,6 @@ public:
             return res; \
         }();
 
-class scratch_area
-{
-
-private:
-  std::vector<std::string_view> m_columns{128};
-  int m_upper_bound;
-
-  std::vector<std::pair<std::string, int >> m_column_name_pos;
-
-public:
-
-  void set_column_pos(const char* n, int pos)//TODO use std::string
-  {
-    m_column_name_pos.push_back( std::pair<const char*, int>(n, pos));
-  }
-
-  void update(std::vector<char*>& tokens, size_t num_of_tokens)
-  {
-    std::copy_n(tokens.begin(), num_of_tokens, m_columns.begin());
-    m_upper_bound = num_of_tokens;
-  }
-
-  int get_column_pos(const char* n)
-  {
-    //done only upon building the AST, not on "runtime"
-
-    for( auto iter : m_column_name_pos)
-    {
-      if (!strcmp(iter.first.c_str(), n))
-      {
-        return iter.second;
-      }
-    }
-
-    return -1;
-  }
-
-  std::string_view get_column_value(int column_pos)
-  {
-    if ((column_pos >= m_upper_bound) || column_pos < 0)
-    {
-      throw base_s3select_exception("column_position_is_wrong", base_s3select_exception::s3select_exp_en_t::ERROR);
-    }
-
-    return m_columns[column_pos];
-  }
-
-  int get_num_of_columns()
-  {
-    return m_upper_bound;
-  }
-};
-
 class s3select_reserved_word
 {
   public:
@@ -977,6 +924,122 @@ public:
   }
 };
 
+class scratch_area
+{
+
+private:
+  std::vector<std::string_view> m_columns{128};
+  std::vector<value> m_schema_values; //values got a type
+  int m_upper_bound;
+
+  std::vector<std::pair<std::string, int >> m_column_name_pos;
+  bool parquet_type; //TODO should set once on construction
+
+public:
+
+  scratch_area():m_upper_bound(-1),parquet_type(false){}
+
+  enum class parquet_data_type
+  {
+    STRING,
+    INT64,
+    DOUBLE
+  };
+
+  typedef struct
+  {//parquet parser is loading values into this structure
+    int64_t num;
+    char *str;
+    uint16_t str_len;
+    double dbl;
+    parquet_data_type type;
+  } parquet_value_t;
+
+  void set_column_pos(const char* n, int pos)//TODO use std::string
+  {
+    m_column_name_pos.push_back( std::pair<const char*, int>(n, pos));
+  }
+
+  void update(std::vector<char*>& tokens, size_t num_of_tokens)
+  {
+    size_t i=0;
+    for(auto s : tokens)
+    {
+      if (i>=num_of_tokens)
+      {
+        break;
+      }
+
+      m_columns[i++] = s;//TODO no need for copy, could use reference to tokens
+    }
+    m_upper_bound = i;
+
+  }
+
+  int get_column_pos(const char* n)
+  {
+    //done only upon building the AST, not on "runtime"
+
+    for( auto iter : m_column_name_pos)
+    {
+      if (!strcmp(iter.first.c_str(), n))
+      {
+        return iter.second;
+      }
+    }
+
+    return -1;
+  }
+
+  void get_column_value(uint16_t column_pos, value &v)
+  {
+
+    if (parquet_type == false)
+    {
+      if ((column_pos >= m_upper_bound) || column_pos < 0)
+      {
+        throw base_s3select_exception("column_position_is_wrong", base_s3select_exception::s3select_exp_en_t::ERROR);
+      }
+      
+      v = m_columns[ column_pos ].data();
+    }
+    else
+    {
+      v = m_schema_values[ column_pos ];
+    }
+    
+  }
+
+  std::string_view get_column_value(int column_pos)//TODO obselete 
+  {
+    if ((column_pos >= m_upper_bound) || column_pos < 0)
+    {
+      throw base_s3select_exception("column_position_is_wrong", base_s3select_exception::s3select_exp_en_t::ERROR);
+    }
+
+    return m_columns[column_pos];
+  }
+
+  int get_num_of_columns()
+  {
+    return m_upper_bound;
+  }
+
+  int update(std::vector<parquet_value_t> &parquet_row_value, std::vector<uint16_t> &column_positions)
+  {
+    //TODO no need for copy , possible to save referece (its save last row for calculation)
+    uint32_t i=0;
+    for(auto v : parquet_row_value)
+    {
+      //TODO (parquet_value_t) --> (value) , or better get it as value (i.e. parquet reader know class-value) 
+      //m_schema_values[ column_positions[i] ] = parquet_row_value[ i ];
+      i++;
+    }
+    return 0;
+  }
+
+};
+
 class base_statement
 {
 
@@ -1021,6 +1084,9 @@ public:
 
   virtual value& eval_internal() = 0;
   
+  bool parquet_type; //TODO enum switch (csv,json,parquet,other)
+
+public:
   virtual base_statement* left() const
   {
     return 0;
@@ -1293,6 +1359,17 @@ public:
   {
     return var_value; //TODO is it correct
   }
+
+  std::string get_name()
+  {
+    return _name;
+  }
+
+  int get_column_pos()
+  {
+    return column_pos;
+  }
+
   virtual value::value_En_t get_value_type()
   {
     return var_value.type;
@@ -1390,7 +1467,7 @@ public:
     }
     else
     {
-      var_value = (char*)m_scratch->get_column_value(column_pos).data();  //no allocation. returning pointer of allocated space
+      m_scratch->get_column_value(column_pos,var_value);
       //in the case of successive column-delimiter {1,some_data,,3}=> third column is NULL 
       if (*var_value.str()== 0)
           var_value.setnull();
