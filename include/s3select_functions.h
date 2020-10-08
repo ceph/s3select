@@ -874,26 +874,26 @@ struct _fn_in : public base_function
 {
 
   value res;
-  
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+
+  bool operator()(bs_stmt_vec_t *args, variable *result)
   {
-    bs_stmt_vec_t::iterator iter_begin = args->begin();
-    bs_stmt_vec_t::iterator iter_end = args->end()-1;
-    base_statement* main_expr = *iter_end;
+    int args_size = args->size()-1;
+    base_statement *main_expr = (*args)[args_size];
     value main_expr_val = main_expr->eval();
-    int args_size = args->size();
-    while (args_size > 1)
+    args_size--;
+    while (args_size>=0)
     {
-      base_statement* expr = *iter_begin;
+      base_statement *expr = (*args)[args_size];
       value expr_val = expr->eval();
-      iter_begin++;
-      if ( (expr_val.type == main_expr_val.type) || (expr_val.is_number() && main_expr_val.is_number())) {
-        if ( expr_val == main_expr_val) {
+      args_size--;
+      if ((expr_val.type == main_expr_val.type) || (expr_val.is_number() && main_expr_val.is_number()))
+      {
+        if (expr_val == main_expr_val)
+        {
           result->set_value(true);
           return true;
-        } 
-    } 
-      args_size--;
+        }
+      }
     }
     result->set_value(false);
     return true;

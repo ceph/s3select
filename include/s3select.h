@@ -216,11 +216,17 @@ struct push_in_predicate
 };
 static push_in_predicate g_push_in_predicate;
 
-struct push_count_expr
+struct push_in_predicate_counter
 {
   void operator()(s3select* self, const char* a, const char* b) const;
 };
-static push_count_expr g_push_count_expr;
+static push_in_predicate_counter g_push_in_predicate_counter;
+
+struct push_in_predicate_counter_start
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_in_predicate_counter_start g_push_in_predicate_counter_start;
 
 struct push_like_predicate
 {
@@ -449,7 +455,7 @@ public:
 
       between_predicate = ( arithmetic_expression >> bsc::str_p("between") >> arithmetic_expression >> bsc::str_p("and") >> arithmetic_expression )[BOOST_BIND_ACTION(push_between_filter)];
 
-      in_predicate = (arithmetic_expression[BOOST_BIND_ACTION(push_count_expr)] >> bsc::str_p("in") >> '(' >> arithmetic_expression[BOOST_BIND_ACTION(push_count_expr)] >> *(',' >> arithmetic_expression[BOOST_BIND_ACTION(push_count_expr)]) >> ')')[BOOST_BIND_ACTION(push_in_predicate)];
+      in_predicate = (arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_counter_start)] >> bsc::str_p("in") >> '(' >> arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_counter)] >> *(',' >> arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_counter)]) >> ')')[BOOST_BIND_ACTION(push_in_predicate)];
 
       like_predicate = (arithmetic_expression >> bsc::str_p("like") >> arithmetic_expression)[BOOST_BIND_ACTION(push_like_predicate)];
 
@@ -877,16 +883,22 @@ void push_between_filter::operator()(s3select* self, const char* a, const char* 
   self->getAction()->exprQ.pop_back();
   func->push_argument(main_expr);
 
-  self->getAction()->in_set_count = 0; //TODO is it correct for all cases.
-
   self->getAction()->condQ.push_back(func);
 }
 
-void push_count_expr::operator()(s3select* self, const char* a, const char* b) const
+void push_in_predicate_counter::operator()(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
   self->getAction()->in_set_count ++;
+
+}
+
+void push_in_predicate_counter_start::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  self->getAction()->in_set_count = 1;
 
 }
 
@@ -923,8 +935,6 @@ void push_like_predicate::operator()(s3select* self, const char* a, const char* 
 
   __function* func = S3SELECT_NEW(self, __function, in_function.c_str(), self->getS3F());
 
-  self->getAction()->in_set_count = 0; //TODO is it correct for all cases.
-
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -953,8 +963,6 @@ void push_is_null_predicate::operator()(s3select* self, const char* a, const cha
   std::string in_function("#is_null#");
 
   __function* func = S3SELECT_NEW(self, __function, in_function.c_str(), self->getS3F());
-
-  self->getAction()->in_set_count = 0; //TODO is it correct for all cases.
 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
