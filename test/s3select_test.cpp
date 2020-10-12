@@ -638,7 +638,7 @@ TEST(TestS3selectFunctions, floatavg)
 TEST(TestS3selectFunctions, charlength)
 {
     s3select s3select_syntax;
-    const std::string input_query = "select charlength(\"abcde\") from stdin;";
+    const std::string input_query = "select char_length(\"abcde\") from stdin;";
     auto status = s3select_syntax.parse_query(input_query.c_str());
     ASSERT_EQ(status, 0);
     s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
@@ -658,7 +658,7 @@ TEST(TestS3selectFunctions, charlength)
 TEST(TestS3selectFunctions, characterlength)
 {
     s3select s3select_syntax;
-    const std::string input_query = "select characterlength(\"abcde\") from stdin;";
+    const std::string input_query = "select character_length(\"abcde\") from stdin;";
     auto status = s3select_syntax.parse_query(input_query.c_str());
     ASSERT_EQ(status, 0);
     s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
@@ -678,7 +678,7 @@ TEST(TestS3selectFunctions, characterlength)
 TEST(TestS3selectFunctions, emptystring)
 {
     s3select s3select_syntax;
-    const std::string input_query = "select charlength(\"\") from stdin;";
+    const std::string input_query = "select char_length(\"\") from stdin;";
     auto status = s3select_syntax.parse_query(input_query.c_str());
     ASSERT_EQ(status, 0);
     s3selectEngine::csv_object s3_csv_object(&s3select_syntax);

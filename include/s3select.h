@@ -154,6 +154,12 @@ struct push_function_expr
 };
 static push_function_expr g_push_function_expr;
 
+struct push_cast_expr
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_cast_expr g_push_cast_expr;
+
 ////////////////////// logical unit ////////////////////////
 
 struct push_compare_operator
@@ -490,13 +496,14 @@ public:
       
       function = ((variable >> '(' )[BOOST_BIND_ACTION(push_function_name)] >> !list_of_function_arguments >> ')')[BOOST_BIND_ACTION(push_function_expr)];
 
-      arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] | 
-                            (number)[BOOST_BIND_ACTION(push_number)] | 
-                            (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
-                            (string)[BOOST_BIND_ACTION(push_string)] | 
-                            (function) |//function is pushed by right-term
-                            (variable)[BOOST_BIND_ACTION(push_variable)] ;
+      arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] |  (number)[BOOST_BIND_ACTION(push_number)] | (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
+                            (string)[BOOST_BIND_ACTION(push_string)] |
+                            (cast)[BOOST_BIND_ACTION(push_cast_expr)] |
+                            (function) | (variable)[BOOST_BIND_ACTION(push_variable)] ;//function is pushed by right-term
 
+      cast = bsc::str_p("cast") >> '(' >> arithmetic_expression >> bsc::str_p("as") >> data_type >> ')' ;
+
+      data_type = (bsc::str_p("int") | bsc::str_p("float") | bsc::str_p("string") |  bsc::str_p("datetime") | bsc::str_p("bool"));
 
       number = bsc::int_p;
 
@@ -515,11 +522,11 @@ public:
 
       log_op = bsc::str_p("and") | bsc::str_p("or");
 
-      variable =  bsc::lexeme_d[(+bsc::alpha_p >> *bsc::digit_p)];
+      variable =  bsc::lexeme_d[(+bsc::alpha_p >> *( bsc::alpha_p | bsc::digit_p | '_') )];
     }
 
 
-    bsc::rule<ScannerT> variable, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor;
+    bsc::rule<ScannerT> cast, data_type, variable, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor;
     bsc::rule<ScannerT> special_predicates,between_predicate, in_predicate, like_predicate, is_null, is_not_null;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
@@ -1042,6 +1049,44 @@ void push_case_when_else::operator()(s3select* self, const char* a, const char* 
 // thus, it causes wrong calculation.
 
   self->getAction()->condQ.clear();
+
+  self->getAction()->exprQ.push_back(func);
+}
+
+void push_cast_expr::operator()(s3select* self, const char* a, const char* b) const
+{
+  //cast(expression as int/float/string/timestamp) --> new function "int/float/string/timestamp" ( args = expression )
+  std::string token(a, b);
+  
+  std::size_t as_pos = token.find(" as ");
+  std::string cast_function;
+
+  auto cast_operator = [&](const char *s){return token.find(s,as_pos,strlen(s)) != std::string::npos;} ;
+
+  if(cast_operator("int"))
+  {
+    cast_function = "int";
+  }else if(cast_operator("float"))
+  {
+    cast_function = "float";
+  }else if(cast_operator("string"))//TODO missing cast function string,timestamp,bool(?),decimal(?)
+  {
+    cast_function = "string";
+  }else if(cast_operator("datetime"))
+  {
+    cast_function = "datetime";
+  }else if(cast_operator("bool"))
+  {
+    cast_function = "bool";
+  }
+
+
+
+  __function* func = S3SELECT_NEW(self, __function, cast_function.c_str(), self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(expr);
 
   self->getAction()->exprQ.push_back(func);
 }
