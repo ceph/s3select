@@ -250,7 +250,62 @@ const char* awsCli_handler::header_name_str[3] = {":event-type", ":content-type"
 const char* awsCli_handler::header_value_str[4] = {"Records", "application/octet-stream", "event","cont"};
 int run_on_localFile(char*  input_query);
 
-int main(int argc,char **argv)
+bool is_parquet_file(const char * fn)
+{
+   const char * ext = "parquet";
+
+   if(strstr(fn+strlen(fn)-strlen(ext), ext ))
+   {
+    return true;
+   }
+
+    return false;
+}
+
+int run_query_on_parquet_file(const char* input_query, const char* input_file)
+{
+  int status;
+  s3select s3select_syntax;
+
+  status = s3select_syntax.parse_query(input_query);
+  if (status != 0)
+  {
+    std::cout << "failed to parse query " << s3select_syntax.get_error_description() << std::endl;
+    return -1;
+  }
+
+  parquet_object parquet_processor(input_file,&s3select_syntax);
+
+  std::string result;
+
+  do
+  {
+    try
+    {
+      status = parquet_processor.run_s3select_on_object(result); //TODO error description
+    }
+    catch (base_s3select_exception &e)
+    {
+      std::cout << e.what() << std::endl;
+      //m_error_description = e.what();
+      //m_error_count++;
+      if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL) //abort query execution
+      {
+        return -1;
+      }
+    }
+
+    std::cout << result << std::endl;
+
+    if (status < 0)
+      break;
+
+  } while (1);
+
+  return 0;
+}
+
+int main(int argc, char** argv)
 {
 awsCli_handler awscli;
 
@@ -339,7 +394,12 @@ int run_on_localFile(char*  input_query)
     return -1;
   }
 
-  std::string object_name = s3select_syntax.get_from_clause(); //TODO stdin
+  std::string object_name = s3select_syntax.get_from_clause(); 
+
+  if (is_parquet_file(object_name.c_str()))
+  {
+    return run_query_on_parquet_file(input_query, object_name.c_str());
+  }
 
   FILE* fp;
 
@@ -424,3 +484,4 @@ int run_on_localFile(char*  input_query)
 
   return 0;
 }
+

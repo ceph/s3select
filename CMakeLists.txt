@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Boost REQUIRED)
 find_package(GTest REQUIRED)
+find_package(Arrow REQUIRED)
 
 enable_testing() 
 

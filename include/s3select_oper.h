@@ -13,6 +13,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/bind.hpp>
+#include <s3select_parquet_intrf.h> //NOTE: should include first (c++11 std::string_view)
+
 namespace bsc = BOOST_SPIRIT_CLASSIC_NS;
 
 namespace s3selectEngine
@@ -928,32 +930,21 @@ class scratch_area
 {
 
 private:
-  std::vector<std::string_view> m_columns{128};
-  std::vector<value> m_schema_values; //values got a type
+  std::vector<std::string_view> m_columns{128};//TODO not correct
+  std::vector<value> *m_schema_values; //values got a type
   int m_upper_bound;
 
   std::vector<std::pair<std::string, int >> m_column_name_pos;
-  bool parquet_type; //TODO should set once on construction
-
+  bool parquet_type;
+  char str_buff[4096];
+  uint16_t buff_loc;
 public:
 
-  scratch_area():m_upper_bound(-1),parquet_type(false){}
-
-  enum class parquet_data_type
+  scratch_area():m_upper_bound(-1),parquet_type(false),buff_loc(0)
   {
-    STRING,
-    INT64,
-    DOUBLE
-  };
-
-  typedef struct
-  {//parquet parser is loading values into this structure
-    int64_t num;
-    char *str;
-    uint16_t str_len;
-    double dbl;
-    parquet_data_type type;
-  } parquet_value_t;
+    //TODO its a leak, to use s3select_new 
+    m_schema_values = new std::vector<value>(128,value(""));
+  }
 
   void set_column_pos(const char* n, int pos)//TODO use std::string
   {
@@ -991,6 +982,11 @@ public:
     return -1;
   }
 
+  void set_parquet_type()
+  {
+    parquet_type = true;
+  }
+
   void get_column_value(uint16_t column_pos, value &v)
   {
 
@@ -1005,12 +1001,13 @@ public:
     }
     else
     {
-      v = m_schema_values[ column_pos ];
+      v = (*m_schema_values)[ column_pos ];
     }
     
   }
 
-  std::string_view get_column_value(int column_pos)//TODO obselete 
+
+  std::string_view get_column_value(int column_pos)//TODO reuse it
   {
     if ((column_pos >= m_upper_bound) || column_pos < 0)
     {
@@ -1020,20 +1017,56 @@ public:
     return m_columns[column_pos];
   }
 
+
   int get_num_of_columns()
   {
     return m_upper_bound;
   }
 
-  int update(std::vector<parquet_value_t> &parquet_row_value, std::vector<uint16_t> &column_positions)
+  void init_string_buff() //TODO temporary
+  {
+    buff_loc=0;
+  }
+
+  int update(std::vector<parquet_file_parser::parquet_value_t> &parquet_row_value, parquet_file_parser::column_pos_t &column_positions)
   {
     //TODO no need for copy , possible to save referece (its save last row for calculation)
-    uint32_t i=0;
+
+    parquet_file_parser::column_pos_t::iterator column_pos_iter = column_positions.begin();
+    m_upper_bound =0;
+    buff_loc=0;
+
     for(auto v : parquet_row_value)
     {
-      //TODO (parquet_value_t) --> (value) , or better get it as value (i.e. parquet reader know class-value) 
-      //m_schema_values[ column_positions[i] ] = parquet_row_value[ i ];
-      i++;
+      //TODO (parquet_value_t) --> (value) , or better get it as value (i.e. parquet reader know class-value)
+      //TODO temporary 
+      switch( v.type )
+      {
+        case  parquet_file_parser::parquet_type::INT64:
+              //TODO waste of CPU
+              (*m_schema_values)[ *column_pos_iter ] = value( v.num ).i64();
+              break;
+
+        case  parquet_file_parser::parquet_type::DOUBLE:
+              //TODO waste of CPU
+              (*m_schema_values)[ *column_pos_iter ] = value( v.dbl ).dbl();
+              break;
+
+        case  parquet_file_parser::parquet_type::STRING:
+              //TODO waste of CPU
+              //TODO value need to present string with char* and length
+
+              memcpy(str_buff+buff_loc, v.str, v.str_len);
+              str_buff[buff_loc+v.str_len] = 0;
+              (*m_schema_values)[ *column_pos_iter ] = str_buff+buff_loc;
+              buff_loc += v.str_len+1;
+              break;
+
+        default:
+        return -1;
+      }
+      m_upper_bound++;
+      column_pos_iter ++;
     }
     return 0;
   }
