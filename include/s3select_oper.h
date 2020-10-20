@@ -1042,6 +1042,11 @@ public:
       //TODO temporary 
       switch( v.type )
       {
+        case  parquet_file_parser::parquet_type::INT32:
+              //TODO waste of CPU
+              (*m_schema_values)[ *column_pos_iter ] = value( v.num ).i64();
+              break;
+
         case  parquet_file_parser::parquet_type::INT64:
               //TODO waste of CPU
               (*m_schema_values)[ *column_pos_iter ] = value( v.num ).i64();

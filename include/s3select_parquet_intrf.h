@@ -1,21 +1,4 @@
 
-// Licensed to the Apache Software Foundation (ASF) under one
-// or more contributor license agreements. See the NOTICE file
-// distributed with this work for additional information
-// regarding copyright ownership. The ASF licenses this file
-// to you under the Apache License, Version 2.0 (the
-// "License"); you may not use this file except in compliance
-// with the License. You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing,
-// software distributed under the License is distributed on an
-// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied. See the License for the
-// specific language governing permissions and limitations
-// under the License.
-
 #pragma once
 
 #include <iostream>
@@ -66,6 +49,11 @@ class parquet_file_parser {
           m_schm.push_back(elm);
       }
       else if(x.get()->type().get()->ToString().compare("int32")==0)
+      {
+          std::pair<std::string, parquet_type> elm(x.get()->name(),parquet_type::INT32);
+          m_schm.push_back(elm);  
+      }
+      else if(x.get()->type().get()->ToString().compare("int64")==0)
       {
           std::pair<std::string, parquet_type> elm(x.get()->name(),parquet_type::INT64);
           m_schm.push_back(elm);  
@@ -153,7 +141,7 @@ class parquet_file_parser {
         case parquet_type::INT64:
         {
           column_value.num =
-              std::static_pointer_cast<arrow::Int32Array>(m_table->column(idx)->chunk(0))->Value(m_rownum);
+              std::static_pointer_cast<arrow::Int64Array>(m_table->column(idx)->chunk(0))->Value(m_rownum);
           column_value.type = parquet_type::INT64;
         }
         break;
@@ -162,7 +150,7 @@ class parquet_file_parser {
         {//TODO add int32
           column_value.num =
               std::static_pointer_cast<arrow::Int32Array>(m_table->column(idx)->chunk(0))->Value(m_rownum);
-          column_value.type = parquet_type::INT64;
+          column_value.type = parquet_type::INT32;
         }
         break;
 

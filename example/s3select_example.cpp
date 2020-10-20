@@ -251,7 +251,7 @@ const char* awsCli_handler::header_value_str[4] = {"Records", "application/octet
 int run_on_localFile(char*  input_query);
 
 bool is_parquet_file(const char * fn)
-{
+{//diffrentiate between csv and parquet
    const char * ext = "parquet";
 
    if(strstr(fn+strlen(fn)-strlen(ext), ext ))
