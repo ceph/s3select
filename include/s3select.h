@@ -509,7 +509,7 @@ public:
 
       float_number = bsc::real_p;
 
-      string = bsc::str_p("\"") >> *( bsc::anychar_p - bsc::str_p("\"") ) >> bsc::str_p("\"") ;
+      string = (bsc::str_p("\"") >> *( bsc::anychar_p - bsc::str_p("\"") ) >> bsc::str_p("\"")) | (bsc::str_p("\'") >> *( bsc::anychar_p - bsc::str_p("\'") ) >> bsc::str_p("\'")) ;
 
       column_pos = ('_'>>+(bsc::digit_p) ) | '*' ;
 
