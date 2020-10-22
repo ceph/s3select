@@ -503,7 +503,7 @@ public:
 
       cast = bsc::str_p("cast") >> '(' >> arithmetic_expression >> bsc::str_p("as") >> data_type >> ')' ;
 
-      data_type = (bsc::str_p("int") | bsc::str_p("float") | bsc::str_p("string") |  bsc::str_p("datetime") | bsc::str_p("bool"));
+      data_type = (bsc::str_p("int") | bsc::str_p("float") | bsc::str_p("string") |  bsc::str_p("timestamp") );
 
       number = bsc::int_p;
 
@@ -1072,12 +1072,9 @@ void push_cast_expr::operator()(s3select* self, const char* a, const char* b) co
   }else if(cast_operator("string"))//TODO missing cast function string,timestamp,bool(?),decimal(?)
   {
     cast_function = "string";
-  }else if(cast_operator("datetime"))
+  }else if(cast_operator("timestamp"))
   {
-    cast_function = "datetime";
-  }else if(cast_operator("bool"))
-  {
-    cast_function = "bool";
+    cast_function = "cast";
   }
 
 
