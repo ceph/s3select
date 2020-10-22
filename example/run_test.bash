@@ -85,10 +85,21 @@ if test "$s3select_val" -ne "$awk_val"; then
 fi
 }
 
+parquet_test()
+{
+s3select_val=$(${PREFIX}/s3select_example -q "select count(*) from $(realpath parquet_mix_types.parquet) where _1>555 and _1<777;")
+
+if test ${s3select_val} != "221,"; then
+  echo "parquet test failed"
+  exit
+fi
+}
+
 ###############################################################
 
 expr_test
 aggregate_test
+parquet_test
 
 rm "$PREFIX"/tmp.c "$PREFIX"/a.out
 
