@@ -1638,3 +1638,210 @@ TEST(TestS3selectFunctions, coalescewhere)
     ASSERT_EQ(status, 0); 
     ASSERT_EQ(s3select_result, std::string("true,\n"));
 } 
+
+
+TEST(TestS3selectFunctions, castint)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select cast(5.123 as int) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("5,\n"));
+} 
+
+TEST(TestS3selectFunctions, castfloat)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select cast(1.234 as float) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("1.234,\n"));
+} 
+
+TEST(TestS3selectFunctions, castfloatoperation)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select cast(1.234 as float) + cast(1.235 as float) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    //ASSERT_EQ(s3select_result, std::string("2.469,\n"));
+    ASSERT_EQ(s3select_result,std::string("2.4690000000000003,\n"));
+} 
+
+TEST(TestS3selectFunctions, caststring)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select cast(1234 as string) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("1234,\n"));
+} 
+
+TEST(TestS3selectFunctions, caststring1)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select cast('12hddd' as int) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, "");
+} 
+
+TEST(TestS3selectFunctions, caststring2)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select cast('124' as int) + 1 from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("125,\n"));
+} 
+
+TEST(TestS3selectFunctions, castsubstr)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select substr(cast(cast(\"1234567\" as int) as string),2,2) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("23,\n"));
+} 
+
+TEST(TestS3selectFunctions, casttimestamp)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select cast('2010-01-15:13:30:10' as timestamp)  from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("2010-Jan-15 13:30:10,\n"));
+} 
+
+TEST(TestS3selectFunctions, castdateadd)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select dateadd('day',2,cast('2010-01-15:13:30:10' as timestamp)) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("2010-Jan-17 13:30:10,\n"));
+} 
+
+TEST(TestS3selectFunctions, castdatediff)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select datediff('year',cast('2010-01-15:13:30:10' as timestamp), cast('2020-01-15:13:30:10' as timestamp)) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("10,\n"));
+} 
+
+
+
+
+

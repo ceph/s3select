@@ -1297,7 +1297,6 @@ struct _fn_coalesce : public base_function
   }
 };
 
-
 struct _fn_string : public base_function
 {
 
@@ -1309,7 +1308,7 @@ struct _fn_string : public base_function
 
     base_statement* expr = *iter;
     value expr_val = expr->eval();
-    *result = expr_val;
+    result->set_value((expr_val.to_string()).c_str());
     return true;
   }
 };
