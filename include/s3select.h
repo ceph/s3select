@@ -67,6 +67,7 @@ struct actionQ
   std::vector<base_statement*> funcQ;
   std::vector<base_statement*> condQ;
   std::vector<base_statement*> whenThenQ;
+  std::vector<std::string> dataTypeQ;
   projection_alias alias_map;
   std::string from_clause;
   std::vector<std::string> schema_columns;
@@ -159,6 +160,12 @@ struct push_cast_expr
   void operator()(s3select* self, const char* a, const char* b) const;
 };
 static push_cast_expr g_push_cast_expr;
+
+struct push_data_type
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_data_type g_push_data_type;
 
 ////////////////////// logical unit ////////////////////////
 
@@ -498,10 +505,10 @@ public:
 
       arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] |  (number)[BOOST_BIND_ACTION(push_number)] | (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
                             (string)[BOOST_BIND_ACTION(push_string)] |
-                            (cast)[BOOST_BIND_ACTION(push_cast_expr)] |
+                            (cast) |
                             (function) | (variable)[BOOST_BIND_ACTION(push_variable)] ;//function is pushed by right-term
 
-      cast = bsc::str_p("cast") >> '(' >> arithmetic_expression >> bsc::str_p("as") >> data_type >> ')' ;
+      cast = (bsc::str_p("cast") >> '(' >> arithmetic_expression >> bsc::str_p("as") >> (data_type)[BOOST_BIND_ACTION(push_data_type)] >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
 
       data_type = (bsc::str_p("int") | bsc::str_p("float") | bsc::str_p("string") |  bsc::str_p("timestamp") );
 
@@ -1058,26 +1065,10 @@ void push_cast_expr::operator()(s3select* self, const char* a, const char* b) co
   //cast(expression as int/float/string/timestamp) --> new function "int/float/string/timestamp" ( args = expression )
   std::string token(a, b);
   
-  std::size_t as_pos = token.find(" as ");
   std::string cast_function;
 
-  auto cast_operator = [&](const char *s){return token.find(s,as_pos,strlen(s)) != std::string::npos;} ;
-
-  if(cast_operator("int"))
-  {
-    cast_function = "int";
-  }else if(cast_operator("float"))
-  {
-    cast_function = "float";
-  }else if(cast_operator("string"))//TODO missing cast function string,timestamp,bool(?),decimal(?)
-  {
-    cast_function = "string";
-  }else if(cast_operator("timestamp"))
-  {
-    cast_function = "cast";
-  }
-
-
+  cast_function = self->getAction()->dataTypeQ.back();
+  self->getAction()->dataTypeQ.pop_back();
 
   __function* func = S3SELECT_NEW(self, __function, cast_function.c_str(), self->getS3F());
 
@@ -1086,6 +1077,27 @@ void push_cast_expr::operator()(s3select* self, const char* a, const char* b) co
   func->push_argument(expr);
 
   self->getAction()->exprQ.push_back(func);
+}
+
+void push_data_type::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  auto cast_operator = [&](const char *s){return strncmp(a,s,strlen(s))==0;};
+
+  if(cast_operator("int"))
+  {
+    self->getAction()->dataTypeQ.push_back("int");
+  }else if(cast_operator("float"))
+  {
+    self->getAction()->dataTypeQ.push_back("float");
+  }else if(cast_operator("string"))
+  {
+    self->getAction()->dataTypeQ.push_back("string");
+  }else if(cast_operator("timestamp"))
+  {
+    self->getAction()->dataTypeQ.push_back("timestamp");
+  }
 }
 
 void push_debug_1::operator()(s3select* self, const char* a, const char* b) const
