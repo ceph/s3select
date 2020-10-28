@@ -56,7 +56,7 @@ enum class s3select_func_En_t {ADD,
                                CASE_WHEN_ELSE,
                                WHEN_THAN,
                                COALESCE,
-                               CAST
+                               STRING
                               };
 
 
@@ -98,7 +98,7 @@ private:
     {"#when-than#", s3select_func_En_t::WHEN_THAN},
     {"#case-when-else#", s3select_func_En_t::CASE_WHEN_ELSE},
     {"coalesce", s3select_func_En_t::COALESCE},
-    {"cast", s3select_func_En_t::CAST}
+    {"string", s3select_func_En_t::STRING}
   };
 
 public:
@@ -434,8 +434,18 @@ struct _fn_to_int : public base_function
 
     if (func_arg.type == value::value_En_t::STRING)
     {
+      errno = 0;
       i = strtol(func_arg.str(), &perr, 10) ;  //TODO check error before constructor
+      if ((errno == ERANGE && (i == LONG_MAX || i == LONG_MIN)) || (errno != 0 && i == 0)) {
+        throw base_s3select_exception("converted value would fall out of the range of the result type!");
+        return false;   
     }
+    
+    if (*perr != '\0') {
+      throw base_s3select_exception("characters after int!");
+      return false;
+    }
+  } 
     else if (func_arg.type == value::value_En_t::FLOAT)
     {
       i = func_arg.dbl();
@@ -467,8 +477,18 @@ struct _fn_to_float : public base_function
 
     if (v.type == value::value_En_t::STRING)
     {
+      errno = 0;
       d = strtod(v.str(), &perr) ;  //TODO check error before constructor
+      if ((errno == ERANGE && (d == LONG_MAX || d == LONG_MIN)) || (errno != 0 && d == 0)) {
+        throw base_s3select_exception("converted value would fall out of the range of the result type!");
+        return false;  
     }
+    
+    if (*perr != '\0') {
+      throw base_s3select_exception("characters after float!");
+      return false;
+    }
+  }
     else if (v.type == value::value_En_t::FLOAT)
     {
       d = v.dbl();
@@ -1277,7 +1297,8 @@ struct _fn_coalesce : public base_function
   }
 };
 
-struct _fn_cast : public base_function
+
+struct _fn_string : public base_function
 {
 
   value res;
@@ -1409,8 +1430,8 @@ base_function* s3select_functions::create(std::string fn_name,bs_stmt_vec_t argu
     return S3SELECT_NEW(this,_fn_case_when_else);
     break;
 
-  case s3select_func_En_t::CAST:
-    return S3SELECT_NEW(this,_fn_cast);
+  case s3select_func_En_t::STRING:
+    return S3SELECT_NEW(this,_fn_string);
     break;
 
   default:
