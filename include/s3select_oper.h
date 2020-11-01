@@ -1278,7 +1278,7 @@ private:
   const int column_alias = -2;
 
 public:
-  variable():m_var_type(var_t::NA), _name(""), column_pos(-1) {}
+  variable():m_var_type(var_t::NA), _name(""), column_pos(undefined_column_pos) {}
 
   explicit variable(int64_t i) : m_var_type(var_t::COL_VALUE), column_pos(-1), var_value(i) {}
 
@@ -1301,14 +1301,14 @@ public:
     {
       _name = "#";
       m_var_type = tp;
-      column_pos = -1;
+      column_pos = undefined_column_pos;
       var_value = n.c_str();
     }
     else if (tp ==variable::var_t::STAR_OPERATION)
     {
       _name = "#";
       m_var_type = tp;
-      column_pos = -1;
+      column_pos = undefined_column_pos;
     }
   }
 
@@ -1317,13 +1317,13 @@ public:
     if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_NULL)
     {
       m_var_type = variable::var_t::COL_VALUE;
-      column_pos = -1;
+      column_pos = undefined_column_pos;
       var_value.type = value::value_En_t::S3NULL;//TODO use set_null
     }
     else if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_NAN)
     {
       m_var_type = variable::var_t::COL_VALUE;
-      column_pos = -1;
+      column_pos = undefined_column_pos;
       var_value.set_nan();
     }
     else if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_TRUE)
@@ -1342,7 +1342,7 @@ public:
     {
       _name = "#";
       m_var_type = var_t::NA;
-      column_pos = -1;
+      column_pos = undefined_column_pos;
     }
   }
 
@@ -1456,7 +1456,7 @@ public:
     }
     else if(m_var_type == var_t::STAR_OPERATION)
     {
-      return star_operation();
+      return star_operation();//TODO parquet star operation
     }
     else if (column_pos == undefined_column_pos)
     {
