@@ -14,14 +14,14 @@ class parquet_file_parser {
  
  public:
   enum class parquet_type {STRING,INT32,INT64,DOUBLE};
-
+  typedef std::vector<std::pair<std::string,parquet_type>> schema_t;
  private:  
  
   std::string parquet_file_name;
   uint32_t m_num_of_columms;
   uint64_t m_num_of_rows;
   uint64_t m_rownum;//TODO chunk-number
-  std::vector<std::pair<std::string,parquet_type>> m_schm;
+  schema_t m_schm;
   std::shared_ptr<arrow::Table> m_table;
   std::shared_ptr<arrow::io::ReadableFile> m_infile;
 
@@ -113,6 +113,11 @@ class parquet_file_parser {
     return m_rownum;
   }
 
+  uint32_t get_num_of_columns()
+  {
+    return m_num_of_columms;
+  }
+
   int get_column_values_by_positions(column_pos_t positions, row_values_t &row_values)
   {
     //per each position get type , extract and push to row_values (intensive method)
@@ -188,4 +193,10 @@ class parquet_file_parser {
     }
     return -1;
   }
+
+  schema_t get_schema()
+  {
+    return m_schm;
+  }
+
 };

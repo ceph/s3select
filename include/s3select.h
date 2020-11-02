@@ -2085,6 +2085,11 @@ public:
     s3_query->get_scratch_area()->set_parquet_type();
 
     load_meta_data_into_scratch_area();
+<<<<<<< HEAD
+=======
+
+    getWhereClauseColumns(m_where_clause_columns);
+>>>>>>> 7d842a6... adding support for column-reference with column-name upon processing parquet file;
 
     for(auto x : m_s3_select->get_projections_list())
     {
@@ -2158,10 +2163,9 @@ public:
     m_aggr_flow = m_s3_select->is_aggregate_query();
   }
 
-
-  void getWhereClauseColumns(parquet_file_parser::column_pos_t &columns_ids)
+  void extractColumns(parquet_file_parser::column_pos_t &columns_ids,std::vector<base_statement*> column_statements)
   {
-    for (auto p : m_s3_select->getAction()->predicate_columns)
+    for (auto p : column_statements)
     {
       //per each (variable*) get its positions and push it into columns_ids
       if (dynamic_cast<variable* >(p) && p->is_column())
@@ -2169,37 +2173,41 @@ public:
         if (dynamic_cast<variable* >(p)->m_var_type == s3selectEngine::variable::var_t::VAR)
         {
           std::string column_name = dynamic_cast<variable* >(p)->get_name();
-          uint16_t column_id = object_reader.get_column_id(column_name);
+          int column_id; 
+          if( (column_id=object_reader.get_column_id(column_name)) == (uint16_t)-1)
+          {
+              std::string error_msg = "column " + column_name +" is not exists";
+              throw base_s3select_exception(error_msg, base_s3select_exception::s3select_exp_en_t::FATAL);
+          }
+
           columns_ids.insert(column_id);
         }
         else
         {
+          if(dynamic_cast<variable* >(p)->get_column_pos() > (object_reader.get_num_of_columns()-1))
+          {
+              std::stringstream error_msg;
+              error_msg << "column position greater than number of columns (" << 
+              object_reader.get_num_of_columns() << ")";
+
+              throw base_s3select_exception( error_msg.str(), base_s3select_exception::s3select_exp_en_t::FATAL);
+          }
+
           columns_ids.insert(dynamic_cast<variable* >(p)->get_column_pos());
         }
-      } //else exception?
+      } 
     }
   }
 
-  void getProjectionsColumns(parquet_file_parser::column_pos_t &columns_ids)
-  {
-    for (auto p : m_s3_select->getAction()->projections_columns)
-    { //TODO reuse code bellow
-      //per each p (variable*) get its positions and push it into columns_ids
-      if (dynamic_cast<variable* >(p) && p->is_column())
-      {
-        if (dynamic_cast<variable* >(p)->m_var_type == s3selectEngine::variable::var_t::VAR)
-        {
-          std::string column_name = dynamic_cast<variable* >(p)->get_name();
-          uint16_t column_id = object_reader.get_column_id(column_name);
-          columns_ids.insert(column_id);
-        }
-        else
-        {
-          columns_ids.insert(dynamic_cast<variable* >(p)->get_column_pos());
-        } //else exception?
-      }
-    }
-  }
+void getWhereClauseColumns(parquet_file_parser::column_pos_t &columns_ids)
+{
+  extractColumns(columns_ids,m_s3_select->getAction()->predicate_columns);
+}
+
+void getProjectionsColumns(parquet_file_parser::column_pos_t &columns_ids)
+{
+  extractColumns(columns_ids, m_s3_select->getAction()->projections_columns);
+}
 
 
   bool is_end_of_stream()
