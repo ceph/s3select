@@ -2085,11 +2085,7 @@ public:
     s3_query->get_scratch_area()->set_parquet_type();
 
     load_meta_data_into_scratch_area();
-<<<<<<< HEAD
-=======
-
     getWhereClauseColumns(m_where_clause_columns);
->>>>>>> 7d842a6... adding support for column-reference with column-name upon processing parquet file;
 
     for(auto x : m_s3_select->get_projections_list())
     {
@@ -2098,6 +2094,13 @@ public:
 
     if(m_s3_select->get_filter())
         m_s3_select->get_filter()->extract_columns(m_where_clause_columns,object_reader.get_num_of_columns());
+    for(auto x : m_s3_select->get_projections_list())
+    {
+        x->extract_columns(m_projections_columns);
+    }
+
+    m_s3_select->get_filter()->extract_columns(m_where_clause_columns);
+
   }
 
   int run_s3select_on_object(std::string &result)
@@ -2208,7 +2211,6 @@ void getProjectionsColumns(parquet_file_parser::column_pos_t &columns_ids)
 {
   extractColumns(columns_ids, m_s3_select->getAction()->projections_columns);
 }
-
 
   bool is_end_of_stream()
   {

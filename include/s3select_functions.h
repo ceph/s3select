@@ -2401,6 +2401,50 @@ bool base_statement::mark_aggreagtion_subtree_to_execute()
   return true;
 }
 
+void base_statement::extract_columns(parquet_file_parser::column_pos_t &cols)
+{// purpose: to extract all column-ids from query
+  if(is_column()) //column reference or column position
+  {variable* v = dynamic_cast<variable*>(this);
+    if(dynamic_cast<variable*>(this)->m_var_type == variable::var_t::VAR)
+    {//column reference 
+      
+      if (v->getScratchArea()->get_column_pos(v->get_name().c_str())>=0)
+      {//column belong to schema
+        cols.insert( v->getScratchArea()->get_column_pos(v->get_name().c_str() ));
+      }else {
+        if(v->getAlias()->search_alias(v->get_name()))
+        {//column is an alias --> extract columns belong to alias
+	 //TODO cyclic alias to resolve
+          v->getAlias()->search_alias(v->get_name())->extract_columns(cols);
+        }else {
+          //column is not alias --> error
+          std::stringstream ss;
+          ss << "column " + v->get_name() + " is not part of schema nor an alias";
+          throw base_s3select_exception(ss.str(),base_s3select_exception::s3select_exp_en_t::FATAL);
+        }
+      }
+    }else {
+      cols.insert(v->get_column_pos());//push column positions 
+    }
+  }else if(is_function())
+  {
+    __function* f = (dynamic_cast<__function*>(this));
+    bs_stmt_vec_t args = f->get_arguments();
+    for (auto prm : args)
+    {//traverse function args
+      prm->extract_columns(cols);
+    }
+    
+  }
+
+  //keep traversing down the AST
+  if(left())
+    left()->extract_columns(cols);
+  
+  if(right())
+    right()->extract_columns(cols);
+}
+
 } //namespace s3selectEngine
 
 #endif

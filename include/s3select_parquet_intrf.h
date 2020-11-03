@@ -42,8 +42,8 @@ class parquet_file_parser {
     m_num_of_columms = m_table->num_columns();
 
     for (auto x : m_table->fields()) {
-      
-      if(x.get()->type().get()->ToString().compare("string")==0)//TODO replace with switch/enum
+      //parquet schema is uploaded as pairs <column-name,data-type>
+      if(x.get()->type().get()->ToString().compare("string")==0)
       {
           std::pair<std::string, parquet_type> elm(x.get()->name(),parquet_type::STRING);
           m_schm.push_back(elm);
@@ -177,14 +177,9 @@ class parquet_file_parser {
     return 0;
   }
 
-  int get_columns_by_names(std::vector<std::string> column_names,row_values_t& row_values)
-  {//TBD
-    return 0;
-  }
-
   uint16_t get_column_id(std::string column_name) {
     uint16_t pos = 0;
-    // search meta-data from column-id by name
+    // search meta-data from column-id by name (done once per query)
     for (auto x : m_table->fields()) {
       if (x.get()->name().compare(column_name) == 0) {
         return pos;

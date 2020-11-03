@@ -93,6 +93,10 @@ if test ${s3select_val} != "221,"; then
   echo "parquet test failed"
   exit
 fi
+
+s3select_val=$(${PREFIX}/s3select_example -q "select c5,c1,int(_1*0+6),int(_3*0+4),substr(c1,int(_1*0+6),int(_3*0+4)) from $(realpath parquet_mix_types.parquet) where ((c1 like \"%wedd%\") and c0 <100 ) and c5 between 2.1000000000000001 and 2.6200000000000001 and c4 between \"col4_1\" and \"col4_2\";")
+
+echo ${s3select_val}
 }
 
 ###############################################################
