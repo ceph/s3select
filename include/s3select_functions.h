@@ -1057,7 +1057,7 @@ struct _fn_substr : public base_function
 
     if (args_size == 3)
     {
-      if (v_from.type == value::value_En_t::FLOAT)
+      if (v_to.type == value::value_En_t::FLOAT)
       {
         t = v_to.dbl();
       }

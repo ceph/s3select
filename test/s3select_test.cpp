@@ -1476,6 +1476,66 @@ TEST(TestS3selectFunctions, mix)
     ASSERT_EQ(s3select_result, std::string("true,\n"));
 }
 
+TEST(TestS3selectFunctions, substr11)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select substr(\"01234567890\",2*0+1,1.53*0+3) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("012,\n"));
+} 
+
+TEST(TestS3selectFunctions, substr12)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select substr(\"01234567890\",2*0+1,1+2.0) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("012,\n"));
+} 
+
+TEST(TestS3selectFunctions, substr13)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select substr(\"01234567890\",2.5*2+1,1+2) from stdin ;" ;
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("567,\n"));
+} 
+
 
 
 
