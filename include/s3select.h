@@ -68,6 +68,7 @@ struct actionQ
   std::vector<base_statement*> condQ;
   std::vector<base_statement*> whenThenQ;
   std::vector<std::string> dataTypeQ;
+  std::vector<std::string> trimTypeQ;
   projection_alias alias_map;
   std::string from_clause;
   std::vector<std::string> schema_columns;
@@ -273,6 +274,36 @@ struct push_debug_1
   void operator()(s3select* self, const char* a, const char* b) const;
 };
 static push_debug_1 g_push_debug_1;
+
+struct push_trim_type
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_trim_type g_push_trim_type; 
+
+struct push_trim_remove_type
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_trim_remove_type g_push_trim_remove_type;
+
+struct push_trim_whitespace_both
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_trim_whitespace_both g_push_trim_whitespace_both;
+
+struct push_trim_expr_one_side_whitespace
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_trim_expr_one_side_whitespace g_push_trim_expr_one_side_whitespace;
+
+struct push_trim_expr_anychar_anyside
+{
+  void operator()(s3select* self, const char* a, const char* b) const;
+};
+static push_trim_expr_anychar_anyside g_push_trim_expr_anychar_anyside;
 
 struct s3select : public bsc::grammar<s3select>
 {
@@ -505,12 +536,24 @@ public:
 
       arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] |  (number)[BOOST_BIND_ACTION(push_number)] | (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
                             (string)[BOOST_BIND_ACTION(push_string)] |
-                            (cast) |
+                            (cast) | (trim) |
                             (function) | (variable)[BOOST_BIND_ACTION(push_variable)] ;//function is pushed by right-term
 
       cast = (bsc::str_p("cast") >> '(' >> arithmetic_expression >> bsc::str_p("as") >> (data_type)[BOOST_BIND_ACTION(push_data_type)] >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
 
       data_type = (bsc::str_p("int") | bsc::str_p("float") | bsc::str_p("string") |  bsc::str_p("timestamp") );
+      
+      trim = (trim_whitespace_both) | (trim_one_side_whitespace) | (trim_anychar_anyside);
+
+      trim_one_side_whitespace = (bsc::str_p("trim") >> '(' >> (trim_type)[BOOST_BIND_ACTION(push_trim_type)] >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_trim_expr_one_side_whitespace)];
+
+      trim_whitespace_both = (bsc::str_p("trim") >> '(' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_trim_whitespace_both)];
+
+      trim_anychar_anyside = (bsc::str_p("trim") >> '(' >> ((trim_remove_type)[BOOST_BIND_ACTION(push_trim_remove_type)] >> arithmetic_expression >> bsc::str_p("from") >> arithmetic_expression)  >> ')') [BOOST_BIND_ACTION(push_trim_expr_anychar_anyside)];
+      
+      trim_type = ((bsc::str_p("leading") >> bsc::str_p("from")) | ( bsc::str_p("trailing") >> bsc::str_p("from")) | (bsc::str_p("both") >> bsc::str_p("from")) | bsc::str_p("from") ); 
+
+      trim_remove_type = (bsc::str_p("leading") | bsc::str_p("trailing") | bsc::str_p("both") );
 
       number = bsc::int_p;
 
@@ -533,7 +576,7 @@ public:
     }
 
 
-    bsc::rule<ScannerT> cast, data_type, variable, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor;
+    bsc::rule<ScannerT> cast, data_type, variable, trim_type, trim_remove_type, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor, trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside;
     bsc::rule<ScannerT> special_predicates,between_predicate, in_predicate, like_predicate, is_null, is_not_null;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
@@ -1099,6 +1142,95 @@ void push_data_type::operator()(s3select* self, const char* a, const char* b) co
     self->getAction()->dataTypeQ.push_back("timestamp");
   }
 }
+
+void push_trim_whitespace_both::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+  
+  __function* func = S3SELECT_NEW(self, __function, "#trim#", self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(expr);
+
+  self->getAction()->exprQ.push_back(func);
+}  
+
+void push_trim_expr_one_side_whitespace::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+  
+  std::string trim_function;
+
+  trim_function = self->getAction()->trimTypeQ.back();
+  self->getAction()->trimTypeQ.pop_back(); 
+
+  __function* func = S3SELECT_NEW(self, __function, trim_function.c_str(), self->getS3F());
+
+  base_statement* inp_expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(inp_expr);
+
+  self->getAction()->exprQ.push_back(func);
+} 
+
+void push_trim_expr_anychar_anyside::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+  
+  std::string trim_function;
+
+  trim_function = self->getAction()->trimTypeQ.back();
+  self->getAction()->trimTypeQ.pop_back(); 
+
+  __function* func = S3SELECT_NEW(self, __function, trim_function.c_str(), self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(expr);
+
+  base_statement* inp_expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(inp_expr);
+
+  self->getAction()->exprQ.push_back(func);
+} 
+
+void push_trim_type::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  auto trim_option = [&](const char *s){return strncmp(a,s,strlen(s))==0;};
+
+  if(trim_option("leading"))
+  {
+    self->getAction()->trimTypeQ.push_back("#leading#");
+  }else if(trim_option("trailing"))
+  {
+    self->getAction()->trimTypeQ.push_back("#trailing#");
+  }else 
+  {
+    self->getAction()->trimTypeQ.push_back("#trim#");
+  }
+} 
+
+void push_trim_remove_type::operator()(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  auto trim_option = [&](const char *s){return strncmp(a,s,strlen(s))==0;};
+
+  if(trim_option("leading"))
+  {
+    self->getAction()->trimTypeQ.push_back("#leading#");
+  }else if(trim_option("trailing"))
+  {
+    self->getAction()->trimTypeQ.push_back("#trailing#");
+  }else 
+  {
+    self->getAction()->trimTypeQ.push_back("#trim#");
+  }
+} 
 
 void push_debug_1::operator()(s3select* self, const char* a, const char* b) const
 {
