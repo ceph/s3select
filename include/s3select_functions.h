@@ -2401,21 +2401,21 @@ bool base_statement::mark_aggreagtion_subtree_to_execute()
   return true;
 }
 
-void base_statement::extract_columns(parquet_file_parser::column_pos_t &cols)
+void base_statement::extract_columns(parquet_file_parser::column_pos_t &cols,const uint16_t max_columns)
 {// purpose: to extract all column-ids from query
   if(is_column()) //column reference or column position
   {variable* v = dynamic_cast<variable*>(this);
     if(dynamic_cast<variable*>(this)->m_var_type == variable::var_t::VAR)
     {//column reference 
-      
+
       if (v->getScratchArea()->get_column_pos(v->get_name().c_str())>=0)
       {//column belong to schema
         cols.insert( v->getScratchArea()->get_column_pos(v->get_name().c_str() ));
       }else {
         if(v->getAlias()->search_alias(v->get_name()))
         {//column is an alias --> extract columns belong to alias
-	 //TODO cyclic alias to resolve
-          v->getAlias()->search_alias(v->get_name())->extract_columns(cols);
+	      //TODO cyclic alias to resolve
+          v->getAlias()->search_alias(v->get_name())->extract_columns(cols,max_columns);
         }else {
           //column is not alias --> error
           std::stringstream ss;
@@ -2423,7 +2423,14 @@ void base_statement::extract_columns(parquet_file_parser::column_pos_t &cols)
           throw base_s3select_exception(ss.str(),base_s3select_exception::s3select_exp_en_t::FATAL);
         }
       }
-    }else {
+    }else if(v->m_var_type == variable::var_t::STAR_OPERATION)
+    {
+      for(uint16_t i=0;i<max_columns;i++)
+      {//push all columns
+        cols.insert( i );
+      }
+    }
+    else {
       cols.insert(v->get_column_pos());//push column positions 
     }
   }else if(is_function())
@@ -2432,17 +2439,17 @@ void base_statement::extract_columns(parquet_file_parser::column_pos_t &cols)
     bs_stmt_vec_t args = f->get_arguments();
     for (auto prm : args)
     {//traverse function args
-      prm->extract_columns(cols);
+      prm->extract_columns(cols,max_columns);
     }
     
   }
 
   //keep traversing down the AST
   if(left())
-    left()->extract_columns(cols);
+    left()->extract_columns(cols,max_columns);
   
   if(right())
-    right()->extract_columns(cols);
+    right()->extract_columns(cols,max_columns);
 }
 
 } //namespace s3selectEngine

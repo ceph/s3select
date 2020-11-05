@@ -378,10 +378,10 @@ public:
 
 private:
   value_t __val;
-  //std::string m_to_string;
-  std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,256>> m_to_string;
-  //std::string m_str_value;
-  std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,256>> m_str_value;
+  std::string m_to_string;
+  //std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,256>> m_to_string;
+  std::string m_str_value;
+  //std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,256>> m_str_value;
 
 public:
   enum class value_En_t
@@ -494,7 +494,7 @@ public:
     type = value_En_t::S3NULL;
   }
 
-  std::string to_string()  //TODO very intensive , must improve this
+  std::string& to_string()  //TODO very intensive , must improve this
   {
 
     if (type != value_En_t::STRING)
@@ -555,7 +555,7 @@ public:
       m_to_string.assign( __val.str );
     }
 
-    return std::string( m_to_string.c_str() );
+    return m_to_string; 
   }
 
 
@@ -1014,7 +1014,14 @@ public:
       throw base_s3select_exception("column_position_is_wrong", base_s3select_exception::s3select_exp_en_t::ERROR);
     }
 
-    return m_columns[column_pos];
+     if (parquet_type == false)
+     {
+      return m_columns[column_pos];
+     }
+     else
+     {
+       return  (*m_schema_values)[ column_pos ].to_string().c_str();
+     }
   }
 
 
@@ -1192,7 +1199,8 @@ public:
   bool is_column_reference() const;
   bool mark_aggreagtion_subtree_to_execute();
 
-  void extract_columns(parquet_file_parser::column_pos_t &cols);
+
+  void extract_columns(parquet_file_parser::column_pos_t &cols,const uint16_t max_columns);
 
   virtual void set_last_call()
   {
@@ -1398,7 +1406,7 @@ public:
 
   virtual bool is_column() const //is reference to column.
   {
-    if(m_var_type == var_t::VAR || m_var_type == var_t::POS)
+    if(m_var_type == var_t::VAR || m_var_type == var_t::POS || m_var_type == var_t::STAR_OPERATION)
     {
       return true;
     }
@@ -1435,13 +1443,14 @@ public:
     int num_of_columns = m_scratch->get_num_of_columns();
     for(i=0; i<num_of_columns-1; i++)
     {
-      size_t len = m_scratch->get_column_value(i).size();
+      std::string_view col_value = m_scratch->get_column_value(i);
+      size_t len = col_value.size();
       if((pos+len)>sizeof(m_star_op_result_charc))
       {
         throw base_s3select_exception("result line too long", base_s3select_exception::s3select_exp_en_t::FATAL);
       }
 
-      memcpy(&m_star_op_result_charc[pos], m_scratch->get_column_value(i).data(), len);
+      memcpy(&m_star_op_result_charc[pos], col_value.data(), len);
       pos += len;
       m_star_op_result_charc[ pos ] = ',';//TODO need for another abstraction (per file type)
       pos ++;

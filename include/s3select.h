@@ -62,6 +62,7 @@ struct actionQ
   projection_alias alias_map;
   std::string from_clause;
   s3select_projections  projections;
+
   bool projection_or_predicate_state; //true->projection false->predicate(where-clause statement)
   std::vector<base_statement*> predicate_columns;
   std::vector<base_statement*> projections_columns; 
@@ -100,6 +101,10 @@ struct actionQ
     }
     return false;
   }
+
+  uint64_t in_set_count;
+
+  actionQ():in_set_count(0){}
 
 };
 
@@ -741,6 +746,7 @@ void push_from_clause::builder(s3select* self, const char* a, const char* b) con
 
   self->getAction()->from_clause = token;
 
+
   self->getAction()->exprQ.clear();
 
   self->getAction()->projection_or_predicate_state = false;//parser is now on where-clause 
@@ -826,14 +832,6 @@ void push_variable::builder(s3select* self, const char* a, const char* b) const
   
   self->getAction()->exprQ.push_back(v);
 
-  if(self->getAction()->projection_or_predicate_state==false)
-  {
-    self->getAction()->predicate_columns.push_back(v);
-  }
-  else
-  {
-    self->getAction()->projections_columns.push_back(v);
-  }
 }
 
 void push_addsub::builder(s3select* self, const char* a, const char* b) const
@@ -1108,14 +1106,6 @@ void push_column_pos::builder(s3select* self, const char* a, const char* b) cons
 
   self->getAction()->exprQ.push_back(v);
 
-  if(self->getAction()->projection_or_predicate_state==false)
-  {
-    self->getAction()->predicate_columns.push_back(v);
-  }
-  else
-  {
-    self->getAction()->projections_columns.push_back(v);
-  }
 }
 
 void push_projection::builder(s3select* self, const char* a, const char* b) const
@@ -2085,7 +2075,6 @@ public:
     s3_query->get_scratch_area()->set_parquet_type();
 
     load_meta_data_into_scratch_area();
-    getWhereClauseColumns(m_where_clause_columns);
 
     for(auto x : m_s3_select->get_projections_list())
     {
@@ -2094,13 +2083,6 @@ public:
 
     if(m_s3_select->get_filter())
         m_s3_select->get_filter()->extract_columns(m_where_clause_columns,object_reader.get_num_of_columns());
-    for(auto x : m_s3_select->get_projections_list())
-    {
-        x->extract_columns(m_projections_columns);
-    }
-
-    m_s3_select->get_filter()->extract_columns(m_where_clause_columns);
-
   }
 
   int run_s3select_on_object(std::string &result)
