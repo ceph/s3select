@@ -1477,7 +1477,7 @@ public:
     }
     else if(m_var_type == var_t::STAR_OPERATION)
     {
-      return star_operation();//TODO parquet star operation
+      return star_operation();
     }
     else if (column_pos == undefined_column_pos)
     {

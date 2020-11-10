@@ -20,28 +20,28 @@ class parquet_file_parser {
   std::string parquet_file_name;
   uint32_t m_num_of_columms;
   uint64_t m_num_of_rows;
-  uint64_t m_rownum;//TODO chunk-number
+  uint64_t m_rownum;
+  uint64_t m_chunk_num;
   schema_t m_schm;
   std::shared_ptr<arrow::Table> m_table;
   std::shared_ptr<arrow::io::ReadableFile> m_infile;
+  std::unique_ptr<parquet::arrow::FileReader> m_reader;
 
   int load_meta_data() {
     PARQUET_ASSIGN_OR_THROW(m_infile, arrow::io::ReadableFile::Open(
                                         parquet_file_name, arrow::default_memory_pool()));
 
-    std::unique_ptr<parquet::arrow::FileReader> reader;
-
     PARQUET_THROW_NOT_OK(
-        parquet::arrow::OpenFile(m_infile, arrow::default_memory_pool(), &reader));
+        parquet::arrow::OpenFile(m_infile, arrow::default_memory_pool(), &m_reader));
 
-    reader->set_use_threads(false);
+    m_reader->set_use_threads(false);
 
-    PARQUET_THROW_NOT_OK(reader->ReadTable(&m_table));
+    std::shared_ptr<::arrow::Schema> scm;
+    m_reader->GetSchema(&scm);
 
-    m_num_of_rows = m_table->num_rows();
-    m_num_of_columms = m_table->num_columns();
+    m_num_of_columms = scm.get()->fields().size();
 
-    for (auto x : m_table->fields()) {
+    for (auto x : scm.get()->fields()) {
       //parquet schema is uploaded as pairs <column-name,data-type>
       if(x.get()->type().get()->ToString().compare("string")==0)
       {
@@ -87,11 +87,34 @@ class parquet_file_parser {
 
   typedef std::vector<parquet_value_t> row_values_t;
 
-  parquet_file_parser(std::string name) : parquet_file_name(name),m_num_of_columms(0),m_num_of_rows(0),m_rownum(0) {load_meta_data();}
+  parquet_file_parser(std::string name) : 
+  parquet_file_name(name),
+  m_num_of_columms(0),
+  m_num_of_rows(0),
+  m_rownum(0),
+  m_chunk_num(0) 
+  {load_meta_data();}
 
   bool end_of_stream()
   {
-    return m_rownum >= m_num_of_rows;
+    if(m_table.get() == 0)
+    {
+      PARQUET_THROW_NOT_OK(m_reader->ReadTable(&m_table));
+      m_num_of_rows = m_table->num_rows();
+    }
+
+    if(m_rownum >= m_num_of_rows)
+    {//next chunk if exists
+      if(m_table->column(0)->num_chunks()<m_chunk_num)
+      {
+        m_chunk_num++;
+        m_rownum = m_table->column(0)->chunk(m_chunk_num)->length();
+      }
+    }
+
+    if(m_rownum >= m_num_of_rows)
+      return true;
+    return false;
   }
 
   uint64_t get_number_of_rows()
@@ -135,7 +158,7 @@ class parquet_file_parser {
         case parquet_type::STRING:
         {
           auto string_column =
-              std::static_pointer_cast<arrow::StringArray>(m_table->column(idx)->chunk(0));
+              std::static_pointer_cast<arrow::StringArray>(m_table->column(idx)->chunk(m_chunk_num));
 
           column_value.str = (char *)string_column->raw_data() + string_column->value_offset(m_rownum);
           column_value.str_len = string_column->value_length(m_rownum);
@@ -146,15 +169,15 @@ class parquet_file_parser {
         case parquet_type::INT64:
         {
           column_value.num =
-              std::static_pointer_cast<arrow::Int64Array>(m_table->column(idx)->chunk(0))->Value(m_rownum);
+              std::static_pointer_cast<arrow::Int64Array>(m_table->column(idx)->chunk(m_chunk_num))->Value(m_rownum);
           column_value.type = parquet_type::INT64;
         }
         break;
 
         case parquet_type::INT32:
-        {//TODO add int32
+        {
           column_value.num =
-              std::static_pointer_cast<arrow::Int32Array>(m_table->column(idx)->chunk(0))->Value(m_rownum);
+              std::static_pointer_cast<arrow::Int32Array>(m_table->column(idx)->chunk(m_chunk_num))->Value(m_rownum);
           column_value.type = parquet_type::INT32;
         }
         break;
@@ -162,7 +185,7 @@ class parquet_file_parser {
         case parquet_type::DOUBLE:
         {
           column_value.dbl =
-              std::static_pointer_cast<arrow::DoubleArray>(m_table->column(idx)->chunk(0))->Value(m_rownum);
+              std::static_pointer_cast<arrow::DoubleArray>(m_table->column(idx)->chunk(m_chunk_num))->Value(m_rownum);
           column_value.type = parquet_type::DOUBLE;
         }
         break;
