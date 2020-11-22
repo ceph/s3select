@@ -2431,6 +2431,12 @@ void base_statement::extract_columns(parquet_file_parser::column_pos_t &cols,con
       }
     }
     else {
+      if (v->get_column_pos()>=max_columns)
+      {
+        std::stringstream ss;
+        ss << "column " + std::to_string( v->get_column_pos()+1 ) + " exceed max number of columns";
+        throw base_s3select_exception(ss.str(),base_s3select_exception::s3select_exp_en_t::FATAL);
+      }
       cols.insert(v->get_column_pos());//push column positions 
     }
   }else if(is_function())
