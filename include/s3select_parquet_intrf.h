@@ -59,6 +59,8 @@ public:
   int64_t ReadBatch(int64_t batch_size, int16_t* def_levels, int16_t* rep_levels,
                             parquet_value_t* values, int64_t* values_read);
 
+  int64_t Skip(int64_t rows_to_skip);
+
   int Read(uint64_t rownum,parquet_value_t & value);
 
 };
@@ -207,7 +209,7 @@ private:
 
 
   column_reader_wrap::column_reader_wrap(std::unique_ptr<parquet::ParquetFileReader> & parquet_reader,uint16_t col_id):
-  m_rownum(1),
+  m_rownum(0),
   m_type(parquet::Type::type::UNDEFINED),
   m_row_grouop_id(0),
   m_col_id(col_id),
@@ -308,41 +310,94 @@ private:
     return rows_read;
   }
 
-  int column_reader_wrap::Read(const uint64_t rownum,parquet_value_t & value)
-  {//m_rownum should be smaller than rownum
+  int64_t column_reader_wrap::Skip(int64_t rows_to_skip)
+  {
+    parquet::Int32Reader* int32_reader;
+    parquet::Int64Reader* int64_reader;
+    parquet::DoubleReader* double_reader;
+    parquet::ByteArrayReader* byte_array_reader;
 
+    parquet::ByteArray str_value;
+    int64_t rows_read;
+    int32_t i32_val;
+
+
+    switch (get_type())
+    {
+    case parquet::Type::type::INT32:
+      int32_reader = static_cast<parquet::Int32Reader *>(m_ColumnReader.get());
+      rows_read = int32_reader->Skip(rows_to_skip);
+      break;
+
+    case parquet::Type::type::INT64:
+      int64_reader = static_cast<parquet::Int64Reader *>(m_ColumnReader.get());
+      rows_read = int64_reader->Skip(rows_to_skip);
+      break;
+
+    case parquet::Type::type::DOUBLE:
+      double_reader = static_cast<parquet::DoubleReader *>(m_ColumnReader.get());
+      rows_read = double_reader->Skip(rows_to_skip);
+      break;
+
+    case parquet::Type::type::BYTE_ARRAY:
+      byte_array_reader = static_cast<parquet::ByteArrayReader *>(m_ColumnReader.get());
+      rows_read = byte_array_reader->Skip(rows_to_skip);
+      break;
+    //TODO default; exception
+    }
+
+    return rows_read;
+  }
+
+  int column_reader_wrap::Read(const uint64_t rownum,parquet_value_t & value)
+  {
     int64_t values_read = 0;
     int64_t rows_read = 0;
 
-    while (m_rownum < (int64_t)rownum)
-    { //should advance
+    if (m_rownum < (int64_t)rownum)
+    { //should skip
       m_read_last_value = false;
-      if (HasNext() == false)
-      { //end of stream or next row-group
-        if ((m_row_grouop_id+1) >= m_parquet_reader->metadata()->num_row_groups())
-        {
-          m_end_of_stream = true;
-          return -2; //end-of-stream
-        }
-        else
-        {
-          m_row_grouop_id++;
-          m_row_group_reader = m_parquet_reader->RowGroup(m_row_grouop_id);
-          m_ColumnReader = m_row_group_reader->Column(m_col_id);
-        }
-      }
-      else
+
+      uint64_t skipped_rows = Skip(rownum - m_rownum -1);
+      m_rownum += skipped_rows;
+
+      while (((m_rownum+1) < (int64_t)rownum) || HasNext() == false)
       {
+        uint64_t skipped_rows = Skip(rownum - m_rownum -1);
+        m_rownum += skipped_rows;
+
+        if (HasNext() == false)
+        {
+          if ((m_row_grouop_id + 1) >= m_parquet_reader->metadata()->num_row_groups())
+          {
+            m_end_of_stream = true;
+            return -2; //end-of-stream
+          }
+          else
+          {
+            m_row_grouop_id++;
+            m_row_group_reader = m_parquet_reader->RowGroup(m_row_grouop_id);
+            m_ColumnReader = m_row_group_reader->Column(m_col_id);
+          }
+        }
+      } //end-while
+
+      rows_read = ReadBatch(1, nullptr, nullptr, &m_last_value, &values_read);
+      m_read_last_value = true;
+      m_rownum++;
+      value = m_last_value;
+    }
+    else
+    {
+      if (m_read_last_value == false)
+      {
+        rows_read = ReadBatch(1, nullptr, nullptr, &m_last_value, &values_read);
+        m_read_last_value = true;
         m_rownum++;
       }
-    } //end-while
 
-    if(m_read_last_value==false) 
-    {
-      rows_read = ReadBatch(1,nullptr , nullptr,&m_last_value, &values_read);
-      m_read_last_value = true;
+      value = m_last_value;
     }
-    value = m_last_value;
 
     //TODO rows_read == 1?
     //TODO values_read == 1?
