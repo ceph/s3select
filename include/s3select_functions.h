@@ -30,6 +30,16 @@ struct push_4dig
 };
 static push_4dig g_push_4dig;
 
+struct push_6dig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    *n = ((char)(*a)-48)*100000 + ((char)*(a+1)-48)*10000 + ((char)*(a+2)-48)*1000  + ((char)*(a+3)-48)*100 + ((char)*(a+4)-48)*10 + ((char)*(a+5)-48);
+  }
+
+};
+static push_6dig g_push_6dig;
+
 enum class s3select_func_En_t {ADD,
                                SUM,
                                AVG,
@@ -508,20 +518,39 @@ struct _fn_to_float : public base_function
 
 struct _fn_to_timestamp : public base_function
 {
-  bsc::rule<> separator = bsc::ch_p(":") | bsc::ch_p("-");
+  bsc::rule<> date_separator = bsc::ch_p("-");
+  bsc::rule<> time_separator = bsc::ch_p(":");
+  bsc::rule<> nano_sec_separator = bsc::ch_p(".");
+  bsc::rule<> delimiter = bsc::ch_p("T");
+  bsc::rule<> zero_timezone = bsc::ch_p("Z");
+  bsc::rule<> timezone_sign = bsc::ch_p("-") | bsc::ch_p("+");
 
   uint32_t yr = 1700, mo = 1, dy = 1;
+  bsc::rule<> dig6 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
   bsc::rule<> dig4 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
   bsc::rule<> dig2 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p];
 
-  bsc::rule<> d_yyyymmdd_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(separator)
-                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mo)]) >> *(separator)
-                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &dy)]) >> *(separator));
+  bsc::rule<> d_yyyy_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(delimiter));
+  bsc::rule<> d_yyyymmdd_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(date_separator)
+                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mo)]) >> *(date_separator)
+                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &dy)]) >> *(delimiter));
 
-  uint32_t hr = 0, mn = 0, sc = 0;
-  bsc::rule<> d_time_dig = ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(separator)
-                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> *(separator)
-                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &sc)]) >> *(separator));
+  uint32_t hr = 0, mn = 0, sc = 0, frac_sec = 0, tz_hr = 0, tz_mn = 0;
+  bsc::rule<> d_timezone_dig =  (*(timezone_sign) >>
+                                (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &tz_hr)]) >> *(time_separator)
+                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &tz_mn)])) | bsc::ch_p("Z");
+
+  bsc::rule<> d_time_dig = ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &sc)]) >> *(nano_sec_separator)
+                            >> (dig6[BOOST_BIND_ACTION_PARAM(push_6dig, &frac_sec)]) >> (d_timezone_dig)) |
+                            ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &sc)]) >> (d_timezone_dig)) |
+                            ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> (d_timezone_dig));
+
+  bsc::rule<> d_date_time = ((d_yyyymmdd_dig) >> (d_time_dig)) | (d_yyyymmdd_dig) | (d_yyyy_dig);
 
   boost::posix_time::ptime new_ptime;
 
@@ -530,34 +559,47 @@ struct _fn_to_timestamp : public base_function
 
   bool datetime_validation()
   {
-    //TODO temporary , should check for leap year
-
-    if(yr<1700 || yr>2050)
+    if (yr>=1700 && yr<=2050 && mo>=1 && mo<=12 && dy>=1 && hr<24 && mn<60 && sc<60 && tz_hr<24 && tz_mn<60)
     {
-      return false;
+      switch (mo)
+      {
+        case 1:
+        case 3:
+	case 5:
+        case 7:
+        case 8:
+        case 10:
+        case 12:
+		if(dy<=31)
+		{
+                  return true;
+                }
+                break;
+        case 4:
+        case 6:
+        case 9:
+        case 11:
+                if(dy<=30)
+                {
+                  return true;
+                }
+                break;
+        case 2:
+                if((yr%4)==0 && dy<=29)
+		{
+			return true;
+		}
+		else if(dy<=28)
+		{
+			return true;
+		}
+		break;
+        default:
+		return false;
+		break;
+      }
     }
-    if (mo<1 || mo>12)
-    {
-      return false;
-    }
-    if (dy<1 || dy>31)
-    {
-      return false;
-    }
-    if (hr>23)
-    {
-      return false;
-    }
-    if (dy>59)
-    {
-      return false;
-    }
-    if (sc>59)
-    {
-      return false;
-    }
-
-    return true;
+    return false; 
   }
 
   bool operator()(bs_stmt_vec_t* args, variable* result)
@@ -566,6 +608,9 @@ struct _fn_to_timestamp : public base_function
     hr = 0;
     mn = 0;
     sc = 0;
+    frac_sec = 0;
+    tz_hr = 0;
+    tz_mn = 0;
 
     bs_stmt_vec_t::iterator iter = args->begin();
     int args_size = args->size();
@@ -584,15 +629,18 @@ struct _fn_to_timestamp : public base_function
       throw base_s3select_exception("to_timestamp first argument must be string");  //can skip current row
     }
 
-    bsc::parse_info<> info_dig = bsc::parse(v_str.str(), d_yyyymmdd_dig >> *(separator) >> d_time_dig);
+    bsc::parse_info<> info_dig = bsc::parse(v_str.str(), d_date_time);
 
     if(datetime_validation()==false or !info_dig.full)
     {
       throw base_s3select_exception("input date-time is illegal");
     }
 
-    new_ptime = boost::posix_time::ptime(boost::gregorian::date(yr, mo, dy),
-                                         boost::posix_time::hours(hr) + boost::posix_time::minutes(mn) + boost::posix_time::seconds(sc));
+    new_ptime = boost::posix_time::ptime(boost::gregorian::date(yr, mo, dy), boost::posix_time::time_duration(hr, mn, sc, frac_sec));
+                                       /* boost::posix_time::hours(hr) + 
+                                        boost::posix_time::minutes(mn) +
+                                        boost::posix_time::seconds(sc) +
+                                        boost::posix_time::nanoseconds(frac_sec*1000000000));*/
 
     result->set_value(&new_ptime);
 
