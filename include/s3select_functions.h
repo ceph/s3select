@@ -79,7 +79,7 @@ private:
     {"max", s3select_func_En_t::MAX},
     {"int", s3select_func_En_t::TO_INT},
     {"float", s3select_func_En_t::TO_FLOAT},
-    {"substr", s3select_func_En_t::SUBSTR},
+    {"substring", s3select_func_En_t::SUBSTR},
     {"timestamp", s3select_func_En_t::TO_TIMESTAMP},
     {"extract", s3select_func_En_t::EXTRACT},
     {"dateadd", s3select_func_En_t::DATE_ADD},
@@ -1035,6 +1035,11 @@ struct _fn_substr : public base_function
     {
       iter++;
       to = *iter;
+      v_to = to->eval();
+      if (!v_to.is_number())
+      {
+        throw base_s3select_exception("substr third argument must be number");  //can skip row
+      }
     }
 
     v_str = str->eval();
@@ -1047,22 +1052,13 @@ struct _fn_substr : public base_function
     int str_length = strlen(v_str.str());
 
     v_from = from->eval();
-    if(v_from.is_string())
+    if(!v_from.is_number())
     {
       throw base_s3select_exception("substr second argument must be number");  //can skip current row
     }
 
     int64_t f;
     int64_t t;
-
-    if (args_size==3)
-    {
-      v_to = to->eval();
-      if (v_to.is_string())
-      {
-        throw base_s3select_exception("substr third argument must be number");  //can skip row
-      }
-    }
 
     if (v_from.type == value::value_En_t::FLOAT)
     {
@@ -1071,6 +1067,11 @@ struct _fn_substr : public base_function
     else
     {
       f=v_from.i64();
+    }
+
+    if (f <= 0 && args_size == 2)
+    {
+      f = 1;
     }
 
     if (f>str_length)
@@ -1094,6 +1095,17 @@ struct _fn_substr : public base_function
         t = v_to.i64();
       }
 
+      if ( f <= 0)
+      {
+        t = t + f - 1;
+        f = 1;
+      }
+
+      if (t > str_length)
+      {
+        t = str_length;
+      }
+
       if( (str_length-(f-1)-t) <0)
       {
         throw base_s3select_exception("substr length parameter beyond bounderies");  //can skip row
@@ -1110,7 +1122,6 @@ struct _fn_substr : public base_function
 
     return true;
   }
-
 };
 
 struct _fn_charlength : public base_function {

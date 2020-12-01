@@ -555,12 +555,18 @@ public:
 
       arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] |  (number)[BOOST_BIND_ACTION(push_number)] | (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
                             (string)[BOOST_BIND_ACTION(push_string)] |
-                            (cast) |
+                            (cast) | (substr) |
                             (function) | (variable)[BOOST_BIND_ACTION(push_variable)] ;//function is pushed by right-term
 
       cast = (bsc::str_p("cast") >> '(' >> arithmetic_expression >> bsc::str_p("as") >> (data_type)[BOOST_BIND_ACTION(push_data_type)] >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
 
       data_type = (bsc::str_p("int") | bsc::str_p("float") | bsc::str_p("string") |  bsc::str_p("timestamp") );
+     
+      substr = (substr_from) | (substr_from_for);
+      
+      substr_from = (bsc::str_p("substring") >> '(' >> (arithmetic_expression >> bsc::str_p("from") >> arithmetic_expression) >> ')') [BOOST_BIND_ACTION(push_substr_from)];
+
+      substr_from_for = (bsc::str_p("substring") >> '(' >> (arithmetic_expression >> bsc::str_p("from") >> arithmetic_expression >> bsc::str_p("for") >> arithmetic_expression) >> ')') [BOOST_BIND_ACTION(push_substr_from_for)];
 
       number = bsc::int_p;
 
@@ -583,7 +589,7 @@ public:
     }
 
 
-    bsc::rule<ScannerT> cast, data_type, variable, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor;
+    bsc::rule<ScannerT> cast, data_type, variable, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor, substr, substr_from, substr_from_for;
     bsc::rule<ScannerT> special_predicates,between_predicate, in_predicate, like_predicate, is_null, is_not_null;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
@@ -1164,15 +1170,16 @@ void push_substr_from::builder(s3select* self, const char* a, const char* b) con
 {
   std::string token(a, b);
 
-  __function* func = S3SELECT_NEW(self, __function, "#substring_from#", self->getS3F());
+  __function* func = S3SELECT_NEW(self, __function, "substring", self->getS3F());
 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
-  func->push_argument(expr);
 
   base_statement* start_position = self->getAction()->exprQ.back();
+
   self->getAction()->exprQ.pop_back();
   func->push_argument(start_position);
+  func->push_argument(expr);
 
   self->getAction()->exprQ.push_back(func);
 }  
@@ -1181,19 +1188,20 @@ void push_substr_from_for::builder(s3select* self, const char* a, const char* b)
 {
   std::string token(a, b);
 
-  __function* func = S3SELECT_NEW(self, __function, "#substring_from#", self->getS3F());
+  __function* func = S3SELECT_NEW(self, __function, "substring", self->getS3F());
 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
-  func->push_argument(expr);
 
   base_statement* start_position = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
-  func->push_argument(start_position);
 
   base_statement* end_position = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
+  
   func->push_argument(end_position);
+  func->push_argument(start_position);
+  func->push_argument(expr);
 
   self->getAction()->exprQ.push_back(func);
 }  
