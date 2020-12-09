@@ -77,200 +77,250 @@ struct actionQ
   size_t when_than_count;
 
   actionQ():when_than_count(0), in_set_count(0){}
+
+  std::map<void*,std::vector<char*> *> x_map;
+
+  ~actionQ()
+  {
+    for(auto m : x_map)
+      delete m.second;
+  }
   
+  bool is_already_scanned(void *th,char *a)
+  {
+    //purpose: caller get indication in the case a specific builder is scan more than once the same text(pointer)
+    auto t = x_map.find(th);
+
+    if(t == x_map.end())
+    {
+      auto v = new std::vector<char*>;//TODO delete 
+      x_map.insert(std::pair<void*,std::vector<char*> *>(th,v));
+      v->push_back(a);
+    }
+    else
+    {
+      for( auto c : *(t->second) )
+      {
+        if( strcmp(c,a) == 0)
+          return true;
+      }
+      t->second->push_back(a);
+    }
+    return false;
+  }
+
 };
 
 class s3select;
 
-struct push_from_clause
+struct base_ast_builder
 {
   void operator()(s3select* self, const char* a, const char* b) const;
+
+  virtual void builder(s3select* self, const char* a, const char* b) const = 0;
+};
+
+struct push_from_clause : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_from_clause g_push_from_clause;
 
-struct push_number
+struct push_number : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_number g_push_number;
 
-struct push_float_number
+struct push_float_number : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_float_number g_push_float_number;
 
-struct push_string
+struct push_string : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_string g_push_string;
 
-struct push_variable
+struct push_variable : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_variable g_push_variable;
 
 /////////////////////////arithmetic unit  /////////////////
-struct push_addsub
+struct push_addsub : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_addsub g_push_addsub;
 
-struct push_mulop
+struct push_mulop : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_mulop g_push_mulop;
 
-struct push_addsub_binop
+struct push_addsub_binop : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_addsub_binop g_push_addsub_binop;
 
-struct push_mulldiv_binop
+struct push_mulldiv_binop : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_mulldiv_binop g_push_mulldiv_binop;
 
-struct push_function_arg
+struct push_function_arg : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_function_arg g_push_function_arg;
 
-struct push_function_name
+struct push_function_name : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_function_name g_push_function_name;
 
-struct push_function_expr
+struct push_function_expr : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_function_expr g_push_function_expr;
 
-struct push_cast_expr
+struct push_cast_expr : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_cast_expr g_push_cast_expr;
 
-struct push_data_type
+struct push_data_type : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_data_type g_push_data_type;
 
 ////////////////////// logical unit ////////////////////////
 
-struct push_compare_operator
+struct push_compare_operator : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 
 };
 static push_compare_operator g_push_compare_operator;
 
-struct push_logical_operator
+struct push_logical_operator : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 
 };
 static push_logical_operator g_push_logical_operator;
 
-struct push_arithmetic_predicate
+struct push_arithmetic_predicate : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 
 };
 static push_arithmetic_predicate g_push_arithmetic_predicate;
 
-struct push_logical_predicate
+struct push_logical_predicate : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_logical_predicate g_push_logical_predicate;
 
-struct push_negation
+struct push_negation : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_negation g_push_negation;
 
-struct push_column_pos
+struct push_column_pos : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static  push_column_pos g_push_column_pos;
 
-struct push_projection
+struct push_projection : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_projection g_push_projection;
 
-struct push_alias_projection
+struct push_alias_projection : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_alias_projection g_push_alias_projection;
 
-struct push_between_filter
+struct push_between_filter : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_between_filter g_push_between_filter;
 
-struct push_in_predicate
+struct push_in_predicate : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_in_predicate g_push_in_predicate;
 
-struct push_in_predicate_counter
+struct push_in_predicate_counter : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_in_predicate_counter g_push_in_predicate_counter;
 
-struct push_in_predicate_counter_start
+struct push_in_predicate_counter_start : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_in_predicate_counter_start g_push_in_predicate_counter_start;
 
-struct push_like_predicate
+struct push_like_predicate : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_like_predicate g_push_like_predicate;
 
-struct push_is_null_predicate
+struct push_is_null_predicate : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_is_null_predicate g_push_is_null_predicate;
 
-struct push_case_when_else
+struct push_case_when_else : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_case_when_else g_push_case_when_else;
 
-struct push_when_than
+struct push_when_than : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_when_than g_push_when_than;
 
-struct push_debug_1
+struct push_substr_from : public base_ast_builder
 {
-  void operator()(s3select* self, const char* a, const char* b) const;
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_substr_from g_push_substr_from;
+
+struct push_substr_from_for : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_substr_from_for g_push_substr_from_for;
+
+struct push_debug_1 : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_debug_1 g_push_debug_1;
 
@@ -546,14 +596,24 @@ public:
   };
 };
 
-void push_from_clause::operator()(s3select* self, const char* a, const char* b) const
+void base_ast_builder::operator()(s3select *self, const char *a, const char *b) const
+{
+  //the purpose of the following procedure is to bypass boost::spirit rescan (calling to bind-action more than once per the same text)
+  //which cause wrong AST creation (and later false execution).
+  if (self->getAction()->is_already_scanned((void *)(this), const_cast<char *>(a)))
+    return;
+
+  builder(self, a, b);
+}
+
+void push_from_clause::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
   self->getAction()->from_clause = token;
 }
 
-void push_number::operator()(s3select* self, const char* a, const char* b) const
+void push_number::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -562,7 +622,7 @@ void push_number::operator()(s3select* self, const char* a, const char* b) const
   self->getAction()->exprQ.push_back(v);
 }
 
-void push_float_number::operator()(s3select* self, const char* a, const char* b) const
+void push_float_number::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -585,7 +645,7 @@ void push_float_number::operator()(s3select* self, const char* a, const char* b)
   }
 }
 
-void push_string::operator()(s3select* self, const char* a, const char* b) const
+void push_string::builder(s3select* self, const char* a, const char* b) const
 {
   a++;
   b--; // remove double quotes
@@ -596,7 +656,7 @@ void push_string::operator()(s3select* self, const char* a, const char* b) const
   self->getAction()->exprQ.push_back(v);
 }
 
-void push_variable::operator()(s3select* self, const char* a, const char* b) const
+void push_variable::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -626,7 +686,7 @@ void push_variable::operator()(s3select* self, const char* a, const char* b) con
   self->getAction()->exprQ.push_back(v);
 }
 
-void push_addsub::operator()(s3select* self, const char* a, const char* b) const
+void push_addsub::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -640,7 +700,7 @@ void push_addsub::operator()(s3select* self, const char* a, const char* b) const
   }
 }
 
-void push_mulop::operator()(s3select* self, const char* a, const char* b) const
+void push_mulop::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -662,7 +722,7 @@ void push_mulop::operator()(s3select* self, const char* a, const char* b) const
   }
 }
 
-void push_addsub_binop::operator()(s3select* self, const char* a, const char* b) const
+void push_addsub_binop::builder(s3select* self, const char* a, const char* b) const
 {
   base_statement* l = 0, *r = 0;
 
@@ -676,7 +736,7 @@ void push_addsub_binop::operator()(s3select* self, const char* a, const char* b)
   self->getAction()->exprQ.push_back(as);
 }
 
-void push_mulldiv_binop::operator()(s3select* self, const char* a, const char* b) const
+void push_mulldiv_binop::builder(s3select* self, const char* a, const char* b) const
 {
   base_statement* vl = 0, *vr = 0;
 
@@ -690,7 +750,7 @@ void push_mulldiv_binop::operator()(s3select* self, const char* a, const char* b
   self->getAction()->exprQ.push_back(f);
 }
 
-void push_function_arg::operator()(s3select* self, const char* a, const char* b) const
+void push_function_arg::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -704,7 +764,7 @@ void push_function_arg::operator()(s3select* self, const char* a, const char* b)
   }
 }
 
-void push_function_name::operator()(s3select* self, const char* a, const char* b) const
+void push_function_name::builder(s3select* self, const char* a, const char* b) const
 {
   b--;
   while (*b == '(' || *b == ' ')
@@ -719,7 +779,7 @@ void push_function_name::operator()(s3select* self, const char* a, const char* b
   self->getAction()->funcQ.push_back(func);
 }
 
-void push_function_expr::operator()(s3select* self, const char* a, const char* b) const
+void push_function_expr::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -729,7 +789,7 @@ void push_function_expr::operator()(s3select* self, const char* a, const char* b
   self->getAction()->exprQ.push_back(func);
 }
 
-void push_compare_operator::operator()(s3select* self, const char* a, const char* b) const
+void push_compare_operator::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
   arithmetic_operand::cmp_t c = arithmetic_operand::cmp_t::NA;
@@ -766,7 +826,7 @@ void push_compare_operator::operator()(s3select* self, const char* a, const char
   self->getAction()->arithmetic_compareQ.push_back(c);
 }
 
-void push_logical_operator::operator()(s3select* self, const char* a, const char* b) const
+void push_logical_operator::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
   logical_operand::oplog_t l = logical_operand::oplog_t::NA;
@@ -787,7 +847,7 @@ void push_logical_operator::operator()(s3select* self, const char* a, const char
   self->getAction()->logical_compareQ.push_back(l);
 }
 
-void push_arithmetic_predicate::operator()(s3select* self, const char* a, const char* b) const
+void push_arithmetic_predicate::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -804,7 +864,7 @@ void push_arithmetic_predicate::operator()(s3select* self, const char* a, const 
   self->getAction()->condQ.push_back(t);
 }
 
-void push_logical_predicate::operator()(s3select* self, const char* a, const char* b) const
+void push_logical_predicate::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -828,7 +888,7 @@ void push_logical_predicate::operator()(s3select* self, const char* a, const cha
   self->getAction()->condQ.push_back(f);
 }
 
-void push_negation::operator()(s3select* self, const char* a, const char* b) const
+void push_negation::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
   base_statement* pred;
@@ -855,7 +915,7 @@ void push_negation::operator()(s3select* self, const char* a, const char* b) con
   }
 }
 
-void push_column_pos::operator()(s3select* self, const char* a, const char* b) const
+void push_column_pos::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
   variable* v;
@@ -872,7 +932,7 @@ void push_column_pos::operator()(s3select* self, const char* a, const char* b) c
   self->getAction()->exprQ.push_back(v);
 }
 
-void push_projection::operator()(s3select* self, const char* a, const char* b) const
+void push_projection::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -880,7 +940,7 @@ void push_projection::operator()(s3select* self, const char* a, const char* b) c
   self->getAction()->exprQ.pop_back();
 }
 
-void push_alias_projection::operator()(s3select* self, const char* a, const char* b) const
+void push_alias_projection::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
   //extract alias name
@@ -901,7 +961,7 @@ void push_alias_projection::operator()(s3select* self, const char* a, const char
   self->getAction()->exprQ.pop_back();
 }
 
-void push_between_filter::operator()(s3select* self, const char* a, const char* b) const
+void push_between_filter::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -924,7 +984,7 @@ void push_between_filter::operator()(s3select* self, const char* a, const char* 
   self->getAction()->condQ.push_back(func);
 }
 
-void push_in_predicate_counter::operator()(s3select* self, const char* a, const char* b) const
+void push_in_predicate_counter::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -932,7 +992,7 @@ void push_in_predicate_counter::operator()(s3select* self, const char* a, const 
 
 }
 
-void push_in_predicate_counter_start::operator()(s3select* self, const char* a, const char* b) const
+void push_in_predicate_counter_start::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -940,7 +1000,7 @@ void push_in_predicate_counter_start::operator()(s3select* self, const char* a, 
 
 }
 
-void push_in_predicate::operator()(s3select* self, const char* a, const char* b) const
+void push_in_predicate::builder(s3select* self, const char* a, const char* b) const
 {
   // expr in (e1,e2,e3 ...)
   std::string token(a, b);
@@ -963,7 +1023,7 @@ void push_in_predicate::operator()(s3select* self, const char* a, const char* b)
   self->getAction()->condQ.push_back(func);
 }
 
-void push_like_predicate::operator()(s3select* self, const char* a, const char* b) const
+void push_like_predicate::builder(s3select* self, const char* a, const char* b) const
 {
   // expr like expr ; both should be string, the second expression could be compiled at the
   // time AST is build, which will improve performance much.
@@ -993,7 +1053,7 @@ void push_like_predicate::operator()(s3select* self, const char* a, const char* 
   self->getAction()->condQ.push_back(func);
 }
 
-void push_is_null_predicate::operator()(s3select* self, const char* a, const char* b) const
+void push_is_null_predicate::builder(s3select* self, const char* a, const char* b) const
 {
     //expression is null 
   std::string token(a, b);
@@ -1009,7 +1069,7 @@ void push_is_null_predicate::operator()(s3select* self, const char* a, const cha
   self->getAction()->condQ.push_back(func);
 }
 
-void push_when_than::operator()(s3select* self, const char* a, const char* b) const
+void push_when_than::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -1029,7 +1089,7 @@ void push_when_than::operator()(s3select* self, const char* a, const char* b) co
  self->getAction()->when_than_count ++;
 }
 
-void push_case_when_else::operator()(s3select* self, const char* a, const char* b) const
+void push_case_when_else::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -1060,7 +1120,7 @@ void push_case_when_else::operator()(s3select* self, const char* a, const char* 
   self->getAction()->exprQ.push_back(func);
 }
 
-void push_cast_expr::operator()(s3select* self, const char* a, const char* b) const
+void push_cast_expr::builder(s3select* self, const char* a, const char* b) const
 {
   //cast(expression as int/float/string/timestamp) --> new function "int/float/string/timestamp" ( args = expression )
   std::string token(a, b);
@@ -1079,7 +1139,7 @@ void push_cast_expr::operator()(s3select* self, const char* a, const char* b) co
   self->getAction()->exprQ.push_back(func);
 }
 
-void push_data_type::operator()(s3select* self, const char* a, const char* b) const
+void push_data_type::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -1100,7 +1160,45 @@ void push_data_type::operator()(s3select* self, const char* a, const char* b) co
   }
 }
 
-void push_debug_1::operator()(s3select* self, const char* a, const char* b) const
+void push_substr_from::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  __function* func = S3SELECT_NEW(self, __function, "#substring_from#", self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(expr);
+
+  base_statement* start_position = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(start_position);
+
+  self->getAction()->exprQ.push_back(func);
+}  
+
+void push_substr_from_for::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  __function* func = S3SELECT_NEW(self, __function, "#substring_from#", self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(expr);
+
+  base_statement* start_position = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(start_position);
+
+  base_statement* end_position = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(end_position);
+
+  self->getAction()->exprQ.push_back(func);
+}  
+
+void push_debug_1::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 }

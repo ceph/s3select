@@ -22,7 +22,7 @@ std::string run_expression_in_C_prog(const char* expression)
   //contain return result
   char result_buff[100];
 
-  char* prog_c;
+  char* prog_c = 0;
 
   if(fp_c_file)
   {
@@ -45,6 +45,9 @@ std::string run_expression_in_C_prog(const char* expression)
 
   if(!fp_build)
   {
+    if(prog_c)
+	free(prog_c);
+
     return std::string("#ERROR#");
   }
 
@@ -52,6 +55,10 @@ std::string run_expression_in_C_prog(const char* expression)
 
   unlink(c_run_file.c_str());
   unlink(c_test_file.c_str());
+  fclose(fp_build);
+
+  if(prog_c)
+    free(prog_c);
 
   return std::string(result_buff);
 }
