@@ -6,6 +6,7 @@
 #include <list>
 #include <map>
 #include <vector>
+#include <algorithm>
 #include <string.h>
 #include <math.h>
 
@@ -227,27 +228,17 @@ public:
     m_column_name_pos.push_back( std::pair<const char*, int>(n, pos));
   }
 
-  void update(std::vector<char*>& tokens, size_t num_of_tokens)
+  void update(const std::vector<char*>& tokens, size_t num_of_tokens)
   {
-    size_t i=0;
-    for(auto s : tokens)
-    {
-      if (i>=num_of_tokens)
-      {
-        break;
-      }
-
-      m_columns[i++] = s;
-    }
-    m_upper_bound = i;
-
+    std::copy_n(tokens.begin(), num_of_tokens, m_columns.begin());
+    m_upper_bound = num_of_tokens;
   }
 
   int get_column_pos(const char* n)
   {
     //done only upon building the AST, not on "runtime"
 
-    for( auto iter : m_column_name_pos)
+    for (const auto& iter : m_column_name_pos)
     {
       if (!strcmp(iter.first.c_str(), n))
       {
