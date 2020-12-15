@@ -6,12 +6,11 @@ int main(int argc, char** argv)
 {
   if (argc<3)
   {
-    printf("%s <num-of-rows> <num-of-columns> \n", argv[0]);
+    printf("%s <num-of-rows> <num-of-columns>\n", argv[0]);
     return -1;
   }
 
   srand(1234);
-  int line_no=0;
   for(int i=0; i<atoi(argv[1]); i++)
   {
     printf("%d,", i);

@@ -7,8 +7,8 @@
 #include <map>
 #include <vector>
 #include <algorithm>
-#include <string.h>
-#include <math.h>
+#include <cstring>
+#include <cmath>
 
 #include <boost/lexical_cast.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -31,7 +31,7 @@ class ChunkAllocator : public std::allocator<T>
 public:
   typedef size_t size_type;
   typedef T* pointer;
-  typedef const T* const_pointer;
+  //typedef const T* const_pointer;
   size_t buffer_capacity;
   char* buffer_ptr;
 
@@ -49,7 +49,7 @@ public:
   {
     // allocate storage for _Count elements of type T
 
-    pointer res = (pointer)(buffer_ptr + buffer_capacity);
+    auto res = (pointer)(buffer_ptr + buffer_capacity);
 
     buffer_capacity+= sizeof(T) * num_of_element;
     
@@ -65,18 +65,18 @@ public:
   }
 
   //==================================
-  inline pointer allocate(size_type n, const void* hint = 0)
+  inline pointer allocate(size_type n, const void* hint = 0) // todo remove as both hides non-virtual and unused
   {
     return (_Allocate(n, (pointer)0));
   }
 
   //==================================
-  inline void deallocate(pointer p, size_type n)
+  inline void deallocate(pointer p, size_type n) // todo remove as both hides non-virtual and unused
   {
   }
 
   //==================================
-  ChunkAllocator() throw() : std::allocator<T>()
+  ChunkAllocator() noexcept : std::allocator<T>()
   {
     // alloc from main-buffer
     buffer_capacity = 0;
@@ -85,7 +85,7 @@ public:
   }
 
   //==================================
-  ChunkAllocator(const ChunkAllocator& other) throw() : std::allocator<T>(other)
+  ChunkAllocator(const ChunkAllocator& other) noexcept : std::allocator<T>(other)
   {
     // copy const
     buffer_capacity = 0;
@@ -93,7 +93,7 @@ public:
   }
 
   //==================================
-  ~ChunkAllocator() throw()
+  ~ChunkAllocator() noexcept
   {
     //do nothing
   }
@@ -121,7 +121,7 @@ private:
 
 public:
   std::string _msg;
-  base_s3select_exception(const char* n) : m_severity(s3select_exp_en_t::NONE)
+  explicit base_s3select_exception(const char* n) : m_severity(s3select_exp_en_t::NONE)
   {
     _msg.assign(n);
   }
@@ -144,7 +144,7 @@ public:
     return m_severity;
   }
 
-  virtual ~base_s3select_exception() {}
+  virtual ~base_s3select_exception() = default;
 };
 
 
@@ -225,7 +225,7 @@ public:
 
   void set_column_pos(const char* n, int pos)//TODO use std::string
   {
-    m_column_name_pos.push_back( std::pair<const char*, int>(n, pos));
+    m_column_name_pos.emplace_back(std::pair<const char*, int>(n, pos));
   }
 
   void update(const std::vector<char*>& tokens, size_t num_of_tokens)
@@ -259,7 +259,7 @@ public:
     return m_columns[column_pos];
   }
 
-  int get_num_of_columns()
+  int get_num_of_columns() const
   {
     return m_upper_bound;
   }
@@ -272,7 +272,7 @@ class s3select_reserved_word
   enum class reserve_word_en_t
   {
     NA,
-    S3S_NULL,//TODO check AWS defintions for reserve words, its a long list , what about functions-names? 
+    S3S_NULL,//TODO check AWS definitions for reserve words, its a long list , what about functions-names?
     S3S_NAN 
   } ;
 
@@ -291,7 +291,7 @@ class s3select_reserved_word
 
   reserve_word_en_t get_reserved_word(std::string & token)
   {
-    if (is_reserved_word(token)==true)
+    if (is_reserved_word(token))
     {
       return m_reserved_words.find(token)->second;
     }
@@ -322,11 +322,11 @@ public:
   {
     //purpose: only unique alias names.
 
-    for(auto alias: alias_map)
+    for(const auto& alias: alias_map)
     {
-      if(alias.first.compare(alias_name) == 0)
+      if(alias.first == alias_name)
       {
-        return false;  //alias name already exist
+        return false;  //alias name already exists
       }
 
     }
@@ -336,11 +336,11 @@ public:
     return true;
   }
 
-  base_statement* search_alias(std::string alias_name)
+  base_statement* search_alias(const std::string&& alias_name) const
   {
-    for(auto alias: alias_map)
+    for(const auto& alias: alias_map)
     {
-      if(alias.first.compare(alias_name) == 0)
+      if(alias.first == alias_name)
       {
         return alias.second;  //refernce to execution node
       }
@@ -414,7 +414,7 @@ class value
 {
 
 public:
-  typedef union
+  typedef union  // consider std::variant
   {
     int64_t num;
     char* str;//TODO consider string_view
@@ -914,11 +914,11 @@ protected:
 public:
   base_statement():m_scratch(nullptr), is_last_call(false), m_is_cache_result(false), m_projection_alias(nullptr), m_eval_stack_depth(0) {}
   virtual value& eval() =0;
-  virtual base_statement* left()
+  virtual base_statement* left() const
   {
     return 0;
   }
-  virtual base_statement* right()
+  virtual base_statement* right() const
   {
     return 0;
   }
@@ -939,20 +939,24 @@ public:
     }
   }
 
-  virtual bool is_aggregate()
+  virtual bool is_aggregate() const
   {
     return false;
   }
-  virtual bool is_column()
+  virtual bool is_column() const
   {
     return false;
   }
 
-  bool is_function();
-  bool is_aggregate_exist_in_expression(base_statement* e);//TODO obsolete ?
-  base_statement* get_aggregate();
-  bool is_nested_aggregate(base_statement* e);
-  bool is_binop_aggregate_and_column(base_statement* skip);
+  bool is_function() const;
+
+  //bool is_aggregate_exist_in_expression(const base_statement* e) const;//TODO obsolete ?
+  bool is_aggregate_exist_in_expression() const;//TODO obsolete ?
+
+  const base_statement* get_aggregate() const;
+  //bool is_nested_aggregate(base_statement* e) const;
+  bool is_nested_aggregate() const;
+  bool is_binop_aggregate_and_column(const base_statement* skip) const;
 
   virtual void set_last_call()
   {
@@ -967,7 +971,7 @@ public:
     }
   }
 
-  bool is_set_last_call()
+  bool is_set_last_call() const
   {
     return is_last_call;
   }
@@ -977,7 +981,7 @@ public:
     m_is_cache_result = false;
   }
 
-  bool is_result_cached()
+  bool is_result_cached() const
   {
     return m_is_cache_result == true;
   }
@@ -1186,7 +1190,7 @@ public:
     return var_value;
   }
 
-  virtual value& eval()
+   value& eval() override
   {
     if (m_var_type == var_t::COL_VALUE)
     {
@@ -1229,7 +1233,7 @@ public:
         throw base_s3select_exception("number of calls exceed maximum size, probably a cyclic reference to alias", base_s3select_exception::s3select_exp_en_t::FATAL);
       }
 
-      if (m_projection_alias->is_result_cached() == false)
+      if (!m_projection_alias->is_result_cached())
       {
         var_value = m_projection_alias->eval();
         m_projection_alias->set_result_cache(var_value);
@@ -1249,14 +1253,14 @@ public:
     return var_value;
   }
 
-  virtual std::string print(int ident)
+   std::string print(int ident) override
   {
     //std::string out = std::string(ident,' ') + std::string("var:") + std::to_string(var_value.__val.num);
     //return out;
     return std::string("#");//TBD
   }
 
-  virtual bool semantic()
+   bool semantic() override
   {
     return false;
   }
@@ -1280,28 +1284,28 @@ private:
   
 public:
 
-  virtual bool semantic()
+   bool semantic() override
   {
     return true;
   }
 
-  virtual base_statement* left()
+   base_statement* left() const override
   {
     return l;
   }
-  virtual base_statement* right()
+   base_statement* right() const override
   {
     return r;
   }
 
-  virtual std::string print(int ident)
+   std::string print(int ident) override
   {
     //std::string out = std::string(ident,' ') + "compare:" += std::to_string(_cmp) + "\n" + l->print(ident-5) +r->print(ident+5);
     //return out;
     return std::string("#");//TBD
   }
 
-  virtual value& eval()
+   value& eval() override
   {
 
     switch (_cmp)
@@ -1338,7 +1342,7 @@ public:
 
   arithmetic_operand(base_statement* _l, cmp_t c, base_statement* _r):l(_l), r(_r), _cmp(c),negation_result(false) {}
   
-  arithmetic_operand(base_statement* p)//NOT operator 
+  explicit arithmetic_operand(base_statement* p)//NOT operator
   {
     l = dynamic_cast<arithmetic_operand*>(p)->l;
     r = dynamic_cast<arithmetic_operand*>(p)->r;
@@ -1347,7 +1351,7 @@ public:
     negation_result = ! dynamic_cast<arithmetic_operand*>(p)->negation_result;
   }
 
-  virtual ~arithmetic_operand() {}
+  virtual ~arithmetic_operand() = default;
 };
 
 class logical_operand : public base_statement
@@ -1367,23 +1371,23 @@ private:
 
 public:
 
-  virtual base_statement* left()
+  base_statement* left() const override
   {
     return l;
   }
-  virtual base_statement* right()
+  base_statement* right() const override
   {
     return r;
   }
 
-  virtual bool semantic()
+  bool semantic() override
   {
     return true;
   }
 
   logical_operand(base_statement* _l, oplog_t _o, base_statement* _r):l(_l), r(_r), _oplog(_o),negation_result(false) {}
 
-  logical_operand(base_statement * p)//NOT operator
+  explicit logical_operand(base_statement * p)//NOT operator
   {
     l = dynamic_cast<logical_operand*>(p)->l;
     r = dynamic_cast<logical_operand*>(p)->r;
@@ -1394,13 +1398,14 @@ public:
 
   virtual ~logical_operand() {}
 
-  virtual std::string print(int ident)
+   std::string print(int ident) override
   {
     //std::string out = std::string(ident, ' ') + "logical_operand:" += std::to_string(_oplog) + "\n" + l->print(ident - 5) + r->print(ident + 5);
     //return out;
     return std::string("#");//TBD
   }
-  virtual value& eval()
+
+  value& eval() override
   {
     bool res;
     if (!l || !r)
@@ -1412,7 +1417,7 @@ public:
     {
       if (a.i64() == false)
       {
-        res = false ^ negation_result;
+        res = negation_result;
         return var_value = res;
       } 
       value b = r->eval();
@@ -1426,7 +1431,7 @@ public:
     {
       if (a.i64() == true)
       {
-        res = true ^ negation_result;
+        res = !negation_result;
         return var_value = res;
       }
       value b = r->eval();
@@ -1457,28 +1462,28 @@ private:
 
 public:
 
-  virtual base_statement* left()
+   base_statement* left() const override
   {
     return l;
   }
-  virtual base_statement* right()
+   base_statement* right() const override
   {
     return r;
   }
 
-  virtual bool semantic()
+   bool semantic()  override
   {
     return true;
   }
 
-  virtual std::string print(int ident)
+   std::string print(int ident) override
   {
     //std::string out = std::string(ident, ' ') + "mulldiv_operation:" += std::to_string(_mulldiv) + "\n" + l->print(ident - 5) + r->print(ident + 5);
     //return out;
     return std::string("#");//TBD
   }
 
-  virtual value& eval()
+   value& eval() override
   {
     switch (_mulldiv)
     {
@@ -1510,7 +1515,7 @@ public:
 
   mulldiv_operation(base_statement* _l, muldiv_t c, base_statement* _r):l(_l), r(_r), _mulldiv(c) {}
 
-  virtual ~mulldiv_operation() {}
+  virtual ~mulldiv_operation() = default;
 };
 
 class addsub_operation : public base_statement
@@ -1530,31 +1535,31 @@ private:
 
 public:
 
-  virtual base_statement* left()
+   base_statement* left() const override
   {
     return l;
   }
-  virtual base_statement* right()
+   base_statement* right() const override
   {
     return r;
   }
 
-  virtual bool semantic()
+   bool semantic() override
   {
     return true;
   }
 
   addsub_operation(base_statement* _l, addsub_op_t _o, base_statement* _r):l(_l), r(_r), _op(_o) {}
 
-  virtual ~addsub_operation() {}
+  virtual ~addsub_operation() = default;
 
-  virtual std::string print(int ident)
+   std::string print(int ident) override
   {
     //std::string out = std::string(ident, ' ') + "addsub_operation:" += std::to_string(_op) + "\n" + l->print(ident - 5) + r->print(ident + 5);
     return std::string("#");//TBD
   }
 
-  virtual value& eval()
+   value& eval() override
   {
     if (_op == addsub_op_t::NA) // -num , +num , unary-operation on number
     {
@@ -1591,24 +1596,24 @@ class negate_function_operation : public base_statement
   
   public:
 
-  negate_function_operation(base_statement *f):function_to_negate(f){}
+  explicit negate_function_operation(base_statement *f):function_to_negate(f){}
 
-  virtual std::string print(int ident)
+   std::string print(int ident) override
   {
     return std::string("#");//TBD
   }
 
-  virtual bool semantic()
+   bool semantic() override
   {
     return true;
   }
 
-  virtual base_statement* left()
+  base_statement* left() const override
   {
     return function_to_negate;
   }
 
-  virtual value& eval()
+   value& eval() override
   {
     res = function_to_negate->eval();
 
@@ -1640,13 +1645,13 @@ public:
   // validate semantic on creation instead on run-time
   virtual bool operator()(bs_stmt_vec_t* args, variable* result) = 0;
   base_function() : aggregate(false) {}
-  bool is_aggregate()
+  bool is_aggregate() const
   {
-    return aggregate == true;
+    return aggregate;
   }
   virtual void get_aggregate_result(variable*) {}
 
-  virtual ~base_function() {}
+  virtual ~base_function() = default;
   
   virtual void dtor()
   {//release function-body implementation 
@@ -1655,6 +1660,6 @@ public:
 };
 
 
-};//namespace
+}//namespace
 
 #endif
