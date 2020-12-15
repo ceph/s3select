@@ -15,7 +15,6 @@
 #include <boost/bind.hpp>
 #include <functional>
 
-using namespace std::string_literals;
 
 #define _DEBUG_TERM {string  token(a,b);std::cout << __FUNCTION__ << token << std::endl;}
 
@@ -932,7 +931,7 @@ void push_negation::builder(s3select* self, const char* a, const char* b) const
   //upon NOT operator, the logical and arithmetical operators are "tagged" to negate result.
   if (dynamic_cast<logical_operand*>(pred))
   {
-    logical_operand* f = S3SELECT_NEW(self, logical_operand, pred); // todo: marked as "empty statemant"
+    logical_operand* f = S3SELECT_NEW(self, logical_operand, pred);
     self->getAction()->condQ.push_back(f);
   }
   else if (dynamic_cast<__function*>(pred) || dynamic_cast<negate_function_operation*>(pred))

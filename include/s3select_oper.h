@@ -31,7 +31,6 @@ class ChunkAllocator : public std::allocator<T>
 public:
   typedef size_t size_type;
   typedef T* pointer;
-  //typedef const T* const_pointer;
   size_t buffer_capacity;
   char* buffer_ptr;
 
@@ -65,7 +64,7 @@ public:
   }
 
   //==================================
-  inline pointer allocate(size_type n, const void* hint = 0) // todo remove as both hides non-virtual and unused
+  inline pointer allocate(size_type n, [[maybe_unused]] const void* hint = 0) // todo remove as both hides non-virtual and unused
   {
     return (_Allocate(n, (pointer)0));
   }
@@ -278,18 +277,18 @@ class s3select_reserved_word
 
   using reserved_words = std::map<std::string,reserve_word_en_t>;
 
-  const reserved_words m_reserved_words=
+  inline static const reserved_words m_reserved_words=
   {
     {"null",reserve_word_en_t::S3S_NULL},{"NULL",reserve_word_en_t::S3S_NULL},
     {"nan",reserve_word_en_t::S3S_NAN},{"NaN",reserve_word_en_t::S3S_NAN}
   };
 
-  bool is_reserved_word(std::string & token)
+  static bool is_reserved_word(std::string & token)
   {
     return m_reserved_words.find(token) != m_reserved_words.end() ;
   }
 
-  reserve_word_en_t get_reserved_word(std::string & token)
+  static reserve_word_en_t get_reserved_word(std::string & token) // todo consider returning std::optional
   {
     if (is_reserved_word(token))
     {
@@ -336,16 +335,17 @@ public:
     return true;
   }
 
+  // todo consider returning std::optional
   base_statement* search_alias(const std::string&& alias_name) const
   {
     for(const auto& alias: alias_map)
     {
       if(alias.first == alias_name)
       {
-        return alias.second;  //refernce to execution node
+        return alias.second;  //reference to execution node
       }
     }
-    return 0;
+    return nullptr;
   }
 };
 
@@ -544,11 +544,11 @@ public:
       m_to_string.assign( __val.str );
     }
 
-    return std::string( m_to_string.c_str() );
+    return std::string( m_to_string );
   }
 
 
-  value& operator=(value& o)
+  value& operator=(const value& o)
   {
     if(o.type == value_En_t::STRING)
     {
@@ -606,17 +606,17 @@ public:
     return *this;
   }
 
-  int64_t i64()
+  int64_t i64() const
   {
     return __val.num;
   }
 
-  const char* str()
+  const char* str() const
   {
     return __val.str;
   }
 
-  double dbl()
+  double dbl() const
   {
     return __val.dbl;
   }
@@ -626,7 +626,7 @@ public:
     return __val.timestamp;
   }
 
-  bool operator<(const value& v)//basic compare operator , most itensive runtime operation
+  bool operator<(const value& v) const//basic compare operator , most itensive runtime operation
   { 
     //TODO NA possible?
     if (is_string() && v.is_string())
@@ -675,7 +675,7 @@ public:
     throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
   }
 
-  bool operator>(const value& v) //basic compare operator , most itensive runtime operation
+  bool operator>(const value& v) const //basic compare operator , most itensive runtime operation
   {
     //TODO NA possible?
     if (is_string() && v.is_string())
@@ -724,7 +724,7 @@ public:
     throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
   }
 
-  bool operator==(const value& v) //basic compare operator , most itensive runtime operation
+  bool operator==(const value& v) const //basic compare operator , most itensive runtime operation
   {
     //TODO NA possible?
     if (is_string() && v.is_string())
@@ -773,31 +773,32 @@ public:
 
     throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
   }
-  bool operator<=(const value& v)
+
+  bool operator<=(const value& v) const
   {
-    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan())) {
+    if (is_null() || v.is_null() || is_nan() || v.is_nan()) {
       return false;
-    } else {
-      return !(*this>v);
-    } 
+    }
+
+    return !(*this > v);
   }
   
-  bool operator>=(const value& v)
+  bool operator>=(const value& v) const
   {
-    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan())) {
+    if (is_null() || v.is_null() || is_nan() || v.is_nan()) {
       return false;
-    } else {
-      return !(*this<v);
-    } 
+    }
+
+    return !(*this < v);
   }
   
-  bool operator!=(const value& v)
+  bool operator!=(const value& v) const
   {
-    if ((is_null() || v.is_null()) || (is_nan() || v.is_nan())) {
+    if (is_null() || v.is_null() || is_nan() || v.is_nan()) {
       return true;
-    } else {
-      return !(*this == v);
-      } 
+    }
+
+    return !(*this == v);
   }
   
   template<typename binop> //conversion rules for arithmetical binary operations
@@ -846,7 +847,6 @@ public:
     if ((l.is_null() || r.is_null()) || (l.is_nan() || r.is_nan()))
     {
       l.set_nan();
-      return l;
     }
 
     return l;
@@ -916,11 +916,11 @@ public:
   virtual value& eval() =0;
   virtual base_statement* left() const
   {
-    return 0;
+    return nullptr;
   }
   virtual base_statement* right() const
   {
-    return 0;
+    return nullptr;
   }
   virtual std::string print(int ident) =0;//TODO complete it, one option to use level parametr in interface ,
   virtual bool semantic() =0;//done once , post syntax , traverse all nodes and validate semantics.
@@ -950,11 +950,10 @@ public:
 
   bool is_function() const;
 
-  //bool is_aggregate_exist_in_expression(const base_statement* e) const;//TODO obsolete ?
   bool is_aggregate_exist_in_expression() const;//TODO obsolete ?
 
   const base_statement* get_aggregate() const;
-  //bool is_nested_aggregate(base_statement* e) const;
+
   bool is_nested_aggregate() const;
   bool is_binop_aggregate_and_column(const base_statement* skip) const;
 
@@ -1078,7 +1077,7 @@ public:
     }
   }
 
-  variable(s3select_reserved_word::reserve_word_en_t reserve_word)
+  explicit variable(s3select_reserved_word::reserve_word_en_t reserve_word)
   {
     if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_NULL)
     {
@@ -1100,9 +1099,10 @@ public:
     }
   }
 
-  void operator=(value& v)
+  variable& operator=(value& v)
   {
     var_value = v;
+    return *this;
   }
 
   void set_value(const char* s)
@@ -1190,7 +1190,7 @@ public:
     return var_value;
   }
 
-   value& eval() override
+  value& eval() override
   {
     if (m_var_type == var_t::COL_VALUE)
     {
@@ -1218,7 +1218,7 @@ public:
 
         //not enter this scope again
         column_pos = column_alias;
-        if(m_projection_alias == 0)
+        if(m_projection_alias == nullptr)
         {
           throw base_s3select_exception(std::string("alias {")+_name+std::string("} or column not exist in schema"), base_s3select_exception::s3select_exp_en_t::FATAL);
         }
@@ -1253,14 +1253,14 @@ public:
     return var_value;
   }
 
-   std::string print(int ident) override
+  std::string print(int ident) override
   {
     //std::string out = std::string(ident,' ') + std::string("var:") + std::to_string(var_value.__val.num);
     //return out;
     return std::string("#");//TBD
   }
 
-   bool semantic() override
+  bool semantic() override
   {
     return false;
   }
@@ -1284,28 +1284,28 @@ private:
   
 public:
 
-   bool semantic() override
+  bool semantic() override
   {
     return true;
   }
 
-   base_statement* left() const override
+  base_statement* left() const override
   {
     return l;
   }
-   base_statement* right() const override
+  base_statement* right() const override
   {
     return r;
   }
 
-   std::string print(int ident) override
+  std::string print(int ident) override
   {
     //std::string out = std::string(ident,' ') + "compare:" += std::to_string(_cmp) + "\n" + l->print(ident-5) +r->print(ident+5);
     //return out;
     return std::string("#");//TBD
   }
 
-   value& eval() override
+  value& eval() override
   {
 
     switch (_cmp)
@@ -1398,7 +1398,7 @@ public:
 
   virtual ~logical_operand() {}
 
-   std::string print(int ident) override
+  std::string print(int ident) override
   {
     //std::string out = std::string(ident, ' ') + "logical_operand:" += std::to_string(_oplog) + "\n" + l->print(ident - 5) + r->print(ident + 5);
     //return out;
@@ -1462,28 +1462,29 @@ private:
 
 public:
 
-   base_statement* left() const override
+  base_statement* left() const override
   {
     return l;
   }
-   base_statement* right() const override
+
+  base_statement* right() const override
   {
     return r;
   }
 
-   bool semantic()  override
+  bool semantic() override
   {
     return true;
   }
 
-   std::string print(int ident) override
+  std::string print(int ident) override
   {
     //std::string out = std::string(ident, ' ') + "mulldiv_operation:" += std::to_string(_mulldiv) + "\n" + l->print(ident - 5) + r->print(ident + 5);
     //return out;
     return std::string("#");//TBD
   }
 
-   value& eval() override
+  value& eval() override
   {
     switch (_mulldiv)
     {
@@ -1535,16 +1536,17 @@ private:
 
 public:
 
-   base_statement* left() const override
+  base_statement* left() const override
   {
     return l;
   }
-   base_statement* right() const override
+
+  base_statement* right() const override
   {
     return r;
   }
 
-   bool semantic() override
+  bool semantic() override
   {
     return true;
   }
@@ -1553,13 +1555,13 @@ public:
 
   virtual ~addsub_operation() = default;
 
-   std::string print(int ident) override
+  std::string print(int ident) override
   {
     //std::string out = std::string(ident, ' ') + "addsub_operation:" += std::to_string(_op) + "\n" + l->print(ident - 5) + r->print(ident + 5);
     return std::string("#");//TBD
   }
 
-   value& eval() override
+  value& eval() override
   {
     if (_op == addsub_op_t::NA) // -num , +num , unary-operation on number
     {
@@ -1598,12 +1600,12 @@ class negate_function_operation : public base_statement
 
   explicit negate_function_operation(base_statement *f):function_to_negate(f){}
 
-   std::string print(int ident) override
+  std::string print(int ident) override
   {
     return std::string("#");//TBD
   }
 
-   bool semantic() override
+  bool semantic() override
   {
     return true;
   }
@@ -1613,7 +1615,7 @@ class negate_function_operation : public base_statement
     return function_to_negate;
   }
 
-   value& eval() override
+  value& eval() override
   {
     res = function_to_negate->eval();
 
