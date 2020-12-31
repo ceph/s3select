@@ -143,11 +143,11 @@ class __function : public base_statement
 private:
   bs_stmt_vec_t arguments;
   std::string name;
-  base_function* m_func_impl;
+  base_function* m_func_impl; // todo: separate the object types used when constructing the __function vs when m_func_impl should be fixed
   s3select_functions* m_s3select_functions;
   variable m_result;
 
-  void _resolve_name()
+  void _resolve_name()  // todo: separate the object types used when constructing the __function vs when m_func_impl should be fixed
   {
     if (m_func_impl)
     {
@@ -183,26 +183,25 @@ public:
     }
   }
 
-  virtual bool is_aggregate() // TODO under semantic flow
+  bool is_aggregate() const override// TODO under semantic flow
   {
-    _resolve_name();
+    const_cast<__function*>(this)->_resolve_name();
 
     return m_func_impl->is_aggregate();
   }
 
-  virtual bool semantic()
+  bool semantic() override
   {
     return true;
   }
 
-  __function(const char* fname, s3select_functions* s3f) : name(fname), m_func_impl(0), m_s3select_functions(s3f) {}
+  __function(const char* fname, s3select_functions* s3f) : name(fname), m_func_impl(nullptr), m_s3select_functions(s3f) {}
 
-  virtual value& eval()
+  value& eval() override
   {
+    const_cast<__function*>(this)->_resolve_name();
 
-    _resolve_name();
-
-    if (is_last_call == false)
+    if (!is_last_call)
     {
       (*m_func_impl)(&arguments, &m_result);
     }
@@ -215,10 +214,9 @@ public:
   }
 
 
-
-  virtual std::string  print(int ident)
+  std::string  print(int ident) override
   {
-    return std::string(0);
+    return std::string{};
   }
 
   void push_argument(base_statement* arg)
@@ -227,12 +225,12 @@ public:
   }
 
 
-  bs_stmt_vec_t& get_arguments()
+  const bs_stmt_vec_t& get_arguments() const
   {
     return arguments;
   }
 
-  virtual ~__function() {}
+  virtual ~__function() = default;
 };
 
 
@@ -250,16 +248,16 @@ public:
   }
 
 /*
-    s3-select function defintions
+    s3-select function definitions
 */
 struct _fn_add : public base_function
 {
 
   value var_result;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     base_statement* x =  *iter;
     iter++;
     base_statement* y = *iter;
@@ -282,9 +280,9 @@ struct _fn_sum : public base_function
     aggregate = true;
   }
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     base_statement* x = *iter;
 
     try
@@ -319,7 +317,7 @@ struct _fn_count : public base_function
     aggregate=true;
   }
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     count += 1;
 
@@ -341,10 +339,9 @@ struct _fn_avg : public base_function
 
     _fn_avg() : sum(0) { aggregate = true; }
 
-    bool operator()(bs_stmt_vec_t* args, variable *result)
+    bool operator()(bs_stmt_vec_t* args, variable *result) override
     {
-        bs_stmt_vec_t::iterator iter = args->begin();
-        base_statement *x = *iter;
+        base_statement *x = *(args->begin());
 
         try
         {
@@ -379,10 +376,9 @@ struct _fn_min : public base_function
     aggregate=true;
   }
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
-    base_statement* x =  *iter;
+    base_statement* x =  *(args->begin());
 
     if(min > x->eval())
     {
@@ -409,9 +405,9 @@ struct _fn_max : public base_function
     aggregate=true;
   }
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     base_statement* x =  *iter;
 
     if(max < x->eval())
@@ -435,7 +431,7 @@ struct _fn_to_int : public base_function
   value var_result;
   value func_arg;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     char* perr;
     int64_t i=0;
@@ -454,7 +450,7 @@ struct _fn_to_int : public base_function
       throw base_s3select_exception("characters after int!");
       return false;
     }
-  } 
+  }
     else if (func_arg.type == value::value_En_t::FLOAT)
     {
       i = func_arg.dbl();
@@ -474,42 +470,43 @@ struct _fn_to_int : public base_function
 
 struct _fn_to_float : public base_function
 {
-
   value var_result;
-  value v_from;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    char* perr;
-    double d=0;
     value v = (*args->begin())->eval();
 
-    if (v.type == value::value_En_t::STRING)
+    switch (v.type) {
+
+    case value::value_En_t::STRING:
     {
-      errno = 0;
-      d = strtod(v.str(), &perr) ;  //TODO check error before constructor
-      if ((errno == ERANGE && (d == LONG_MAX || d == LONG_MIN)) || (errno != 0 && d == 0)) {
+      char* pend;
+      double d = strtod(v.str(), &pend);
+      if (errno == ERANGE) {
         throw base_s3select_exception("converted value would fall out of the range of the result type!");
-        return false;  
+      }
+      if (pend == v.str()) {
+        // no number found
+        throw base_s3select_exception("text cannot be converted to a number");
+      }
+      if (*pend) {
+        throw base_s3select_exception("extra characters after the number");
+      }
+
+      var_result = d;
     }
-    
-    if (*perr != '\0') {
-      throw base_s3select_exception("characters after float!");
-      return false;
-    }
-  }
-    else if (v.type == value::value_En_t::FLOAT)
-    {
-      d = v.dbl();
-    }
-    else
-    {
-      d = v.i64();
+    break;
+
+    case value::value_En_t::FLOAT:
+      var_result = v.dbl();
+      break;
+
+    default:
+      var_result = v.i64();
+      break;
     }
 
-    var_result = d;
     *result = var_result;
-
     return true;
   }
 
@@ -537,7 +534,7 @@ struct _fn_to_timestamp : public base_function
   value v_str;
 
 
-  bool datetime_validation()
+  [[nodiscard]] bool datetime_validation() const
   {
     //TODO temporary , should check for leap year
 
@@ -569,14 +566,14 @@ struct _fn_to_timestamp : public base_function
     return true;
   }
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
 
     hr = 0;
     mn = 0;
     sc = 0;
 
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     int args_size = args->size();
 
     if (args_size != 1)
@@ -595,7 +592,7 @@ struct _fn_to_timestamp : public base_function
 
     bsc::parse_info<> info_dig = bsc::parse(v_str.str(), d_yyyymmdd_dig >> *(separator) >> d_time_dig);
 
-    if(datetime_validation()==false or !info_dig.full)
+    if(!datetime_validation() || !info_dig.full)
     {
       throw base_s3select_exception("input date-time is illegal");
     }
@@ -617,9 +614,9 @@ struct _fn_extact_from_timestamp : public base_function
 
   value val_date_part;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     int args_size = args->size();
 
     if (args_size < 2)
@@ -631,7 +628,7 @@ struct _fn_extact_from_timestamp : public base_function
 
     val_date_part = date_part->eval();//TODO could be done once?
 
-    if(val_date_part.is_string()== false)
+    if(!val_date_part.is_string())
     {
       throw base_s3select_exception("first parameter should be string");
     }
@@ -640,7 +637,7 @@ struct _fn_extact_from_timestamp : public base_function
 
     base_statement* ts = *iter;
 
-    if(ts->eval().is_timestamp()== false)
+    if(!ts->eval().is_timestamp())
     {
       throw base_s3select_exception("second parameter is not timestamp");
     }
@@ -680,9 +677,9 @@ struct _fn_diff_timestamp : public base_function
   value val_dt1;
   value val_dt2;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     int args_size = args->size();
 
     if (args_size < 3)
@@ -697,7 +694,7 @@ struct _fn_diff_timestamp : public base_function
     iter++;
     base_statement* dt1_param = *iter;
     val_dt1 = dt1_param->eval();
-    if (val_dt1.is_timestamp() == false)
+    if (!val_dt1.is_timestamp())
     {
       throw base_s3select_exception("second parameter should be timestamp");
     }
@@ -705,7 +702,7 @@ struct _fn_diff_timestamp : public base_function
     iter++;
     base_statement* dt2_param = *iter;
     val_dt2 = dt2_param->eval();
-    if (val_dt2.is_timestamp() == false)
+    if (!val_dt2.is_timestamp())
     {
       throw base_s3select_exception("third parameter should be timestamp");
     }
@@ -752,9 +749,9 @@ struct _fn_add_to_timestamp : public base_function
   value val_quantity;
   value val_timestamp;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     int args_size = args->size();
 
     if (args_size < 3)
@@ -765,7 +762,7 @@ struct _fn_add_to_timestamp : public base_function
     base_statement* date_part = *iter;
     val_date_part = date_part->eval();//TODO could be done once?
 
-    if(val_date_part.is_string()== false)
+    if(!val_date_part.is_string())
     {
       throw base_s3select_exception("first parameter should be string");
     }
@@ -774,7 +771,7 @@ struct _fn_add_to_timestamp : public base_function
     base_statement* quan = *iter;
     val_quantity = quan->eval();
 
-    if (val_quantity.is_number() == false)
+    if (!val_quantity.is_number())
     {
       throw base_s3select_exception("second parameter should be number");  //TODO what about double?
     }
@@ -783,7 +780,7 @@ struct _fn_add_to_timestamp : public base_function
     base_statement* ts = *iter;
     val_timestamp = ts->eval();
 
-    if(val_timestamp.is_timestamp() == false)
+    if(!val_timestamp.is_timestamp())
     {
       throw base_s3select_exception("third parameter should be time-stamp");
     }
@@ -820,7 +817,7 @@ struct _fn_utcnow : public base_function
 
   boost::posix_time::ptime now_ptime;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     int args_size = args->size();
 
@@ -841,7 +838,7 @@ struct _fn_between : public base_function
 
   value res;
   
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     int args_size = args->size();
 
@@ -851,7 +848,7 @@ struct _fn_between : public base_function
       throw base_s3select_exception("between operates on 3 expressions");//TODO FATAL
     }
 
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
 
     base_statement* second_expr = *iter;
     iter++;    
@@ -880,7 +877,7 @@ static char s3select_ver[10]="41.a";
 struct _fn_version : public base_function
 {
   value val; //TODO use git to generate sha1
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     val = &s3select_ver[0];
     *result = val;
@@ -893,9 +890,9 @@ struct _fn_isnull : public base_function
 
   value res;
   
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     base_statement* expr = *iter;
     value expr_val = expr->eval();
     if ( expr_val.is_null()) {
@@ -912,9 +909,9 @@ struct _fn_in : public base_function
 
   value res;
 
-  bool operator()(bs_stmt_vec_t *args, variable *result)
+  bool operator()(bs_stmt_vec_t *args, variable *result) override
   {
-    int args_size = args->size()-1;
+    int args_size = static_cast<int>(args->size()) - 1;
     base_statement *main_expr = (*args)[args_size];
     value main_expr_val = main_expr->eval();
     args_size--;
@@ -943,14 +940,14 @@ struct _fn_like : public base_function
   value res;
   std::regex compiled_regex;
 
-  _fn_like(value s)
+  explicit _fn_like(value s)
   {
     std::string string_value = s.to_string();
     transform(string_value);
     compiled_regex = std::regex(string_value);
   } 
 
-  void transform(std::string& s)
+  static void transform(std::string& s)
   {
     std::string::size_type i = 0;
     while (!s.empty())
@@ -997,9 +994,9 @@ struct _fn_like : public base_function
     }
   }
   
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     iter++;
     base_statement* main_expr = *iter;
     value main_expr_val = main_expr->eval();
@@ -1024,9 +1021,9 @@ struct _fn_substr : public base_function
   value v_from;
   value v_to;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
     int args_size = args->size();
 
 
@@ -1137,9 +1134,9 @@ struct _fn_charlength : public base_function {
 
     value v_str;
  
-    bool operator()(bs_stmt_vec_t* args, variable* result)
+    bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
-        bs_stmt_vec_t::iterator iter = args->begin();
+        auto iter = args->begin();
         base_statement* str =  *iter;
         v_str = str->eval();
         if(v_str.type != value::value_En_t::STRING) {
@@ -1157,9 +1154,9 @@ struct _fn_lower : public base_function {
     std::string buff;
     value v_str;
 
-    bool operator()(bs_stmt_vec_t* args, variable* result)
+    bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
-        bs_stmt_vec_t::iterator iter = args->begin();
+        auto iter = args->begin();
         base_statement* str = *iter;
         v_str = str->eval();
         if(v_str.type != value::value_En_t::STRING) {
@@ -1178,9 +1175,9 @@ struct _fn_upper : public base_function {
     std::string buff;
     value v_str;
 
-    bool operator()(bs_stmt_vec_t* args, variable* result)
+    bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
-        bs_stmt_vec_t::iterator iter = args->begin();
+        auto iter = args->begin();
         base_statement* str = *iter;
         v_str = str->eval();
         if(v_str.type != value::value_En_t::STRING) {
@@ -1199,9 +1196,9 @@ struct _fn_nullif : public base_function {
     value x;
     value y;
 
-    bool operator()(bs_stmt_vec_t* args, variable* result)
+    bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
-        bs_stmt_vec_t::iterator iter = args->begin();
+        auto iter = args->begin();
 
         int args_size = args->size();
         if (args_size != 2)
@@ -1240,11 +1237,11 @@ struct _fn_nullif : public base_function {
 
 struct _fn_when_than : public base_function {
 
-  value when_value,than_value;
+  value when_value;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
 
     base_statement* than_expr = *iter;
     iter ++;
@@ -1269,7 +1266,7 @@ struct _fn_case_when_else : public base_function {
 
   value when_than_value;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     base_statement* else_expr = *(args->begin());
 
@@ -1297,9 +1294,9 @@ struct _fn_coalesce : public base_function
 
   value res;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter_begin = args->begin();
+    auto iter_begin = args->begin();
     int args_size = args->size();
     while (args_size >= 1)
     {
@@ -1322,9 +1319,9 @@ struct _fn_string : public base_function
 
   value res;
 
-  bool operator()(bs_stmt_vec_t* args, variable* result)
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    bs_stmt_vec_t::iterator iter = args->begin();
+    auto iter = args->begin();
 
     base_statement* expr = *iter;
     value expr_val = expr->eval();
@@ -1432,12 +1429,12 @@ struct _fn_trailing : public base_function {
 
 base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt_vec_t &arguments)
 {
-  const FunctionLibrary::const_iterator iter = m_functions_library.find(fn_name.data());
+  const auto iter = m_functions_library.find(fn_name.data());
 
   if (iter == m_functions_library.end())
   {
     std::string msg;
-    msg = std::string{fn_name} + " " + " function not found";
+    msg = std::string{fn_name} + " function not found"s;
     throw base_s3select_exception(msg, base_s3select_exception::s3select_exp_en_t::FATAL);
   }
 
@@ -1568,9 +1565,9 @@ base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt
   }
 }
 
-bool base_statement::is_function()
+bool base_statement::is_function() const
 {
-  if (dynamic_cast<__function*>(this))
+  if (dynamic_cast<__function*>(const_cast<base_statement*>(this)))
   {
     return true;
   }
@@ -1580,27 +1577,27 @@ bool base_statement::is_function()
   }
 }
 
-bool base_statement::is_aggregate_exist_in_expression(base_statement* e) //TODO obsolete ?
+bool base_statement::is_aggregate_exist_in_expression() const //TODO obsolete ?
 {
-  if (e->is_aggregate())
+  if (is_aggregate())
   {
     return true;
   }
 
-  if (e->left() && e->left()->is_aggregate_exist_in_expression(e->left()))
+  if (left() && left()->is_aggregate_exist_in_expression())
   {
     return true;
   }
 
-  if (e->right() && e->right()->is_aggregate_exist_in_expression(e->right()))
+  if (right() && right()->is_aggregate_exist_in_expression())
   {
     return true;
   }
 
-  if (e->is_function())
+  if (is_function())
   {
-    for (auto i : dynamic_cast<__function*>(e)->get_arguments())
-      if (e->is_aggregate_exist_in_expression(i))
+    for (const auto& i : dynamic_cast<__function*>(const_cast<base_statement*>(this))->get_arguments())
+      if (i->is_aggregate_exist_in_expression())
       {
         return true;
       }
@@ -1609,64 +1606,63 @@ bool base_statement::is_aggregate_exist_in_expression(base_statement* e) //TODO 
   return false;
 }
 
-base_statement* base_statement::get_aggregate()
+const base_statement* base_statement::get_aggregate() const
 {
   //search for aggregation function in AST
-  base_statement* res = 0;
+  const base_statement* res;
 
   if (is_aggregate())
   {
     return this;
   }
 
-  if (left() && (res=left()->get_aggregate())!=0)
+  if (left() && (res=left()->get_aggregate())!=nullptr)
   {
     return res;
   }
 
-  if (right() && (res=right()->get_aggregate())!=0)
+  if (right() && (res=right()->get_aggregate())!=nullptr)
   {
     return res;
   }
 
   if (is_function())
   {
-    for (auto i : dynamic_cast<__function*>(this)->get_arguments())
+    for (const auto& i : dynamic_cast<__function*>(const_cast<base_statement*>(this))->get_arguments())
     {
-      base_statement* b=i->get_aggregate();
-      if (b)
+      if (auto b = i->get_aggregate(); b)
       {
         return b;
       }
     }
   }
-  return 0;
+  return nullptr;
 }
 
-bool base_statement::is_nested_aggregate(base_statement* e)
+bool base_statement::is_nested_aggregate() const
 {
   //validate for non nested calls for aggregation function, i.e. sum ( min ( ))
-  if (e->is_aggregate())
+  if (is_aggregate())
   {
-    if (e->left())
+    if (left())
     {
-      if (e->left()->is_aggregate_exist_in_expression(e->left()))
+      if (left()->is_aggregate_exist_in_expression())
       {
         return true;
       }
     }
-    else if (e->right())
+    else if (right())
     {
-      if (e->right()->is_aggregate_exist_in_expression(e->right()))
+      if (right()->is_aggregate_exist_in_expression())
       {
         return true;
       }
     }
-    else if (e->is_function())
+    else if (is_function())
     {
-      for (auto i : dynamic_cast<__function*>(e)->get_arguments())
+      for (const auto& i : dynamic_cast<__function*>(const_cast<base_statement*>(this))->get_arguments())
       {
-        if (i->is_aggregate_exist_in_expression(i))
+        if (i->is_aggregate_exist_in_expression())
         {
           return true;
         }
@@ -1678,7 +1674,7 @@ bool base_statement::is_nested_aggregate(base_statement* e)
 }
 
 // select sum(c2) ... + c1 ... is not allowed. a binary operation with scalar is OK. i.e. select sum() + 1
-bool base_statement::is_binop_aggregate_and_column(base_statement* skip_expression)
+bool base_statement::is_binop_aggregate_and_column(const base_statement* skip_expression) const
 {
   if (left() && left() != skip_expression) //can traverse to left
   {
@@ -1686,7 +1682,7 @@ bool base_statement::is_binop_aggregate_and_column(base_statement* skip_expressi
     {
       return true;
     }
-    else if (left()->is_binop_aggregate_and_column(skip_expression) == true)
+    else if (left()->is_binop_aggregate_and_column(skip_expression))
     {
       return true;
     }
@@ -1698,7 +1694,7 @@ bool base_statement::is_binop_aggregate_and_column(base_statement* skip_expressi
     {
       return true;
     }
-    else if (right()->is_binop_aggregate_and_column(skip_expression) == true)
+    else if (right()->is_binop_aggregate_and_column(skip_expression))
     {
       return true;
     }
@@ -1707,7 +1703,7 @@ bool base_statement::is_binop_aggregate_and_column(base_statement* skip_expressi
   if (this != skip_expression && is_function())
   {
 
-    __function* f = (dynamic_cast<__function*>(this));
+    const __function* f = (dynamic_cast<const __function*>(this));
     bs_stmt_vec_t l = f->get_arguments();
     for (auto i : l)
     {
@@ -1715,7 +1711,7 @@ bool base_statement::is_binop_aggregate_and_column(base_statement* skip_expressi
       {
         return true;
       }
-      if (i->is_binop_aggregate_and_column(skip_expression) == true)
+      if (i->is_binop_aggregate_and_column(skip_expression))
       {
         return true;
       }
