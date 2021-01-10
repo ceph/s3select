@@ -43,8 +43,9 @@ static s3select_reserved_word g_s3select_reserve_word;//read-only
 struct actionQ
 {
 // upon parser is accepting a token (lets say some number),
-// it push it into dedicated queue, later those tokens are poped out to build some "higher" contruct (lets say 1 + 2)
-// those containers are used only for parsing phase and not for runtime.
+// it pushes it into a dedicated queue. These tokens are later popped out to
+// build some "higher" construct (1 + 2 for example).
+// The containers below are only used during the parsing phase, not for runtime.
 
   std::vector<mulldiv_operation::muldiv_t> muldivQ;
   std::vector<addsub_operation::addsub_op_t> addsubQ;
@@ -410,7 +411,7 @@ public:
 
   int parse_query(const char* input_query)
   {
-    if(get_projections_list().empty() == false)
+    if(!get_projections_list().empty())
     {
       return 0;  //already parsed
     }
@@ -756,13 +757,11 @@ void push_mulop::builder(s3select* self, const char* a, const char* b) const
   }
 }
 
-void push_addsub_binop::builder(s3select* self, [[maybe_unused]] const char* a,[[maybe_unused]] const char* b) const
+void push_addsub_binop::builder(s3select* self, [[maybe_unused]] const char* a, [[maybe_unused]] const char* b) const
 {
-  base_statement* l = nullptr, *r = nullptr;
-
-  r = self->getAction()->exprQ.back();
+  base_statement* r = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
-  l = self->getAction()->exprQ.back();
+  base_statement* l = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   addsub_operation::addsub_op_t o = self->getAction()->addsubQ.back();
   self->getAction()->addsubQ.pop_back();
@@ -772,11 +771,9 @@ void push_addsub_binop::builder(s3select* self, [[maybe_unused]] const char* a,[
 
 void push_mulldiv_binop::builder(s3select* self, [[maybe_unused]] const char* a, [[maybe_unused]] const char* b) const
 {
-  base_statement* vl = nullptr, *vr = nullptr;
-
-  vr = self->getAction()->exprQ.back();
+  base_statement* vr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
-  vl = self->getAction()->exprQ.back();
+  base_statement* vl = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   mulldiv_operation::muldiv_t o = self->getAction()->muldivQ.back();
   self->getAction()->muldivQ.pop_back();
@@ -826,7 +823,7 @@ void push_function_expr::builder(s3select* self, const char* a, const char* b) c
 void push_compare_operator::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
-  arithmetic_operand::cmp_t c = arithmetic_operand::cmp_t::NA;
+  arithmetic_operand::cmp_t c;
 
   if (token == "==")
   {
@@ -859,7 +856,7 @@ void push_compare_operator::builder(s3select* self, const char* a, const char* b
 void push_logical_operator::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
-  logical_operand::oplog_t l = logical_operand::oplog_t::NA;
+  logical_operand::oplog_t l;
 
   if (token == "and")
   {
@@ -893,17 +890,18 @@ void push_arithmetic_predicate::builder(s3select* self, const char* a, const cha
 void push_logical_predicate::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
+  base_statement* tl = nullptr;
+  base_statement* tr = nullptr;
 
-  base_statement* tl = nullptr, *tr = nullptr;
   logical_operand::oplog_t oplog = self->getAction()->logical_compareQ.back();
   self->getAction()->logical_compareQ.pop_back();
 
-  if (self->getAction()->condQ.empty() == false)
+  if (!self->getAction()->condQ.empty())
   {
     tr = self->getAction()->condQ.back();
     self->getAction()->condQ.pop_back();
   }
-  if (self->getAction()->condQ.empty() == false)
+  if (!self->getAction()->condQ.empty())
   {
     tl = self->getAction()->condQ.back();
     self->getAction()->condQ.pop_back();
@@ -917,9 +915,9 @@ void push_logical_predicate::builder(s3select* self, const char* a, const char* 
 void push_negation::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
-  base_statement* pred = nullptr;
+  base_statement* pred{nullptr};
 
-  if (self->getAction()->condQ.empty() == false)
+  if (!self->getAction()->condQ.empty())
   {
     pred = self->getAction()->condQ.back();
     self->getAction()->condQ.pop_back();
@@ -979,7 +977,7 @@ void push_alias_projection::builder(s3select* self, const char* a, const char* b
 
   //mapping alias name to base-statement
   bool res = self->getAction()->alias_map.insert_new_entry(alias_name, bs);
-  if (res == false)
+  if (!res)
   {
     throw base_s3select_exception(std::string("alias <") + alias_name + std::string("> is already been used in query"), base_s3select_exception::s3select_exp_en_t::FATAL);
   }
@@ -1175,16 +1173,16 @@ void push_data_type::builder(s3select* self, const char* a, const char* b) const
 
   if(cast_operator("int"))
   {
-    self->getAction()->dataTypeQ.push_back("int");
+    self->getAction()->dataTypeQ.emplace_back("int");
   }else if(cast_operator("float"))
   {
-    self->getAction()->dataTypeQ.push_back("float");
+    self->getAction()->dataTypeQ.emplace_back("float");
   }else if(cast_operator("string"))
   {
-    self->getAction()->dataTypeQ.push_back("string");
+    self->getAction()->dataTypeQ.emplace_back("string");
   }else if(cast_operator("timestamp"))
   {
-    self->getAction()->dataTypeQ.push_back("timestamp");
+    self->getAction()->dataTypeQ.emplace_back("timestamp");
   }
 }
 
@@ -1305,7 +1303,6 @@ class base_s3object
 
 protected:
   scratch_area* m_sa;
-  std::string m_obj_name;
 
 public:
   explicit base_s3object(scratch_area* m) : m_sa(m){}
@@ -1462,10 +1459,10 @@ public:
 
   int getMatchRow( std::string& result) //TODO virtual ? getResult
   {
-    int number_of_tokens = 0;
+    int number_of_tokens;
 
 
-    if (m_aggr_flow == true)
+    if (m_aggr_flow)
     {
       do
       {
@@ -1498,7 +1495,7 @@ public:
         }
 
         if (!m_where_clause || m_where_clause->eval().i64() == true)
-          for (auto i : m_projections)
+          for (auto& i : m_projections)
           {
             i->eval();
           }
@@ -1541,7 +1538,7 @@ public:
   int extract_csv_header_info()
   {
 
-    if (m_csv_defintion.ignore_header_info == true)
+    if (m_csv_defintion.ignore_header_info)
     {
       while(*m_stream && (*m_stream != m_csv_defintion.row_delimiter ))
       {
@@ -1549,7 +1546,7 @@ public:
       }
       m_stream++;
     }
-    else if(m_csv_defintion.use_header_info == true)
+    else if(m_csv_defintion.use_header_info)
     {
       size_t num_of_tokens = getNextRow();//TODO validate number of tokens
 
@@ -1627,11 +1624,10 @@ private:
         p_obj_chunk--;  //scan until end-of previous line in chunk
       }
 
-      u_int32_t skip_last_bytes = (&(csv_stream[stream_length - 1]) - p_obj_chunk);
+      int32_t skip_last_bytes = (&(csv_stream[stream_length - 1]) - p_obj_chunk);
       m_last_line.assign(p_obj_chunk + 1, p_obj_chunk + 1 + skip_last_bytes); //save it for next chunk
 
       m_previous_line = true;//it means to skip last line
-
     }
 
     return run_s3select_on_object(result, csv_stream, stream_length, m_skip_first_line, m_previous_line, (m_processed_bytes >= obj_size));
@@ -1641,14 +1637,12 @@ private:
 public:
   int run_s3select_on_object(std::string& result, const char* csv_stream, size_t stream_length, bool skip_first_line, bool skip_last_line, bool do_aggregate)
   {
-
-
     m_stream = (char*)csv_stream;
     m_end_stream = (char*)csv_stream + stream_length;
     m_is_to_aggregate = do_aggregate;
     m_skip_last_line = skip_last_line;
 
-    if(m_extract_csv_header_info == false)
+    if(!m_extract_csv_header_info)
     {
       extract_csv_header_info();
     }
@@ -1693,6 +1687,6 @@ public:
   }
 };
 
-};//namespace
+} //namespace
 
 #endif

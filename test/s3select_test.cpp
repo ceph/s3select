@@ -1,7 +1,6 @@
 #include "s3select.h"
 #include "gtest/gtest.h"
 #include <string>
-#include "boost/date_time/gregorian/gregorian.hpp"
 #include "boost/date_time/posix_time/posix_time.hpp"
 
 using namespace s3selectEngine;
@@ -102,7 +101,7 @@ public:
 
   std::string generate()
   {
-    std::string exp = "";
+    std::string exp;
     open = 0;
 
     for (int i = 0; i < 10; i++)
@@ -132,7 +131,7 @@ std::string run_s3select(std::string expression)
 
   s3_csv_object.run_s3select_on_object(s3select_result, in.c_str(), in.size(), false, false, true);
 
-  s3select_result = s3select_result.substr(0, s3select_result.find_first_of(","));
+  s3select_result = s3select_result.substr(0, s3select_result.find_first_of(','));
 
   return s3select_result;
 }
@@ -149,7 +148,7 @@ TEST(TestS3SElect, s3select_vs_C)
     std::string exp = g.generate();
     std::string c_result = run_expression_in_C_prog( exp.c_str() );
 
-    char* err=0;
+    char* err;
     double  c_dbl_res = strtod(c_result.c_str(), &err);
 
     std::string input_query = "select " + exp + " from stdin;" ;
@@ -167,7 +166,7 @@ TEST(TestS3SElect, s3select_vs_C)
 TEST(TestS3SElect, ParseQuery)
 {
   //TODO syntax issues ?
-  //TODO error messeges ?
+  //TODO error messages ?
 
   s3select s3select_syntax;
 

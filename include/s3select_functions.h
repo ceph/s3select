@@ -143,12 +143,12 @@ class __function : public base_statement
 private:
   bs_stmt_vec_t arguments;
   std::string name;
-  base_function* m_func_impl;
+  base_function* m_func_impl; // todo: separate the object types used when constructing the __function vs when m_func_impl should be fixed
   s3select_functions* m_s3select_functions;
   variable m_result;
   bool m_is_aggregate_function;
 
-  void _resolve_name()
+  void _resolve_name()  // todo: separate the object types used when constructing the __function vs when m_func_impl should be fixed
   {
     if (m_func_impl)
     {
@@ -268,7 +268,7 @@ public:
 
   std::string  print(int ident) override
   {
-    return std::string(0);
+    return std::string{};
   }
 
   void push_argument(base_statement* arg)
@@ -277,7 +277,7 @@ public:
   }
 
 
-  bs_stmt_vec_t& get_arguments()
+  const bs_stmt_vec_t& get_arguments() const
   {
     return arguments;
   }
@@ -300,7 +300,7 @@ public:
   }
 
 /*
-    s3-select function defintions
+    s3-select function definitions
 */
 struct _fn_add : public base_function
 {
@@ -504,7 +504,7 @@ struct _fn_to_int : public base_function
       throw base_s3select_exception("characters after int!");
       return false;
     }
-  } 
+  }
     else if (func_arg.type == value::value_En_t::FLOAT)
     {
       i = func_arg.dbl();
@@ -524,42 +524,43 @@ struct _fn_to_int : public base_function
 
 struct _fn_to_float : public base_function
 {
-
   value var_result;
-  value v_from;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    char* perr;
-    double d=0;
     value v = (*args->begin())->eval();
 
-    if (v.type == value::value_En_t::STRING)
+    switch (v.type) {
+
+    case value::value_En_t::STRING:
     {
-      errno = 0;
-      d = strtod(v.str(), &perr) ;  //TODO check error before constructor
-      if ((errno == ERANGE && (d == LONG_MAX || d == LONG_MIN)) || (errno != 0 && d == 0)) {
+      char* pend;
+      double d = strtod(v.str(), &pend);
+      if (errno == ERANGE) {
         throw base_s3select_exception("converted value would fall out of the range of the result type!");
-        return false;  
+      }
+      if (pend == v.str()) {
+        // no number found
+        throw base_s3select_exception("text cannot be converted to a number");
+      }
+      if (*pend) {
+        throw base_s3select_exception("extra characters after the number");
+      }
+
+      var_result = d;
     }
-    
-    if (*perr != '\0') {
-      throw base_s3select_exception("characters after float!");
-      return false;
-    }
-  }
-    else if (v.type == value::value_En_t::FLOAT)
-    {
-      d = v.dbl();
-    }
-    else
-    {
-      d = v.i64();
+    break;
+
+    case value::value_En_t::FLOAT:
+      var_result = v.dbl();
+      break;
+
+    default:
+      var_result = v.i64();
+      break;
     }
 
-    var_result = d;
     *result = var_result;
-
     return true;
   }
 
@@ -587,7 +588,7 @@ struct _fn_to_timestamp : public base_function
   value v_str;
 
 
-  bool datetime_validation()
+  [[nodiscard]] bool datetime_validation() const
   {
     //TODO temporary , should check for leap year
 
@@ -645,7 +646,7 @@ struct _fn_to_timestamp : public base_function
 
     bsc::parse_info<> info_dig = bsc::parse(v_str.str(), d_yyyymmdd_dig >> *(separator) >> d_time_dig);
 
-    if(datetime_validation()==false or !info_dig.full)
+    if(!datetime_validation() || !info_dig.full)
     {
       throw base_s3select_exception("input date-time is illegal");
     }
@@ -681,7 +682,7 @@ struct _fn_extact_from_timestamp : public base_function
 
     val_date_part = date_part->eval();//TODO could be done once?
 
-    if(val_date_part.is_string()== false)
+    if(!val_date_part.is_string())
     {
       throw base_s3select_exception("first parameter should be string");
     }
@@ -690,7 +691,7 @@ struct _fn_extact_from_timestamp : public base_function
 
     base_statement* ts = *iter;
 
-    if(ts->eval().is_timestamp()== false)
+    if(!ts->eval().is_timestamp())
     {
       throw base_s3select_exception("second parameter is not timestamp");
     }
@@ -747,7 +748,7 @@ struct _fn_diff_timestamp : public base_function
     iter++;
     base_statement* dt1_param = *iter;
     val_dt1 = dt1_param->eval();
-    if (val_dt1.is_timestamp() == false)
+    if (!val_dt1.is_timestamp())
     {
       throw base_s3select_exception("second parameter should be timestamp");
     }
@@ -755,7 +756,7 @@ struct _fn_diff_timestamp : public base_function
     iter++;
     base_statement* dt2_param = *iter;
     val_dt2 = dt2_param->eval();
-    if (val_dt2.is_timestamp() == false)
+    if (!val_dt2.is_timestamp())
     {
       throw base_s3select_exception("third parameter should be timestamp");
     }
@@ -815,7 +816,7 @@ struct _fn_add_to_timestamp : public base_function
     base_statement* date_part = *iter;
     val_date_part = date_part->eval();//TODO could be done once?
 
-    if(val_date_part.is_string()== false)
+    if(!val_date_part.is_string())
     {
       throw base_s3select_exception("first parameter should be string");
     }
@@ -824,7 +825,7 @@ struct _fn_add_to_timestamp : public base_function
     base_statement* quan = *iter;
     val_quantity = quan->eval();
 
-    if (val_quantity.is_number() == false)
+    if (!val_quantity.is_number())
     {
       throw base_s3select_exception("second parameter should be number");  //TODO what about double?
     }
@@ -833,7 +834,7 @@ struct _fn_add_to_timestamp : public base_function
     base_statement* ts = *iter;
     val_timestamp = ts->eval();
 
-    if(val_timestamp.is_timestamp() == false)
+    if(!val_timestamp.is_timestamp())
     {
       throw base_s3select_exception("third parameter should be time-stamp");
     }
@@ -993,14 +994,14 @@ struct _fn_like : public base_function
   value res;
   std::regex compiled_regex;
 
-  _fn_like(value s)
+  explicit _fn_like(value s)
   {
     std::string string_value = s.to_string();
     transform(string_value);
     compiled_regex = std::regex(string_value);
   } 
 
-  void transform(std::string& s)
+  static void transform(std::string& s)
   {
     std::string::size_type i = 0;
     while (!s.empty())
@@ -1482,12 +1483,12 @@ struct _fn_trailing : public base_function {
 
 base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt_vec_t &arguments)
 {
-  const FunctionLibrary::const_iterator iter = m_functions_library.find(fn_name.data());
+  const auto iter = m_functions_library.find(fn_name.data());
 
   if (iter == m_functions_library.end())
   {
     std::string msg;
-    msg = std::string{fn_name} + " " + " function not found";
+    msg = std::string{fn_name} + " function not found"s;
     throw base_s3select_exception(msg, base_s3select_exception::s3select_exp_en_t::FATAL);
   }
 
@@ -1640,12 +1641,12 @@ const base_statement* base_statement::get_aggregate() const
     return this;
   }
 
-  if (left() && (res=left()->get_aggregate())!=0)
+  if (left() && (res=left()->get_aggregate())!=nullptr)
   {
     return res;
   }
 
-  if (right() && (res=right()->get_aggregate())!=0)
+  if (right() && (res=right()->get_aggregate())!=nullptr)
   {
     return res;
   }
@@ -1661,7 +1662,7 @@ const base_statement* base_statement::get_aggregate() const
       }
     }
   }
-  return 0;
+  return nullptr;
 }
 
 bool base_statement::is_column_reference() const
