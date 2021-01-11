@@ -297,6 +297,12 @@ struct push_when_than : public base_ast_builder
 };
 static push_when_than g_push_when_than;
 
+struct push_when_then_simple : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_when_then_simple g_push_when_then_simple;
+
 struct push_substr_from : public base_ast_builder
 {
   void builder(s3select* self, const char* a, const char* b) const;
@@ -556,7 +562,11 @@ public:
 
       when_case_else_projection = (bsc::str_p("case")  >> (+when_stmt) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
 
+      when_case_else_projection_simple = (bsc::str_p("case")  >> (+when_stmt_simple) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
+
       when_stmt = (bsc::str_p("when") >> condition_expression >> bsc::str_p("than") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_than)];
+
+      when_stmt_simple = (arithmetic_expression >> bsc::str_p("when") >> arithmetic_expression >> bsc::str_p("then") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_then_simple)];
 
       s3_object = bsc::str_p("stdin") | bsc::str_p("s3object")  | object_path ;
 
@@ -659,7 +669,7 @@ public:
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
     bsc::rule<ScannerT> projections, projection_expression, alias_name, column_pos;
-    bsc::rule<ScannerT> when_case_else_projection, when_stmt;
+    bsc::rule<ScannerT> when_case_else_projection, when_case_else_projection_simple, when_stmt, when_stmt_simple;
     bsc::rule<ScannerT> const& start() const
     {
       return select_expr;
@@ -1224,6 +1234,30 @@ void push_case_when_else::builder(s3select* self, const char* a, const char* b) 
   self->getAction()->condQ.clear();
 
   self->getAction()->exprQ.push_back(func);
+}
+
+void push_when_then_simple::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  __function* func = S3SELECT_NEW(self, __function, "#when-then-simple#", self->getS3F());
+
+ base_statement* then_expr = self->getAction()->exprQ.back();
+ self->getAction()->exprQ.pop_back();
+
+ base_statement* when_expr = self->getAction()->exprQ.back();
+ self->getAction()->exprQ.pop_back();
+
+ base_statement* case_expr = self->getAction()->exprQ.back();
+ self->getAction()->exprQ.pop_back(); 
+
+ func->push_argument(then_expr);
+ func->push_argument(when_expr);
+ func->push_argument(case_expr);
+
+ self->getAction()->whenThenQ.push_back(func);
+
+ self->getAction()->when_than_count ++;
 }
 
 void push_cast_expr::builder(s3select* self, const char* a, const char* b) const

@@ -1950,6 +1950,28 @@ TEST(TestS3selectFunctions, case_when_than_else)
     ASSERT_EQ(s3select_result, std::string("case_1_2,case_else_2,\n"));
 }
 
+TEST(TestS3selectFunctions, simple_case_when)
+{
+    s3select s3select_syntax;
+    const std::string input_query = "select  case (2*3) when (6*1)  then \"case_1_1\" \
+              else \"case_else_1\" end from stdin where (3*3==9);" ;
+
+    auto status = s3select_syntax.parse_query(input_query.c_str());
+    ASSERT_EQ(status, 0);
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax);
+    std::string s3select_result;
+    std::string input;
+    size_t size = 1;
+    generate_csv(input, size);
+    status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), 
+        false, // dont skip first line 
+        false, // dont skip last line
+        true   // aggregate call
+        ); 
+    ASSERT_EQ(status, 0); 
+    ASSERT_EQ(s3select_result, std::string("case_1_1,\n"));
+}
+
 TEST(TestS3selectFunctions, substr11)
 {
     s3select s3select_syntax;
