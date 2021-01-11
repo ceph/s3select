@@ -1540,7 +1540,7 @@ public:
           a.second->invalidate_cache_result();
         }
 
-        if (!m_where_clause || m_where_clause->eval().i64() == true)
+        if (!m_where_clause || m_where_clause->eval().is_true())
           for (auto i : m_projections)
           {
             i->eval();
@@ -1568,7 +1568,7 @@ public:
         }
 
       }
-      while (m_where_clause && m_where_clause->eval().i64() == false);
+      while (m_where_clause && !m_where_clause->eval().is_true());
 
       for (auto& i : m_projections)
       {

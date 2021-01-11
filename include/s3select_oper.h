@@ -505,6 +505,11 @@ public:
     return type == value_En_t::S3NAN; 
   }
 
+  bool is_true()
+  {
+    return (i64()!=0 && !is_null());
+  }
+
   void set_nan() 
   {
     __val.dbl = NAN;
