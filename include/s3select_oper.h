@@ -1500,12 +1500,12 @@ public:
     }
     else
     {
-      if (a.i64() == true) {
+      if (a.is_true()) {
         res = true ^ negation_result;
         return var_value = res;
       } 
       value b = r->eval();
-      if(b.i64() == true) {
+      if(b.is_true() == true) {
         res = true ^ negation_result;
         return var_value = res;
       } else {
@@ -1695,7 +1695,7 @@ class negate_function_operation : public base_statement
 
     if (res.is_number())//TODO is integer type
     {
-      if (res.i64() == 1)
+      if (res.is_true())
       {
         res = (int64_t)0;
       }

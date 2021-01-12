@@ -966,7 +966,7 @@ struct _fn_is_not_null : public base_function
    
     isnull_op(args,result);
  
-    if (result->get_value().i64() == 0)
+    if (result->get_value().is_true() == 0)
       result->set_value(true);
     else
       result->set_value(false);
@@ -1327,7 +1327,7 @@ struct _fn_when_than : public base_function {
 
     when_value = when_expr->eval();
     
-    if (when_value.i64())//true
+    if (when_value.is_true())//true
     {
         *result = than_expr->eval();
         return true;
