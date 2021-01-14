@@ -57,6 +57,7 @@ struct actionQ
   std::vector<std::string> dataTypeQ;
   std::vector<std::string> trimTypeQ;
   std::vector<std::string> datePartQ;
+  std::vector<base_statement*> caseValueQ;
   projection_alias alias_map;
   std::string from_clause;
   s3select_projections  projections;
@@ -291,17 +292,23 @@ struct push_case_when_else : public base_ast_builder
 };
 static push_case_when_else g_push_case_when_else;
 
-struct push_when_than : public base_ast_builder
+struct push_when_condition_then : public base_ast_builder
 {
   void builder(s3select* self, const char* a, const char* b) const;
 };
-static push_when_than g_push_when_than;
+static push_when_condition_then g_push_when_condition_then;
 
-struct push_when_then_simple : public base_ast_builder
+struct push_when_value_then : public base_ast_builder
 {
   void builder(s3select* self, const char* a, const char* b) const;
 };
-static push_when_then_simple g_push_when_then_simple;
+static push_when_value_then g_push_when_value_then;
+
+struct push_case_value : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_case_value g_push_case_value;
 
 struct push_substr_from : public base_ast_builder
 {
@@ -555,18 +562,21 @@ public:
 
       projections = projection_expression >> *( ',' >> projection_expression) ;
 
-      projection_expression = (when_case_else_projection) [BOOST_BIND_ACTION(push_projection)] | (arithmetic_expression >> bsc::str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] | (arithmetic_expression)[BOOST_BIND_ACTION(push_projection)];
+      projection_expression = (when_case_else_projection|when_case_value_when) [BOOST_BIND_ACTION(push_projection)] | 
+                              (arithmetic_expression >> bsc::str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] | 
+                              (arithmetic_expression)[BOOST_BIND_ACTION(push_projection)];
 
       alias_name = bsc::lexeme_d[(+bsc::alpha_p >> *bsc::digit_p)] ;
 
-
       when_case_else_projection = (bsc::str_p("case")  >> (+when_stmt) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
 
-      when_case_else_projection_simple = (bsc::str_p("case")  >> (+when_stmt_simple) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
+      // than => then
+      when_stmt = (bsc::str_p("when") >> condition_expression >> bsc::str_p("than") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_condition_then)];
 
-      when_stmt = (bsc::str_p("when") >> condition_expression >> bsc::str_p("than") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_than)];
+      when_case_value_when = (bsc::str_p("case") >> arithmetic_expression[BOOST_BIND_ACTION(push_case_value)]  >> 
+                              (+when_value_then) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
 
-      when_stmt_simple = (arithmetic_expression >> bsc::str_p("when") >> arithmetic_expression >> bsc::str_p("then") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_then_simple)];
+      when_value_then = (bsc::str_p("when") >> arithmetic_expression >> bsc::str_p("then") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_value_then)];
 
       s3_object = bsc::str_p("stdin") | bsc::str_p("s3object")  | object_path ;
 
@@ -669,7 +679,7 @@ public:
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
     bsc::rule<ScannerT> projections, projection_expression, alias_name, column_pos;
-    bsc::rule<ScannerT> when_case_else_projection, when_case_else_projection_simple, when_stmt, when_stmt_simple;
+    bsc::rule<ScannerT> when_case_else_projection, when_case_value_when, when_stmt, when_value_then;
     bsc::rule<ScannerT> const& start() const
     {
       return select_expr;
@@ -1185,7 +1195,7 @@ void push_is_null_predicate::builder(s3select* self, const char* a, const char* 
   self->getAction()->condQ.push_back(func);
 }
 
-void push_when_than::builder(s3select* self, const char* a, const char* b) const
+void push_when_condition_then::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -1236,7 +1246,17 @@ void push_case_when_else::builder(s3select* self, const char* a, const char* b) 
   self->getAction()->exprQ.push_back(func);
 }
 
-void push_when_then_simple::builder(s3select* self, const char* a, const char* b) const
+void push_case_value::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  base_statement* case_value = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  self->getAction()->caseValueQ.push_back(case_value);
+}
+
+void push_when_value_then::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
@@ -1248,8 +1268,7 @@ void push_when_then_simple::builder(s3select* self, const char* a, const char* b
  base_statement* when_expr = self->getAction()->exprQ.back();
  self->getAction()->exprQ.pop_back();
 
- base_statement* case_expr = self->getAction()->exprQ.back();
- self->getAction()->exprQ.pop_back(); 
+ base_statement* case_expr = self->getAction()->caseValueQ.back();
 
  func->push_argument(then_expr);
  func->push_argument(when_expr);

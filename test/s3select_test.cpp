@@ -1953,8 +1953,8 @@ TEST(TestS3selectFunctions, case_when_than_else)
 TEST(TestS3selectFunctions, simple_case_when)
 {
     s3select s3select_syntax;
-    const std::string input_query = "select  case (2*3) when (6*1)  then \"case_1_1\" \
-              else \"case_else_1\" end from stdin where (3*3==9);" ;
+
+    const std::string input_query = "select  case 2+1 when (3+4) then \"case_1_1\" when 3 then \"case_3\" else \"case_else_1\" end from stdin;";
 
     auto status = s3select_syntax.parse_query(input_query.c_str());
     ASSERT_EQ(status, 0);
@@ -1969,7 +1969,7 @@ TEST(TestS3selectFunctions, simple_case_when)
         true   // aggregate call
         ); 
     ASSERT_EQ(status, 0); 
-    ASSERT_EQ(s3select_result, std::string("case_1_1,\n"));
+    ASSERT_EQ(s3select_result, std::string("case_3,\n"));
 }
 
 TEST(TestS3selectFunctions, substr11)
