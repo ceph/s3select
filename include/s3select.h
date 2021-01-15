@@ -64,9 +64,9 @@ struct actionQ
 
   uint64_t in_set_count;
 
-  size_t when_than_count;
+  size_t when_then_count;
 
-  actionQ():in_set_count(0), when_than_count(0){}
+  actionQ():in_set_count(0), when_then_count(0){}
 
   std::map<const void*,std::vector<const char*> *> x_map;
 
@@ -571,7 +571,7 @@ public:
       when_case_else_projection = (bsc::str_p("case")  >> (+when_stmt) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
 
       // than => then
-      when_stmt = (bsc::str_p("when") >> condition_expression >> bsc::str_p("than") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_condition_then)];
+      when_stmt = (bsc::str_p("when") >> condition_expression >> bsc::str_p("then") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_condition_then)];
 
       when_case_value_when = (bsc::str_p("case") >> arithmetic_expression[BOOST_BIND_ACTION(push_case_value)]  >> 
                               (+when_value_then) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
@@ -1199,20 +1199,20 @@ void push_when_condition_then::builder(s3select* self, const char* a, const char
 {
   std::string token(a, b);
 
-  __function* func = S3SELECT_NEW(self, __function, "#when-than#", self->getS3F());
+  __function* func = S3SELECT_NEW(self, __function, "#when-then#", self->getS3F());
 
- base_statement* than_expr = self->getAction()->exprQ.back();
+ base_statement* then_expr = self->getAction()->exprQ.back();
  self->getAction()->exprQ.pop_back();
 
  base_statement* when_expr = self->getAction()->condQ.back();
  self->getAction()->condQ.pop_back();
 
- func->push_argument(than_expr);
+ func->push_argument(then_expr);
  func->push_argument(when_expr);
 
  self->getAction()->whenThenQ.push_back(func);
 
- self->getAction()->when_than_count ++;
+ self->getAction()->when_then_count ++;
 }
 
 void push_case_when_else::builder(s3select* self, const char* a, const char* b) const
@@ -1226,14 +1226,14 @@ void push_case_when_else::builder(s3select* self, const char* a, const char* b) 
 
   func->push_argument(else_expr);
 
-  while(self->getAction()->when_than_count)
+  while(self->getAction()->when_then_count)
   {
     base_statement* when_then_func = self->getAction()->whenThenQ.back();
     self->getAction()->whenThenQ.pop_back();
 
     func->push_argument(when_then_func);
 
-    self->getAction()->when_than_count--;
+    self->getAction()->when_then_count--;
   }
 
 // condQ is cleared explicitly, because of "leftover", due to double scanning upon accepting
@@ -1260,7 +1260,7 @@ void push_when_value_then::builder(s3select* self, const char* a, const char* b)
 {
   std::string token(a, b);
 
-  __function* func = S3SELECT_NEW(self, __function, "#when-then-simple#", self->getS3F());
+  __function* func = S3SELECT_NEW(self, __function, "#when-value-then#", self->getS3F());
 
  base_statement* then_expr = self->getAction()->exprQ.back();
  self->getAction()->exprQ.pop_back();
@@ -1276,7 +1276,7 @@ void push_when_value_then::builder(s3select* self, const char* a, const char* b)
 
  self->getAction()->whenThenQ.push_back(func);
 
- self->getAction()->when_than_count ++;
+ self->getAction()->when_then_count ++;
 }
 
 void push_cast_expr::builder(s3select* self, const char* a, const char* b) const

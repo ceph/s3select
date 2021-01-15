@@ -1926,13 +1926,13 @@ TEST(TestS3selectFunctions, mix)
     ASSERT_EQ(s3select_result, std::string("true,\n"));
 }
 
-TEST(TestS3selectFunctions, case_when_than_else)
+TEST(TestS3selectFunctions, case_when_then_else)
 {
     s3select s3select_syntax;
-    const std::string input_query = "select  case when (1+1+1*1==(2+1)*3)  than \"case_1_1\" \
-              when ((4*3)==(12)) than \"case_1_2\" else \"case_else_1\" end , \
-               case when 1+1*7==(2+1)*3  than \"case_2_1\" \
-              when ((4*3)==(12)+1) than \"case_2_2\" else \"case_else_2\" end from stdin where (3*3==9);" ;
+    const std::string input_query = "select  case when (1+1+1*1==(2+1)*3)  then \"case_1_1\" \
+              when ((4*3)==(12)) then \"case_1_2\" else \"case_else_1\" end , \
+               case when 1+1*7==(2+1)*3  then \"case_2_1\" \
+              when ((4*3)==(12)+1) then \"case_2_2\" else \"case_else_2\" end from stdin where (3*3==9);" ;
 
     auto status = s3select_syntax.parse_query(input_query.c_str());
     ASSERT_EQ(status, 0);

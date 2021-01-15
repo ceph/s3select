@@ -114,8 +114,8 @@ enum class s3select_func_En_t {ADD,
                                LIKE,
                                VERSION,
                                CASE_WHEN_ELSE,
-                               WHEN_THAN,
-                               WHEN_THEN_SIMPLE,
+                               WHEN_THEN,
+                               WHEN_VALUE_THEN,
                                COALESCE,
                                STRING,
                                TRIM,
@@ -176,8 +176,8 @@ private:
     {"#in_predicate#", s3select_func_En_t::IN},
     {"#like_predicate#", s3select_func_En_t::LIKE},
     {"version", s3select_func_En_t::VERSION},
-    {"#when-than#", s3select_func_En_t::WHEN_THAN},
-    {"#when-then-simple#", s3select_func_En_t::WHEN_THEN_SIMPLE},
+    {"#when-then#", s3select_func_En_t::WHEN_THEN},
+    {"#when-value-then#", s3select_func_En_t::WHEN_VALUE_THEN},
     {"#case-when-else#", s3select_func_En_t::CASE_WHEN_ELSE},
     {"coalesce", s3select_func_En_t::COALESCE},
     {"string", s3select_func_En_t::STRING},
@@ -1488,7 +1488,7 @@ struct _fn_nullif : public base_function {
       }
     };
 
-struct _fn_when_than : public base_function {
+struct _fn_when_then : public base_function {
 
   value when_value;
 
@@ -1496,7 +1496,7 @@ struct _fn_when_than : public base_function {
   {
     auto iter = args->begin();
 
-    base_statement* than_expr = *iter;
+    base_statement* then_expr = *iter;
     iter ++;
 
     base_statement* when_expr = *iter;
@@ -1505,7 +1505,7 @@ struct _fn_when_than : public base_function {
     
     if (when_value.is_true())//true
     {
-        *result = than_expr->eval();
+        *result = then_expr->eval();
         return true;
     }
 
@@ -1515,7 +1515,7 @@ struct _fn_when_than : public base_function {
   }
 };
 
-struct _fn_when_then_simple : public base_function {
+struct _fn_when_value_then : public base_function {
 
   value when_value;
   value case_value;
@@ -1550,7 +1550,7 @@ struct _fn_when_then_simple : public base_function {
 
 struct _fn_case_when_else : public base_function {
 
-  value when_than_value;
+  value when_then_value;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
@@ -1560,11 +1560,11 @@ struct _fn_case_when_else : public base_function {
 
     for(int ivec=args_size;ivec>0;ivec--)
     {
-      when_than_value = (*args)[ivec]->eval();
+      when_then_value = (*args)[ivec]->eval();
       
-      if(!when_than_value.is_null())
+      if(!when_then_value.is_null())
       {
-        *result = when_than_value;
+        *result = when_then_value;
         return true;
       }
 
@@ -1889,12 +1889,12 @@ base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt
     return S3SELECT_NEW(this,_fn_coalesce);
     break;
 
-  case s3select_func_En_t::WHEN_THAN:
-    return S3SELECT_NEW(this,_fn_when_than);
+  case s3select_func_En_t::WHEN_THEN:
+    return S3SELECT_NEW(this,_fn_when_then);
     break;
 
-  case s3select_func_En_t::WHEN_THEN_SIMPLE:
-    return S3SELECT_NEW(this,_fn_when_then_simple);
+  case s3select_func_En_t::WHEN_VALUE_THEN:
+    return S3SELECT_NEW(this,_fn_when_value_then);
     break;
 
   case s3select_func_En_t::CASE_WHEN_ELSE:
