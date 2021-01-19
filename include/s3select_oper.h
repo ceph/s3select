@@ -536,7 +536,7 @@ public:
       }
       else if (type == value_En_t::TIMESTAMP)
       {
-        m_to_string =  to_simple_string( *__val.timestamp );
+        m_to_string =  to_iso_extended_string( *__val.timestamp );
       }
       else if (type == value_En_t::S3NULL)
       {
@@ -1733,8 +1733,114 @@ public:
   {//release function-body implementation 
     this->~base_function();
   }
+
 };
 
+class base_date_extract : public base_function
+{
+  protected:
+    value val_timestamp;
+    boost::posix_time::ptime new_ptime;
+
+  public:
+    void param_validation(bs_stmt_vec_t*& args)
+    {
+      auto iter = args->begin();
+      int args_size = args->size();
+
+      if (args_size < 1)
+      {
+        throw base_s3select_exception("to_timestamp should have 2 parameters");
+      }
+
+      base_statement* ts = *iter;
+      val_timestamp = ts->eval();
+      if(val_timestamp.is_timestamp()== false)
+      {
+        throw base_s3select_exception("second parameter is not timestamp");
+      }
+
+      new_ptime = *val_timestamp.timestamp();
+    }
+
+};
+
+class base_date_diff : public base_function
+{
+  protected:
+    value val_ts1;
+    value val_ts2;
+
+  public:
+    void param_validation(bs_stmt_vec_t*& args)
+    {
+      auto iter = args->begin();
+      int args_size = args->size();
+
+      if (args_size < 2)
+      {
+        throw base_s3select_exception("datediff need 3 parameters");
+      }
+
+      base_statement* dt1_param = *iter;
+      val_ts1 = dt1_param->eval();
+
+      if (val_ts1.is_timestamp() == false)
+      {
+        throw base_s3select_exception("second parameter should be timestamp");
+      }
+
+      iter++;
+      base_statement* dt2_param = *iter;
+      val_ts2 = dt2_param->eval();
+
+      if (val_ts2.is_timestamp() == false)
+      {
+        throw base_s3select_exception("third parameter should be timestamp");
+      }
+    }
+
+};
+
+class base_date_add : public base_function
+{
+  protected:
+    value val_quantity;
+    value val_ts;
+    boost::posix_time::ptime new_ptime;
+
+  public:
+    void param_validation(bs_stmt_vec_t*& args)
+    {
+      auto iter = args->begin();
+      int args_size = args->size();
+
+      if (args_size < 2)
+      {
+        throw base_s3select_exception("add_to_timestamp should have 3 parameters");
+      }
+
+      base_statement* quan = *iter;
+      val_quantity = quan->eval();
+
+      if (val_quantity.is_number() == false)
+      {
+        throw base_s3select_exception("second parameter should be number");  //TODO what about double?
+      }
+
+      iter++;
+      base_statement* ts = *iter;
+      val_ts = ts->eval();
+
+      if(val_ts.is_timestamp() == false)
+      {
+        throw base_s3select_exception("third parameter should be time-stamp");
+      }
+
+      new_ptime = *val_ts.timestamp();
+    }
+
+};
 
 };//namespace
 

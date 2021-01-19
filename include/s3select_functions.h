@@ -13,25 +13,65 @@ using namespace std::string_literals;
 namespace s3selectEngine
 {
 
+struct push_1dig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    *n = (static_cast<char>(*a) - 48);
+  }
+
+};
+static push_1dig g_push_1dig;
+
 struct push_2dig
 {
   void operator()(const char* a, const char* b, uint32_t* n) const
   {
-    *n = ((char)(*a) - 48) *10 + ((char)*(a+1)-48) ;
+    *n = (static_cast<char>(*a) - 48) * 10 + (static_cast<char>(*(a+1)) - 48) ;
   }
 
 };
 static push_2dig g_push_2dig;
 
+struct push_3dig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    *n = (static_cast<char>(*a) - 48) * 100 + (static_cast<char>(*(a+1)) - 48) * 10 + (static_cast<char>(*(a+2)) - 48);
+  }
+
+};
+static push_3dig g_push_3dig;
+
 struct push_4dig
 {
   void operator()(const char* a, const char* b, uint32_t* n) const
   {
-    *n = ((char)(*a) - 48) *1000 + ((char)*(a+1)-48)*100 + ((char)*(a+2)-48)*10  + ((char)*(a+3)-48);
+    *n = (static_cast<char>(*a) - 48) * 1000 + (static_cast<char>(*(a+1)) - 48) * 100 + (static_cast<char>(*(a+2)) - 48) * 10 + (static_cast<char>(*(a+3)) - 48);
   }
 
 };
 static push_4dig g_push_4dig;
+
+struct push_5dig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    *n = (static_cast<char>(*a) - 48) * 10000 + (static_cast<char>(*(a+1)) - 48) * 1000 + (static_cast<char>(*(a+2)) - 48) * 100  + (static_cast<char>(*(a+3)) - 48) * 10 + (static_cast<char>(*(a+4)) - 48);
+  }
+
+};
+static push_5dig g_push_5dig;
+
+struct push_6dig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    *n = (static_cast<char>(*a) - 48) * 100000 + (static_cast<char>(*(a+1)) - 48) * 10000 + (static_cast<char>(*(a+2)) - 48) * 1000 + (static_cast<char>(*(a+3)) - 48) * 100 + (static_cast<char>(*(a+4)) - 48) * 10 + (static_cast<char>(*(a+5)) - 48);
+  }
+
+};
+static push_6dig g_push_6dig;
 
 enum class s3select_func_En_t {ADD,
                                SUM,
@@ -43,9 +83,25 @@ enum class s3select_func_En_t {ADD,
                                TO_FLOAT,
                                TO_TIMESTAMP,
                                SUBSTR,
-                               EXTRACT,
-                               DATE_ADD,
-                               DATE_DIFF,
+                               EXTRACT_YEAR,
+                               EXTRACT_MONTH,
+                               EXTRACT_DAY,
+                               EXTRACT_HOUR,
+                               EXTRACT_MINUTE,
+                               EXTRACT_SECOND,
+                               EXTRACT_WEEK,
+                               DATE_ADD_YEAR,
+                               DATE_ADD_MONTH,
+                               DATE_ADD_DAY,
+                               DATE_ADD_HOUR,
+                               DATE_ADD_MINUTE,
+                               DATE_ADD_SECOND,
+                               DATE_DIFF_YEAR,
+                               DATE_DIFF_MONTH,
+                               DATE_DIFF_DAY,
+                               DATE_DIFF_HOUR,
+                               DATE_DIFF_MINUTE,
+                               DATE_DIFF_SECOND,
                                UTCNOW,
                                LENGTH,
                                LOWER,
@@ -87,10 +143,26 @@ private:
     {"int", s3select_func_En_t::TO_INT},
     {"float", s3select_func_En_t::TO_FLOAT},
     {"substring", s3select_func_En_t::SUBSTR},
-    {"timestamp", s3select_func_En_t::TO_TIMESTAMP},
-    {"extract", s3select_func_En_t::EXTRACT},
-    {"dateadd", s3select_func_En_t::DATE_ADD},
-    {"datediff", s3select_func_En_t::DATE_DIFF},
+    {"to_timestamp", s3select_func_En_t::TO_TIMESTAMP},
+    {"#extract_year#", s3select_func_En_t::EXTRACT_YEAR},
+    {"#extract_month#", s3select_func_En_t::EXTRACT_MONTH},
+    {"#extract_day#", s3select_func_En_t::EXTRACT_DAY},
+    {"#extract_hour#", s3select_func_En_t::EXTRACT_HOUR},
+    {"#extract_minute#", s3select_func_En_t::EXTRACT_MINUTE},
+    {"#extract_second#", s3select_func_En_t::EXTRACT_SECOND},
+    {"#extract_week#", s3select_func_En_t::EXTRACT_WEEK},
+    {"#dateadd_year#", s3select_func_En_t::DATE_ADD_YEAR},
+    {"#dateadd_month#", s3select_func_En_t::DATE_ADD_MONTH},
+    {"#dateadd_day#", s3select_func_En_t::DATE_ADD_DAY},
+    {"#dateadd_hour#", s3select_func_En_t::DATE_ADD_HOUR},
+    {"#dateadd_minute#", s3select_func_En_t::DATE_ADD_MINUTE},
+    {"#dateadd_second#", s3select_func_En_t::DATE_ADD_SECOND},
+    {"#datediff_year#", s3select_func_En_t::DATE_DIFF_YEAR},
+    {"#datediff_month#", s3select_func_En_t::DATE_DIFF_MONTH},
+    {"#datediff_day#", s3select_func_En_t::DATE_DIFF_DAY},
+    {"#datediff_hour#", s3select_func_En_t::DATE_DIFF_HOUR},
+    {"#datediff_minute#", s3select_func_En_t::DATE_DIFF_MINUTE},
+    {"#datediff_second#", s3select_func_En_t::DATE_DIFF_SECOND},
     {"utcnow", s3select_func_En_t::UTCNOW},
     {"character_length", s3select_func_En_t::LENGTH},
     {"char_length", s3select_func_En_t::LENGTH},
@@ -566,20 +638,48 @@ struct _fn_to_float : public base_function
 
 struct _fn_to_timestamp : public base_function
 {
-  bsc::rule<> separator = bsc::ch_p(":") | bsc::ch_p("-");
+  bsc::rule<> date_separator = bsc::ch_p("-");
+  bsc::rule<> time_separator = bsc::ch_p(":");
+  bsc::rule<> nano_sec_separator = bsc::ch_p(".");
+  bsc::rule<> delimiter = bsc::ch_p("T");
+  bsc::rule<> zero_timezone = bsc::ch_p("Z");
+  bsc::rule<> timezone_sign = bsc::ch_p("-") | bsc::ch_p("+");
 
   uint32_t yr = 1700, mo = 1, dy = 1;
+  bsc::rule<> dig6 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+  bsc::rule<> dig5 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
   bsc::rule<> dig4 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+  bsc::rule<> dig3 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
   bsc::rule<> dig2 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p];
+  bsc::rule<> dig1 = bsc::lexeme_d[bsc::digit_p];
 
-  bsc::rule<> d_yyyymmdd_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(separator)
-                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mo)]) >> *(separator)
-                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &dy)]) >> *(separator));
+  bsc::rule<> d_yyyy_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(delimiter));
+  bsc::rule<> d_yyyymmdd_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(date_separator)
+                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mo)]) >> *(date_separator)
+                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &dy)]) >> *(delimiter));
 
-  uint32_t hr = 0, mn = 0, sc = 0;
-  bsc::rule<> d_time_dig = ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(separator)
-                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> *(separator)
-                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &sc)]) >> *(separator));
+  uint32_t hr = 0, mn = 0, sc = 0, frac_sec = 0, tz_hr = 0, tz_mn = 0;
+  bsc::rule<> d_timezone_dig =  (*(timezone_sign) >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &tz_hr)]) >> *(time_separator)
+                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &tz_mn)])) | zero_timezone;
+
+  bsc::rule<> fraction_sec = (dig6[BOOST_BIND_ACTION_PARAM(push_6dig, &frac_sec)]) |
+                             (dig5[BOOST_BIND_ACTION_PARAM(push_5dig, &frac_sec)]) |
+			     (dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &frac_sec)]) |
+			     (dig3[BOOST_BIND_ACTION_PARAM(push_3dig, &frac_sec)]) |
+			     (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &frac_sec)]) |
+			     (dig1[BOOST_BIND_ACTION_PARAM(push_1dig, &frac_sec)]);
+
+  bsc::rule<> d_time_dig = ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &sc)]) >> *(nano_sec_separator)
+                            >> (fraction_sec)  >> (d_timezone_dig)) |
+                            ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &sc)]) >> (d_timezone_dig)) |
+                            ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(time_separator)
+                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> (d_timezone_dig));
+
+  bsc::rule<> d_date_time = ((d_yyyymmdd_dig) >> (d_time_dig)) | (d_yyyymmdd_dig) | (d_yyyy_dig);
 
   boost::posix_time::ptime new_ptime;
 
@@ -588,34 +688,62 @@ struct _fn_to_timestamp : public base_function
 
   bool datetime_validation()
   {
-    //TODO temporary , should check for leap year
-
-    if(yr<1700 || yr>2050)
+    if (yr >= 1400 && yr <= 9999 && mo >= 1 && mo <= 12 && dy >= 1 && hr < 24 && mn < 60 && sc < 60 && tz_hr < 24 && tz_mn < 60)
     {
-      return false;
+      switch (mo)
+      {
+        case 1:
+        case 3:
+        case 5:
+        case 7:
+        case 8:
+        case 10:
+        case 12:
+		if(dy <= 31)
+		{
+                  return true;
+                }
+                break;
+        case 4:
+        case 6:
+        case 9:
+        case 11:
+                if(dy <= 30)
+                {
+                  return true;
+                }
+                break;
+        case 2:
+                if(dy >= 28)
+                {
+                  if(!(yr % 4) == 0 && dy > 28)
+                  {
+                    return false;
+                  }
+                  else if(!(yr % 100) == 0 && dy <= 29)
+                  {
+                    return true;
+                  }
+                  else if(!(yr % 400) == 0 && dy > 28)
+                  {
+                    return false;
+                  }
+                  else
+                  {
+                    return true;
+                  }
+                }
+                else
+                {
+                  return true;
+                }
+                break;
+        default:
+		return false;
+		break;
+      }
     }
-    if (mo<1 || mo>12)
-    {
-      return false;
-    }
-    if (dy<1 || dy>31)
-    {
-      return false;
-    }
-    if (hr>23)
-    {
-      return false;
-    }
-    if (dy>59)
-    {
-      return false;
-    }
-    if (sc>59)
-    {
-      return false;
-    }
-
-    return true;
+    return false;
   }
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
@@ -624,6 +752,9 @@ struct _fn_to_timestamp : public base_function
     hr = 0;
     mn = 0;
     sc = 0;
+    frac_sec = 0;
+    tz_hr = 0;
+    tz_mn = 0;
 
     auto iter = args->begin();
     int args_size = args->size();
@@ -642,226 +773,269 @@ struct _fn_to_timestamp : public base_function
       throw base_s3select_exception("to_timestamp first argument must be string");  //can skip current row
     }
 
-    bsc::parse_info<> info_dig = bsc::parse(v_str.str(), d_yyyymmdd_dig >> *(separator) >> d_time_dig);
+    bsc::parse_info<> info_dig = bsc::parse(v_str.str(), d_date_time);
 
     if(datetime_validation()==false or !info_dig.full)
     {
       throw base_s3select_exception("input date-time is illegal");
     }
 
-    new_ptime = boost::posix_time::ptime(boost::gregorian::date(yr, mo, dy),
-                                         boost::posix_time::hours(hr) + boost::posix_time::minutes(mn) + boost::posix_time::seconds(sc));
+    #if NANO_SEC
+      //TODO: Include timezone hours(tz_hr) and timezone minutes(tz_mn) in date time calculation.
+      new_ptime = boost::posix_time::ptime(boost::gregorian::date(yr, mo, dy),
+                          boost::posix_time::hours(hr) +
+                          boost::posix_time::minutes(mn) +
+                          boost::posix_time::seconds(sc) +
+                          boost::posix_time::nanoseconds(frac_sec*1000000000));
 
-    result->set_value(&new_ptime);
+      result->set_value(&new_ptime);
+    #else
+      if (frac_sec >= 0 && frac_sec < 10)
+              frac_sec = frac_sec * 100000;
+      else if (frac_sec >= 10 && frac_sec < 100)
+              frac_sec = frac_sec * 10000;
+      else if (frac_sec >= 100 && frac_sec < 1000)
+              frac_sec = frac_sec * 1000;
+      else if (frac_sec >= 1000 && frac_sec < 10000)
+              frac_sec = frac_sec * 100;
+      else if (frac_sec >= 0 && frac_sec < 100000)
+              frac_sec = frac_sec * 10;
+
+      //TODO: Include timezone hours(tz_hr) and timezone minutes(tz_mn) in date time calculation.
+      new_ptime = boost::posix_time::ptime(boost::gregorian::date(yr, mo, dy),
+                          boost::posix_time::time_duration(hr, mn, sc, frac_sec));
+
+      result->set_value(&new_ptime);
+    #endif
 
     return true;
   }
 
 };
 
-struct _fn_extact_from_timestamp : public base_function
+struct _fn_extract_year_from_timestamp : public base_date_extract
 {
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
 
+    result->set_value( (int64_t)new_ptime.date().year());
+    return true;
+  }
+};
+
+struct _fn_extract_month_from_timestamp : public base_date_extract
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    result->set_value( (int64_t)new_ptime.date().month());
+    return true;
+  }
+};
+
+struct _fn_extract_day_from_timestamp : public base_date_extract
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    result->set_value( (int64_t)new_ptime.date().day_of_year());
+    return true;
+  }
+};
+
+struct _fn_extract_hour_from_timestamp : public base_date_extract
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    result->set_value( (int64_t)new_ptime.time_of_day().hours());
+    return true;
+  }
+};
+
+struct _fn_extract_minute_from_timestamp : public base_date_extract
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    result->set_value( (int64_t)new_ptime.time_of_day().minutes());
+    return true;
+  }
+};
+
+struct _fn_extract_second_from_timestamp : public base_date_extract
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    result->set_value( (int64_t)new_ptime.time_of_day().seconds());
+    return true;
+  }
+};
+
+struct _fn_extract_week_from_timestamp : public base_date_extract
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    result->set_value( (int64_t)new_ptime.date().week_number());
+    return true;
+  }
+};
+
+struct _fn_diff_year_timestamp : public base_date_diff
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    int64_t yr = val_ts2.timestamp()->date().year() - val_ts1.timestamp()->date().year();
+    result->set_value( yr );
+    return true;
+  }
+};
+
+struct _fn_diff_month_timestamp : public base_date_diff
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    int64_t yr = val_ts2.timestamp()->date().year() - val_ts1.timestamp()->date().year();
+    int64_t mon = val_ts2.timestamp()->date().month() - val_ts1.timestamp()->date().month();
+    result->set_value((yr * 12) + mon );
+    return true;
+  }
+};
+
+struct _fn_diff_day_timestamp : public base_date_diff
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    boost::gregorian::date_period dp = boost::gregorian::date_period( val_ts1.timestamp()->date(), val_ts2.timestamp()->date());
+    result->set_value( dp.length().days() );
+    return true;
+  }
+};
+
+struct _fn_diff_hour_timestamp : public base_date_diff
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    boost::posix_time::time_duration td_res = (*val_ts2.timestamp() - *val_ts1.timestamp());
+    result->set_value( td_res.hours());
+    return true;
+  }
+};
+
+struct _fn_diff_minute_timestamp : public base_date_diff
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    boost::posix_time::time_duration td_res = (*val_ts2.timestamp() - *val_ts1.timestamp());
+    result->set_value((td_res.hours() * 60) + td_res.minutes());
+    return true;
+  }
+};
+
+struct _fn_diff_second_timestamp : public base_date_diff
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    boost::posix_time::time_duration td_res = (*val_ts2.timestamp() - *val_ts1.timestamp());
+    result->set_value((((td_res.hours() * 60) + td_res.minutes()) * 60) + td_res.seconds());
+    return true;
+  }
+};
+
+struct _fn_add_year_to_timestamp : public base_date_add
+{
   boost::posix_time::ptime new_ptime;
 
-  value val_date_part;
-
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    auto iter = args->begin();
-    int args_size = args->size();
+    param_validation(args);
 
-    if (args_size < 2)
-    {
-      throw base_s3select_exception("to_timestamp should have 2 parameters");
-    }
-
-    base_statement* date_part = *iter;
-
-    val_date_part = date_part->eval();//TODO could be done once?
-
-    if(val_date_part.is_string()== false)
-    {
-      throw base_s3select_exception("first parameter should be string");
-    }
-
-    iter++;
-
-    base_statement* ts = *iter;
-
-    if(ts->eval().is_timestamp()== false)
-    {
-      throw base_s3select_exception("second parameter is not timestamp");
-    }
-
-    new_ptime = *ts->eval().timestamp();
-
-    if( strcmp(val_date_part.str(), "year")==0 )
-    {
-      result->set_value( (int64_t)new_ptime.date().year() );
-    }
-    else if( strcmp(val_date_part.str(), "month")==0 )
-    {
-      result->set_value( (int64_t)new_ptime.date().month() );
-    }
-    else if( strcmp(val_date_part.str(), "day")==0 )
-    {
-      result->set_value( (int64_t)new_ptime.date().day_of_year() );
-    }
-    else if( strcmp(val_date_part.str(), "week")==0 )
-    {
-      result->set_value( (int64_t)new_ptime.date().week_number() );
-    }
-    else
-    {
-      throw base_s3select_exception(std::string( val_date_part.str() + std::string("  is not supported ") ).c_str() );
-    }
-
-    return true;
-  }
-
-};
-
-struct _fn_diff_timestamp : public base_function
-{
-
-  value val_date_part;
-  value val_dt1;
-  value val_dt2;
-
-  bool operator()(bs_stmt_vec_t* args, variable* result) override
-  {
-    auto iter = args->begin();
-    int args_size = args->size();
-
-    if (args_size < 3)
-    {
-      throw base_s3select_exception("datediff need 3 parameters");
-    }
-
-    base_statement* date_part = *iter;
-
-    val_date_part = date_part->eval();
-
-    iter++;
-    base_statement* dt1_param = *iter;
-    val_dt1 = dt1_param->eval();
-    if (val_dt1.is_timestamp() == false)
-    {
-      throw base_s3select_exception("second parameter should be timestamp");
-    }
-
-    iter++;
-    base_statement* dt2_param = *iter;
-    val_dt2 = dt2_param->eval();
-    if (val_dt2.is_timestamp() == false)
-    {
-      throw base_s3select_exception("third parameter should be timestamp");
-    }
-
-    if (strcmp(val_date_part.str(), "year") == 0)
-    {
-      int64_t yr = val_dt2.timestamp()->date().year() - val_dt1.timestamp()->date().year() ;
-      result->set_value( yr );
-    }
-    else if (strcmp(val_date_part.str(), "month") == 0)
-    {
-      int64_t yr = val_dt2.timestamp()->date().year() - val_dt1.timestamp()->date().year() ;
-      int64_t mon = val_dt2.timestamp()->date().month() - val_dt1.timestamp()->date().month() ;
-
-      result->set_value( yr*12 + mon );
-    }
-    else if (strcmp(val_date_part.str(), "day") == 0)
-    {
-      boost::gregorian::date_period dp =
-        boost::gregorian::date_period( val_dt1.timestamp()->date(), val_dt2.timestamp()->date());
-      result->set_value( dp.length().days() );
-    }
-    else if (strcmp(val_date_part.str(), "hours") == 0)
-    {
-      boost::posix_time::time_duration td_res = (*val_dt2.timestamp() - *val_dt1.timestamp());
-      result->set_value( td_res.hours());
-    }
-    else
-    {
-      throw base_s3select_exception("first parameter should be string: year,month,hours,day");
-    }
-
-
+    new_ptime = *val_ts.timestamp();
+    new_ptime += boost::gregorian::years( val_quantity.i64() );
+    result->set_value( &new_ptime );
     return true;
   }
 };
 
-struct _fn_add_to_timestamp : public base_function
+struct _fn_add_month_to_timestamp : public base_date_add
 {
-
-  boost::posix_time::ptime new_ptime;
-
-  value val_date_part;
-  value val_quantity;
-  value val_timestamp;
-
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    auto iter = args->begin();
-    int args_size = args->size();
+    param_validation(args);
 
-    if (args_size < 3)
-    {
-      throw base_s3select_exception("add_to_timestamp should have 3 parameters");
-    }
-
-    base_statement* date_part = *iter;
-    val_date_part = date_part->eval();//TODO could be done once?
-
-    if(val_date_part.is_string()== false)
-    {
-      throw base_s3select_exception("first parameter should be string");
-    }
-
-    iter++;
-    base_statement* quan = *iter;
-    val_quantity = quan->eval();
-
-    if (val_quantity.is_number() == false)
-    {
-      throw base_s3select_exception("second parameter should be number");  //TODO what about double?
-    }
-
-    iter++;
-    base_statement* ts = *iter;
-    val_timestamp = ts->eval();
-
-    if(val_timestamp.is_timestamp() == false)
-    {
-      throw base_s3select_exception("third parameter should be time-stamp");
-    }
-
-    new_ptime = *val_timestamp.timestamp();
-
-    if( strcmp(val_date_part.str(), "year")==0 )
-    {
-      new_ptime += boost::gregorian::years( val_quantity.i64() );
-      result->set_value( &new_ptime );
-    }
-    else if( strcmp(val_date_part.str(), "month")==0 )
-    {
-      new_ptime += boost::gregorian::months( val_quantity.i64() );
-      result->set_value( &new_ptime );
-    }
-    else if( strcmp(val_date_part.str(), "day")==0 )
-    {
-      new_ptime += boost::gregorian::days( val_quantity.i64() );
-      result->set_value( &new_ptime );
-    }
-    else
-    {
-      throw base_s3select_exception( std::string(val_date_part.str() + std::string(" is not supported for add")).c_str());
-    }
-
+    new_ptime += boost::gregorian::months( val_quantity.i64() );
+    result->set_value( &new_ptime );
     return true;
   }
+};
 
+struct _fn_add_day_to_timestamp : public base_date_add
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    new_ptime += boost::gregorian::days( val_quantity.i64() );
+    result->set_value( &new_ptime );
+    return true;
+  }
+};
+
+struct _fn_add_hour_to_timestamp : public base_date_add
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    new_ptime += boost::posix_time::hours( val_quantity.i64() );
+    result->set_value( &new_ptime );
+    return true;
+  }
+};
+
+struct _fn_add_minute_to_timestamp : public base_date_add
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    new_ptime += boost::posix_time::minutes( val_quantity.i64() );
+    result->set_value( &new_ptime );
+    return true;
+  }
+};
+
+struct _fn_add_second_to_timestamp : public base_date_add
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    new_ptime += boost::posix_time::seconds( val_quantity.i64() );
+    result->set_value( &new_ptime );
+    return true;
+  }
 };
 
 struct _fn_utcnow : public base_function
@@ -1553,16 +1727,80 @@ base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt
     return S3SELECT_NEW(this,_fn_to_timestamp);
     break;
 
-  case s3select_func_En_t::EXTRACT:
-    return S3SELECT_NEW(this,_fn_extact_from_timestamp);
+  case s3select_func_En_t::EXTRACT_YEAR:
+    return S3SELECT_NEW(this,_fn_extract_year_from_timestamp);
     break;
 
-  case s3select_func_En_t::DATE_ADD:
-    return S3SELECT_NEW(this,_fn_add_to_timestamp);
+  case s3select_func_En_t::EXTRACT_MONTH:
+    return S3SELECT_NEW(this,_fn_extract_month_from_timestamp);
     break;
 
-  case s3select_func_En_t::DATE_DIFF:
-    return S3SELECT_NEW(this,_fn_diff_timestamp);
+  case s3select_func_En_t::EXTRACT_DAY:
+    return S3SELECT_NEW(this,_fn_extract_day_from_timestamp);
+    break;
+
+  case s3select_func_En_t::EXTRACT_HOUR:
+    return S3SELECT_NEW(this,_fn_extract_hour_from_timestamp);
+    break;
+
+  case s3select_func_En_t::EXTRACT_MINUTE:
+    return S3SELECT_NEW(this,_fn_extract_minute_from_timestamp);
+    break;
+
+  case s3select_func_En_t::EXTRACT_SECOND:
+    return S3SELECT_NEW(this,_fn_extract_second_from_timestamp);
+    break;
+
+  case s3select_func_En_t::EXTRACT_WEEK:
+    return S3SELECT_NEW(this,_fn_extract_week_from_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_ADD_YEAR:
+    return S3SELECT_NEW(this,_fn_add_year_to_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_ADD_MONTH:
+    return S3SELECT_NEW(this,_fn_add_month_to_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_ADD_DAY:
+    return S3SELECT_NEW(this,_fn_add_day_to_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_ADD_HOUR:
+    return S3SELECT_NEW(this,_fn_add_hour_to_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_ADD_MINUTE:
+    return S3SELECT_NEW(this,_fn_add_minute_to_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_ADD_SECOND:
+    return S3SELECT_NEW(this,_fn_add_second_to_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_DIFF_YEAR:
+    return S3SELECT_NEW(this,_fn_diff_year_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_DIFF_MONTH:
+    return S3SELECT_NEW(this,_fn_diff_month_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_DIFF_DAY:
+    return S3SELECT_NEW(this,_fn_diff_day_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_DIFF_HOUR:
+    return S3SELECT_NEW(this,_fn_diff_hour_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_DIFF_MINUTE:
+    return S3SELECT_NEW(this,_fn_diff_minute_timestamp);
+    break;
+
+  case s3select_func_En_t::DATE_DIFF_SECOND:
+    return S3SELECT_NEW(this,_fn_diff_second_timestamp);
     break;
 
   case s3select_func_En_t::UTCNOW:

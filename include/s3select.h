@@ -56,6 +56,7 @@ struct actionQ
   std::vector<base_statement*> whenThenQ;
   std::vector<std::string> dataTypeQ;
   std::vector<std::string> trimTypeQ;
+  std::vector<std::string> datePartQ;
   projection_alias alias_map;
   std::string from_clause;
   s3select_projections  projections;
@@ -332,6 +333,30 @@ struct push_trim_expr_anychar_anyside : public base_ast_builder
 };
 static push_trim_expr_anychar_anyside g_push_trim_expr_anychar_anyside;
 
+struct push_datediff : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_datediff g_push_datediff;
+
+struct push_dateadd : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_dateadd g_push_dateadd;
+
+struct push_extract : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_extract g_push_extract;
+
+struct push_date_part : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_date_part g_push_date_part;
+
 struct s3select : public bsc::grammar<s3select>
 {
 private:
@@ -572,9 +597,9 @@ public:
       function = ((variable >> '(' )[BOOST_BIND_ACTION(push_function_name)] >> !list_of_function_arguments >> ')')[BOOST_BIND_ACTION(push_function_expr)];
 
       arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] |  (number)[BOOST_BIND_ACTION(push_number)] | (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
-                            (string)[BOOST_BIND_ACTION(push_string)] |
+                            (string)[BOOST_BIND_ACTION(push_string)] | (datediff) | (dateadd) | (extract) |
                             (cast) | (substr) | (trim) |
-                            (function) | (variable)[BOOST_BIND_ACTION(push_variable)] ;//function is pushed by right-term
+                            (function) | (variable)[BOOST_BIND_ACTION(push_variable)]; //function is pushed by right-term
 
       cast = (bsc::str_p("cast") >> '(' >> arithmetic_expression >> bsc::str_p("as") >> (data_type)[BOOST_BIND_ACTION(push_data_type)] >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
 
@@ -598,6 +623,16 @@ public:
 
       trim_remove_type = (bsc::str_p("leading") | bsc::str_p("trailing") | bsc::str_p("both") );
 
+      datediff = (bsc::str_p("date_diff") >> '(' >> date_part >> ',' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_datediff)];
+
+      dateadd = (bsc::str_p("date_add") >> '(' >> date_part >> ',' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_dateadd)];
+
+      extract = (bsc::str_p("extract") >> '(' >> (date_part_extract)[BOOST_BIND_ACTION(push_date_part)] >> bsc::str_p("from") >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_extract)];
+
+      date_part = (bsc::str_p("year") | bsc::str_p("month") | bsc::str_p("day") | bsc::str_p("hour")  | bsc::str_p("minute") | bsc::str_p("second")) [BOOST_BIND_ACTION(push_date_part)];
+
+      date_part_extract = ((date_part) |  bsc::str_p("week"));
+
       number = bsc::int_p;
 
       float_number = bsc::real_p;
@@ -619,7 +654,7 @@ public:
     }
 
 
-    bsc::rule<ScannerT> cast, data_type, variable, trim_type, trim_remove_type, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor, trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside, substr, substr_from, substr_from_for;
+    bsc::rule<ScannerT> cast, data_type, variable, trim_type, trim_remove_type, select_expr, s3_object, where_clause, number, float_number, string, arith_cmp, log_op, condition_expression, binary_condition, arithmetic_predicate, factor, trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside, substr, substr_from, substr_from_for, datediff, dateadd, extract, date_part, date_part_extract;
     bsc::rule<ScannerT> special_predicates,between_predicate, in_predicate, like_predicate, is_null, is_not_null;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
@@ -1227,7 +1262,7 @@ void push_data_type::builder(s3select* self, const char* a, const char* b) const
     self->getAction()->dataTypeQ.push_back("string");
   }else if(cast_operator("timestamp"))
   {
-    self->getAction()->dataTypeQ.push_back("timestamp");
+    self->getAction()->dataTypeQ.push_back("to_timestamp");
   }
 }
 
@@ -1340,7 +1375,85 @@ void push_substr_from_for::builder(s3select* self, const char* a, const char* b)
   func->push_argument(expr);
 
   self->getAction()->exprQ.push_back(func);
-}  
+}
+
+void push_datediff::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  std::string date_op;
+
+  date_op = self->getAction()->datePartQ.back();
+  self->getAction()->datePartQ.pop_back();
+
+  std::string date_function =  "#datediff_" + date_op + "#";
+
+  __function* func = S3SELECT_NEW(self, __function, date_function.c_str(), self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  base_statement* start_position = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  func->push_argument(start_position);
+  func->push_argument(expr);
+
+  self->getAction()->exprQ.push_back(func);
+}
+
+void push_dateadd::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  std::string date_op;
+
+  date_op = self->getAction()->datePartQ.back();
+  self->getAction()->datePartQ.pop_back();
+
+  std::string date_function =  "#dateadd_" + date_op + "#";
+
+  __function* func = S3SELECT_NEW(self, __function, date_function.c_str(), self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  base_statement* start_position = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  func->push_argument(start_position);
+  func->push_argument(expr);
+
+  self->getAction()->exprQ.push_back(func);
+}
+
+void push_extract::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  std::string date_op;
+
+  date_op = self->getAction()->datePartQ.back();
+  self->getAction()->datePartQ.pop_back();
+
+  std::string date_function =  "#extract_" + date_op + "#";
+
+  __function* func = S3SELECT_NEW(self, __function, date_function.c_str(), self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  func->push_argument(expr);
+
+  self->getAction()->exprQ.push_back(func);
+}
+
+void push_date_part::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  self->getAction()->datePartQ.push_back(token);
+}
 
 /////// handling different object types
 class base_s3object
