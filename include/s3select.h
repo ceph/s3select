@@ -669,7 +669,7 @@ public:
 
       addsubop_operator = bsc::str_p("+") | bsc::str_p("-");
 
-      arith_cmp = bsc::str_p(">=") | bsc::str_p("<=") | bsc::str_p("==") | bsc::str_p("<") | bsc::str_p(">") | bsc::str_p("!=");
+      arith_cmp = bsc::str_p(">=") | bsc::str_p("<=") | bsc::str_p("=") | bsc::str_p("<") | bsc::str_p(">") | bsc::str_p("!=");
 
       and_op =  bsc::str_p("and");
 
@@ -894,7 +894,7 @@ void push_compare_operator::builder(s3select* self, const char* a, const char* b
   std::string token(a, b);
   arithmetic_operand::cmp_t c = arithmetic_operand::cmp_t::NA;
 
-  if (token == "==")
+  if (token == "=")
   {
     c = arithmetic_operand::cmp_t::EQ;
   }
