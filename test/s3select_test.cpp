@@ -3407,6 +3407,14 @@ TEST(TestS3selectFunctions, truefalse)
   test_single_column_single_row("select true,false from s3object where false == false;","true,false,\n");
   test_single_column_single_row("select count(*) from s3object where not (1>2) == true;","1,");
   test_single_column_single_row("select count(*) from s3object where not (1>2) == (not false);","1,");
+  test_single_column_single_row("select (true or false) from s3object;","true,\n");
+  test_single_column_single_row("select (true and true) from s3object;","true,\n");
+  test_single_column_single_row("select (true and null) from s3object;","null,\n");
+  test_single_column_single_row("select (false or false) from s3object;","false,\n");
+  test_single_column_single_row("select (not true) from s3object;","false,\n");
+  test_single_column_single_row("select (not 1 > 2) from s3object;","true,\n");
+  test_single_column_single_row("select (1 > 2) from s3object;","false,\n");
+  test_single_column_single_row("select case when (nullif(3,3) is null) == true then \"case_1_1\" else \"case_2_2\"  end, case when (\"a\" in (\"a\",\"b\")) == true then \"case_3_3\" else \"case_4_4\" end, case when 1>3 then \"case_5_5\" else \"case_6_6\" end from s3object where (3*3 == 9);","case_1_1,case_3_3,case_6_6,\n");
 }
 
 TEST(TestS3selectFunctions, boolcast)

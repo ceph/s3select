@@ -630,7 +630,7 @@ public:
   value& operator=(bool b)
   {
     this->__val.num = (int64_t)b;
-    this->type = value_En_t::DECIMAL;
+    this->type = value_En_t::BOOL;
 
     return *this;
   }
@@ -1759,11 +1759,11 @@ class negate_function_operation : public base_statement
     {
       if (res.is_true())
       {
-        res = (int64_t)0;
+        res = (bool)0;
       }
       else
       {
-        res = (int64_t)1;
+        res = (bool)1;
       }
     }
 
