@@ -3413,6 +3413,7 @@ TEST(TestS3selectFunctions, truefalse)
   test_single_column_single_row("select (false or false) from s3object;","false,\n");
   test_single_column_single_row("select (not true) from s3object;","false,\n");
   test_single_column_single_row("select (not 1 > 2) from s3object;","true,\n");
+  test_single_column_single_row("select (not 1 > 2) as a1,cast(a1 as int)*4 from s3object;","true,4,\n");
   test_single_column_single_row("select (1 > 2) from s3object;","false,\n");
   test_single_column_single_row("select case when (nullif(3,3) is null) == true then \"case_1_1\" else \"case_2_2\"  end, case when (\"a\" in (\"a\",\"b\")) == true then \"case_3_3\" else \"case_4_4\" end, case when 1>3 then \"case_5_5\" else \"case_6_6\" end from s3object where (3*3 == 9);","case_1_1,case_3_3,case_6_6,\n");
 }
@@ -3677,4 +3678,22 @@ TEST(TestS3selectFunctions, truefalse_in_expressions)
   std::string s3select_result_10 = run_s3select(input_query_10,input);
 
   ASSERT_EQ(s3select_result_9, s3select_result_10);
+}
+
+TEST(TestS3selectFunctions, truefalse_alias_expressions)
+{
+  std::string input;
+  size_t size = 100;
+  generate_rand_columns_csv(input, size);
+  const std::string input_query_1 = "select (int(_1) > int(_2)) as a1 from s3object where a1 == true ;";
+
+  std::string s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_NE(s3select_result_1,failure_sign);
+
+  const std::string input_query_2 = "select (int(_1) > int(_2)) from s3object where int(_1) > int(_2) == true;";
+
+  std::string s3select_result_2 = run_s3select(input_query_2,input);
+
+  ASSERT_EQ(s3select_result_1, s3select_result_2);
 }

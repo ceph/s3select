@@ -565,7 +565,8 @@ public:
       projection_expression = (when_case_else_projection|when_case_value_when) [BOOST_BIND_ACTION(push_projection)] | 
                               (arithmetic_expression >> bsc::str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] | 
                               (arithmetic_expression)[BOOST_BIND_ACTION(push_projection)] | 
-                              (arithmetic_predicate)[BOOST_BIND_ACTION(push_alias_projection)];
+			      (arithmetic_predicate >> bsc::str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] |
+                              (arithmetic_predicate)[BOOST_BIND_ACTION(push_projection)] ;
 
       alias_name = bsc::lexeme_d[(+bsc::alpha_p >> *bsc::digit_p)] ;
 
