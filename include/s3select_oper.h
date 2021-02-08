@@ -857,6 +857,11 @@ public:
     {
       throw base_s3select_exception("illegal binary operation with string");
     }
+    if (l.is_bool() || r.is_bool())
+    {
+      throw base_s3select_exception("illegal binary operation with bool type");
+    }
+
     if (l.is_number() && r.is_number())
     {
       if (l.type != r.type)
