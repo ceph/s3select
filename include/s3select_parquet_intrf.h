@@ -319,7 +319,6 @@ private:
 
     parquet::ByteArray str_value;
     int64_t rows_read;
-    int32_t i32_val;
 
 
     switch (get_type())

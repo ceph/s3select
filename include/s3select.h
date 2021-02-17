@@ -104,7 +104,6 @@ struct actionQ
 
   uint64_t in_set_count;
 
-  actionQ():in_set_count(0){}
 
 };
 
@@ -2148,52 +2147,6 @@ public:
     m_aggr_flow = m_s3_select->is_aggregate_query();
   }
 
-  void extractColumns(parquet_file_parser::column_pos_t &columns_ids,std::vector<base_statement*> column_statements)
-  {
-    for (auto p : column_statements)
-    {
-      //per each (variable*) get its positions and push it into columns_ids
-      if (dynamic_cast<variable* >(p) && p->is_column())
-      {
-        if (dynamic_cast<variable* >(p)->m_var_type == s3selectEngine::variable::var_t::VAR)
-        {
-          std::string column_name = dynamic_cast<variable* >(p)->get_name();
-          int column_id; 
-          if( (column_id=object_reader.get_column_id(column_name)) == (uint16_t)-1)
-          {
-              std::string error_msg = "column " + column_name +" is not exists";
-              throw base_s3select_exception(error_msg, base_s3select_exception::s3select_exp_en_t::FATAL);
-          }
-
-          columns_ids.insert(column_id);
-        }
-        else
-        {
-          if(dynamic_cast<variable* >(p)->get_column_pos() > (object_reader.get_num_of_columns()-1))
-          {
-              std::stringstream error_msg;
-              error_msg << "column position greater than number of columns (" << 
-              object_reader.get_num_of_columns() << ")";
-
-              throw base_s3select_exception( error_msg.str(), base_s3select_exception::s3select_exp_en_t::FATAL);
-          }
-
-          columns_ids.insert(dynamic_cast<variable* >(p)->get_column_pos());
-        }
-      } 
-    }
-  }
-
-void getWhereClauseColumns(parquet_file_parser::column_pos_t &columns_ids)
-{
-  extractColumns(columns_ids,m_s3_select->getAction()->predicate_columns);
-}
-
-void getProjectionsColumns(parquet_file_parser::column_pos_t &columns_ids)
-{
-  extractColumns(columns_ids, m_s3_select->getAction()->projections_columns);
-}
-
   bool is_end_of_stream()
   {
     return object_reader.end_of_stream();
@@ -2235,7 +2188,7 @@ void getProjectionsColumns(parquet_file_parser::column_pos_t &columns_ids)
         }
 
         //TODO if (m_where_clause)
-        int status = object_reader.get_column_values_by_positions(m_where_clause_columns, m_predicate_values); //TODO status should indicate error/end-of-stream/success
+        object_reader.get_column_values_by_positions(m_where_clause_columns, m_predicate_values); //TODO status should indicate error/end-of-stream/success
 
         m_sa->update(m_predicate_values, m_where_clause_columns);
 
@@ -2246,7 +2199,7 @@ void getProjectionsColumns(parquet_file_parser::column_pos_t &columns_ids)
 
         if (!m_where_clause || m_where_clause->eval().i64() == true)
         {
-          int status = object_reader.get_column_values_by_positions(m_projections_columns, m_projections_values);
+          object_reader.get_column_values_by_positions(m_projections_columns, m_projections_values);
           m_sa->update(m_projections_values, m_projections_columns);
           for (auto i : m_projections)
           {
@@ -2270,7 +2223,7 @@ void getProjectionsColumns(parquet_file_parser::column_pos_t &columns_ids)
             a.second->invalidate_cache_result();
           }
 
-          int status = object_reader.get_column_values_by_positions(m_where_clause_columns, m_predicate_values); //TODO status should indicate error/end-of-stream/success
+          object_reader.get_column_values_by_positions(m_where_clause_columns, m_predicate_values); //TODO status should indicate error/end-of-stream/success
 
           m_sa->update(m_predicate_values, m_where_clause_columns);
 
@@ -2292,7 +2245,7 @@ void getProjectionsColumns(parquet_file_parser::column_pos_t &columns_ids)
         }
       }
 
-      int status = object_reader.get_column_values_by_positions(m_projections_columns, m_projections_values);
+      object_reader.get_column_values_by_positions(m_projections_columns, m_projections_values);
       m_sa->update(m_projections_values, m_projections_columns);
 
       for (auto i : m_projections)
