@@ -1904,6 +1904,391 @@ class base_date_add : public base_function
 
 };
 
+class base_time_to_string
+{
+  protected:
+    std::vector<std::string> months = { "January", "February", "March","April",
+                        "May", "June", "July", "August", "September",
+                        "October", "November", "December"};
+  public:
+    virtual std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param) = 0;
+    virtual ~base_time_to_string() = default;
+};
+
+class derive_yyyy : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t yr = new_ptime.date().year();
+      return std::string(param - 4, '0') + std::to_string(yr);
+    }
+} yyyy_to_string;
+
+class derive_yy : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t yr = new_ptime.date().year();
+      return std::string(2 - std::to_string(yr%100).length(), '0') + std::to_string(yr%100);
+    }
+} yy_to_string;
+
+class derive_y : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t yr = new_ptime.date().year();
+      return std::to_string(yr);
+    }
+} y_to_string;
+
+class derive_mmmmm_month : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t mnth = new_ptime.date().month();
+      return (months[mnth - 1]).substr(0, 1);
+    }
+} mmmmm_month_to_string;
+
+class derive_mmmm_month : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t mnth = new_ptime.date().month();
+      return months[mnth - 1];
+    }
+} mmmm_month_to_string;
+
+class derive_mmm_month : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t mnth = new_ptime.date().month();
+      return (months[mnth - 1]).substr(0, 3);
+    }
+} mmm_month_to_string;
+
+class derive_mm_month : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t mnth = new_ptime.date().month();
+      std::string mnth_str = std::to_string(mnth);
+      return std::string(2 - mnth_str.length(), '0') + mnth_str;
+    }
+} mm_month_to_string;
+
+class derive_m_month : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t mnth = new_ptime.date().month();
+      return std::to_string(mnth);
+    }
+} m_month_to_string;
+
+class derive_dd : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      std::string day = std::to_string(new_ptime.date().day());
+      return std::string(2 - day.length(), '0') + day;
+    }
+} dd_to_string;
+
+class derive_d : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      std::string day = std::to_string(new_ptime.date().day());
+      return day;
+    }
+} d_to_string;
+
+class derive_a : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t hr = new_ptime.time_of_day().hours();
+      std::string meridiem = (hr < 12 ? "AM" : "PM");
+      return meridiem;
+    }
+} a_to_string;
+
+class derive_hh : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t hr = new_ptime.time_of_day().hours();
+      std::string hr_12 = std::to_string(hr%12 == 0 ? 12 : hr%12);
+      return std::string(2 - hr_12.length(), '0') + hr_12;
+    }
+} hh_to_string;
+
+class derive_h : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t hr = new_ptime.time_of_day().hours();
+      std::string hr_12 = std::to_string(hr%12 == 0 ? 12 : hr%12);
+      return hr_12;
+    }
+} h_to_string;
+
+class derive_h2 : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t hr = new_ptime.time_of_day().hours();
+      std::string hr_24 = std::to_string(hr);
+      return std::string(2 - hr_24.length(), '0') + hr_24;
+    }
+} h2_to_string;
+
+class derive_h1 : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      int64_t hr = new_ptime.time_of_day().hours();
+      return std::to_string(hr);
+    }
+} h1_to_string;
+
+class derive_mm : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      std::string mint = std::to_string(new_ptime.time_of_day().minutes());
+      return std::string(2 - mint.length(), '0') + mint;
+    }
+} mm_to_string;
+
+class derive_m : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      std::string mint = std::to_string(new_ptime.time_of_day().minutes());
+      return mint;
+    }
+} m_to_string;
+
+class derive_ss : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      std::string sec =  std::to_string(new_ptime.time_of_day().seconds());
+      return std::string(2 - sec.length(), '0') + sec;
+    }
+} ss_to_string;
+
+class derive_s : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      std::string sec =  std::to_string(new_ptime.time_of_day().seconds());
+      return sec;
+    }
+} s_to_string;
+
+class derive_frac_sec : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      std::string frac_seconds = std::to_string(new_ptime.time_of_day().fractional_seconds());
+      if (param >= frac_seconds.length())
+      {
+        return frac_seconds + std::string(param - frac_seconds.length(), '0');
+      }
+      else
+      {
+        return frac_seconds.substr(0, param);
+      }
+    }
+} frac_sec_to_string;
+
+class derive_n : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      std::string frac_seconds = std::to_string(new_ptime.time_of_day().fractional_seconds());
+      return frac_seconds + std::string(9 - frac_seconds.length(), '0');
+    }
+} n_to_string;
+
+class derive_delimiter : public base_time_to_string
+{
+  public:
+    std::string print_time(boost::posix_time::ptime& new_ptime, uint32_t param)
+    {
+      char ch = param;
+      return std::string(1, ch);
+    }
+} delimiter_to_string;
+
+class base_timestamp_to_string : public base_function
+{
+  protected:
+    boost::posix_time::ptime new_ptime;
+    std::string format;
+    std::vector<char> m_metachar {'y', 'M', 'd', 'a', 'h', 'H', 'm', 's', 'S', 'n'};
+    std::vector<std::string> m_metaword_vec {"yyy", "yy", "y", "MMMMM", "MMMM",
+                                "MMM", "MM", "M", "dd", "d", "a", "hh", "h",
+                                "HH", "H", "mm", "m", "ss", "s", "n"};
+    std::vector<base_time_to_string*> print_vector;
+    std::vector<uint32_t> para;
+    bool initialized = false;
+
+    using to_string_lib_t = std::map<std::string,base_time_to_string* >;
+
+    const to_string_lib_t time_to_string_functions =
+    {
+      {"yyyy+", &yyyy_to_string},
+      {"yyy", &y_to_string},
+      {"yy", &yy_to_string},
+      {"y", &y_to_string},
+      {"MMMMM", &mmmmm_month_to_string},
+      {"MMMM", &mmmm_month_to_string},
+      {"MMM", &mmm_month_to_string},
+      {"MM", &mm_month_to_string},
+      {"M", &m_month_to_string},
+      {"dd", &dd_to_string },
+      {"d", &d_to_string },
+      {"a", &a_to_string },
+      {"hh", &hh_to_string},
+      {"h", &h_to_string},
+      {"HH", &h2_to_string},
+      {"H", &h1_to_string},
+      {"mm", &mm_to_string},
+      {"m", &m_to_string},
+      {"ss", &ss_to_string},
+      {"s", &s_to_string},
+      {"S+", &frac_sec_to_string},
+      {"n", &n_to_string},
+      {"delimiter", &delimiter_to_string}
+    };
+
+  public:
+    void param_validation(bs_stmt_vec_t*& args)
+    {
+      auto iter = args->begin();
+      int args_size = args->size();
+
+      if (args_size < 2)
+      {
+        throw base_s3select_exception("to_string need 2 parameters");
+      }
+
+      base_statement* dt1_param = *iter;
+      value val_timestamp = dt1_param->eval();
+
+      if (val_timestamp.is_timestamp() == false)
+      {
+        throw base_s3select_exception("first parameter should be timestamp");
+      }
+
+      iter++;
+      base_statement* frmt = *iter;
+      value val_format = frmt->eval();
+
+      if (val_format.is_string() == false)
+      {
+        throw base_s3select_exception("second parameter should be string");
+      }
+
+      new_ptime = *val_timestamp.timestamp();
+      format = val_format.to_string();
+    }
+
+    uint32_t length_same_char_str(std::string str, char ch)
+    {
+      int i = 0;
+      while(str[i] == ch)
+        i++;
+      return i;
+    }
+
+    void prepare_to_string_vector(std::vector<base_time_to_string*>& print_vector, std::vector<uint32_t>& para)
+    {
+      for (uint32_t i = 0; i < format.length(); i++)
+      {
+        if (std::find(m_metachar.begin(), m_metachar.end() , format[i]) != m_metachar.end())
+        {
+          if (format.substr(i, 4).compare("yyyy") == 0)
+          {
+            uint32_t len = length_same_char_str(format.substr(i), 'y');
+            auto it = time_to_string_functions.find("yyyy+");
+            print_vector.push_back( it->second);
+            para.push_back(len);
+            i += len - 1;
+            continue;
+          }
+          else if (format[i] == 'S')
+          {
+            uint32_t len = length_same_char_str(format.substr(i), 'S');
+            auto it = time_to_string_functions.find("S+");
+            print_vector.push_back( it->second);
+            para.push_back(len);
+            i += len - 1;
+            continue;
+          }
+
+          for (auto word : m_metaword_vec)
+          {
+            if (format.substr(i, word.length()).compare(word) == 0)
+            {
+              auto it = time_to_string_functions.find(word.c_str());
+              print_vector.push_back( it->second);
+              para.push_back('\0');
+              i += word.length() - 1;
+              break;
+            }
+          }
+        }
+        else
+        {
+          auto it = time_to_string_functions.find("delimiter");
+          print_vector.push_back( it->second );
+          para.push_back(format[i]);
+        }
+      }
+    }
+
+    std::string execute_to_string(std::vector<base_time_to_string*>& print_vector, std::vector<uint32_t>& para)
+    {
+      std::string res;
+      int temp = 0;
+      for(auto p : print_vector)
+      {
+        res += p->print_time(new_ptime, para.at(temp));
+        temp++;
+      }
+      return res;
+    }
+
+};
+
 };//namespace
 
 #endif

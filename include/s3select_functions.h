@@ -6,6 +6,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <regex>
+#include <boost/regex.hpp>
 
 using namespace std::string_literals;
 
@@ -82,6 +83,8 @@ enum class s3select_func_En_t {ADD,
                                TO_INT,
                                TO_FLOAT,
                                TO_TIMESTAMP,
+                               TO_STRING_CONSTANT,
+                               TO_STRING_DYNAMIC,
                                TO_BOOL,
                                SUBSTR,
                                EXTRACT_YEAR,
@@ -146,6 +149,8 @@ private:
     {"float", s3select_func_En_t::TO_FLOAT},
     {"substring", s3select_func_En_t::SUBSTR},
     {"to_timestamp", s3select_func_En_t::TO_TIMESTAMP},
+    {"#to_string_constant#",s3select_func_En_t::TO_STRING_CONSTANT},
+    {"#to_string_dynamic#",s3select_func_En_t::TO_STRING_DYNAMIC},
     {"to_bool", s3select_func_En_t::TO_BOOL},
     {"#extract_year#", s3select_func_En_t::EXTRACT_YEAR},
     {"#extract_month#", s3select_func_En_t::EXTRACT_MONTH},
@@ -818,6 +823,43 @@ struct _fn_to_timestamp : public base_function
     return true;
   }
 
+};
+
+struct _fn_to_string_constant : public base_timestamp_to_string
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    if (!initialized)
+    {
+      prepare_to_string_vector(print_vector, para);
+      initialized = true;
+    }
+
+    std::string result_ = execute_to_string(print_vector, para);
+
+    result->set_value(result_.c_str());
+    return true;
+  }
+};
+
+struct _fn_to_string_dynamic : public base_timestamp_to_string
+{
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    param_validation(args);
+
+    print_vector.clear();
+    para.clear();
+
+    prepare_to_string_vector(print_vector, para);
+
+    std::string result_ = execute_to_string(print_vector, para);
+
+    result->set_value(result_.c_str());
+    return true;
+  }
 };
 
 struct _fn_extract_year_from_timestamp : public base_date_extract
@@ -1799,6 +1841,14 @@ base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt
 
   case s3select_func_En_t::TO_TIMESTAMP:
     return S3SELECT_NEW(this,_fn_to_timestamp);
+    break;
+
+  case s3select_func_En_t::TO_STRING_CONSTANT:
+    return S3SELECT_NEW(this,_fn_to_string_constant);
+    break;
+
+  case s3select_func_En_t::TO_STRING_DYNAMIC:
+    return S3SELECT_NEW(this,_fn_to_string_dynamic);
     break;
 
   case s3select_func_En_t::TO_BOOL:

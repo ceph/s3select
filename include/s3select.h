@@ -370,6 +370,18 @@ struct push_date_part : public base_ast_builder
 };
 static push_date_part g_push_date_part;
 
+struct push_time_to_string_constant : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_time_to_string_constant g_push_time_to_string_constant;
+
+struct push_time_to_string_dynamic : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_time_to_string_dynamic g_push_time_to_string_dynamic;
+
 struct s3select : public bsc::grammar<s3select>
 {
 private:
@@ -622,7 +634,7 @@ public:
       function = ((variable >> '(' )[BOOST_BIND_ACTION(push_function_name)] >> !list_of_function_arguments >> ')')[BOOST_BIND_ACTION(push_function_expr)];
 
       arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] |  (number)[BOOST_BIND_ACTION(push_number)] | (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
-                            (string)[BOOST_BIND_ACTION(push_string)] | (datediff) | (dateadd) | (extract) |
+                            (string)[BOOST_BIND_ACTION(push_string)] | (datediff) | (dateadd) | (extract) | (time_to_string_constant) | (time_to_string_dynamic) |
                             (cast) | (substr) | (trim) |
                             (function) | (variable)[BOOST_BIND_ACTION(push_variable)]; //function is pushed by right-term
 
@@ -658,6 +670,10 @@ public:
 
       date_part_extract = ((date_part) |  bsc::str_p("week"));
 
+      time_to_string_constant = (bsc::str_p("to_string") >> '(' >> arithmetic_expression >> ',' >> (string)[BOOST_BIND_ACTION(push_string)] >> ')') [BOOST_BIND_ACTION(push_time_to_string_constant)];
+
+      time_to_string_dynamic = (bsc::str_p("to_string") >> '(' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_time_to_string_dynamic)];
+
       number = bsc::int_p;
 
       float_number = bsc::real_p;
@@ -683,7 +699,7 @@ public:
     bsc::rule<ScannerT> cast, data_type, variable,  select_expr, s3_object, where_clause, number, float_number, string;
     bsc::rule<ScannerT> cmp_operand, arith_cmp, condition_expression, arithmetic_predicate, logical_predicate, factor; 
     bsc::rule<ScannerT> trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside, trim_type, trim_remove_type, substr, substr_from, substr_from_for;
-    bsc::rule<ScannerT> datediff, dateadd, extract, date_part, date_part_extract;
+    bsc::rule<ScannerT> datediff, dateadd, extract, date_part, date_part_extract, time_to_string_constant, time_to_string_dynamic;
     bsc::rule<ScannerT> special_predicates, between_predicate, in_predicate, like_predicate, is_null, is_not_null;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
@@ -1566,6 +1582,43 @@ void push_date_part::builder(s3select* self, const char* a, const char* b) const
   std::string token(a, b);
 
   self->getAction()->datePartQ.push_back(token);
+}
+
+void push_time_to_string_constant::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  __function* func = S3SELECT_NEW(self, __function, "#to_string_constant#", self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  base_statement* frmt = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  func->push_argument(frmt);
+  func->push_argument(expr);
+
+  self->getAction()->exprQ.push_back(func);
+
+}
+
+void push_time_to_string_dynamic::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  __function* func = S3SELECT_NEW(self, __function, "#to_string_dynamic#", self->getS3F());
+
+  base_statement* expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  base_statement* frmt = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+
+  func->push_argument(frmt);
+  func->push_argument(expr);
+
+  self->getAction()->exprQ.push_back(func);
 }
 
 /////// handling different object types

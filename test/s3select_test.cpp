@@ -458,6 +458,21 @@ TEST(TestS3selectFunctions, extract)
     EXPECT_EQ(s3select_res, "6");
 }
 
+TEST(TestS3selectFunctions, to_string)
+{
+    std::string input_query = "select to_string(to_timestamp(\'2009-09-17T17:56:06.234567Z\'), \'yyyyMMdd-H:m:s\') from stdin;" ;
+    auto s3select_res = run_s3select(input_query);
+    EXPECT_EQ(s3select_res, "20090917-17:56:6");
+
+    input_query = "select to_string(to_timestamp(\'2009-03-17T17:56:06.234567Z\'), \'yydaMMMM h m s.n\') from stdin;" ;
+    s3select_res = run_s3select(input_query);
+    EXPECT_EQ(s3select_res, "0917PMMarch 5 56 6.234567000");
+
+    input_query = "select to_string(to_timestamp(\'2009-03-07T01:08:06.234567Z\'), \'yyyyyy yyyy yyy yy y MMMMM MMMM MMM MM M dd dTHH H hh h : mm m ss s SSSSSSSSSS SSSSSS SSS SS S n - a\') from stdin;" ;
+    s3select_res = run_s3select(input_query);
+    EXPECT_EQ(s3select_res, "002009 2009 2009 09 2009 M March Mar 03 3 07 7T01 1 01 1 : 08 8 06 6 2345670000 234567 234 23 2 234567000 - AM");
+}
+
 TEST(TestS3selectFunctions, utcnow)
 {
     const boost::posix_time::ptime now(boost::posix_time::second_clock::universal_time());
