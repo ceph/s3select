@@ -568,6 +568,67 @@ void generate_rand_columns_csv_datetime(std::string& out, size_t size) {
   out = ss.str();
 }
 
+void generate_rand_csv_datetime_to_string(std::string& out, std::string& result, size_t size, bool const_frmt = true) {
+  std::stringstream ss_out, ss_res;
+  std::string format = "yyyysMMMMMdddSSSSSSSSSSSMMMM HHa:m -:-";
+  std::string months[12] = {"January", "February", "March","April", "May", "June", "July", "August", "September", "October", "November", "December"};
+  auto year = [](){return rand()%100 + 1900;};
+  auto month = [](){return 1 + rand()%12;};
+  auto day = [](){return 1 + rand()%28;};
+  auto hours = [](){return rand()%24;};
+  auto minutes = [](){return rand()%60;};
+  auto seconds = [](){return rand()%60;};
+  auto fracation_sec = [](){return rand()%1000000;};
+
+  for (auto i = 0U; i < size; ++i)
+  {
+    auto yr = year();
+    auto mnth = month();
+    auto dy = day();
+    auto hr = hours();
+    auto mint = minutes();
+    auto sec = seconds();
+    auto frac_sec = fracation_sec();
+
+    if (const_frmt)
+    {
+      ss_out << yr << "-" << std::setw(2) << std::setfill('0') << mnth << "-" << std::setw(2) << std::setfill('0') << dy << "T" <<std::setw(2) << std::setfill('0') << hr << ":" << std::setw(2) << std::setfill('0') << mint << ":" << std::setw(2) << std::setfill('0') <<sec << "." << frac_sec << "Z" << "," << std::endl;
+
+      ss_res << yr << sec << months[mnth-1].substr(0, 1) << std::setw(2) << std::setfill('0') << dy << dy << frac_sec << std::string(11 - std::to_string(frac_sec).length(), '0') << months[mnth-1] << " " << std::setw(2) << std::setfill('0') << hr << (hr < 12 ? "AM" : "PM") << ":" << mint << " -:-" << "," << std::endl;
+    }
+    else
+    {
+      switch(rand()%5)
+      {
+        case 0:
+            format = "yyyysMMMMMdddSSSSSSSSSSSMMMM HHa:m -:-";
+            ss_res << yr << sec << months[mnth-1].substr(0, 1) << std::setw(2) << std::setfill('0') << dy << dy << frac_sec << std::string(11 - std::to_string(frac_sec).length(), '0') << months[mnth-1] << " " << std::setw(2) << std::setfill('0') << hr << (hr < 12 ? "AM" : "PM") << ":" << mint << " -:-" << "," << std::endl;
+            break;
+        case 1:
+            format = "aMMhh";
+            ss_res << (hr < 12 ? "AM" : "PM") << std::setw(2) << std::setfill('0') << mnth << std::setw(2) << std::setfill('0') << (hr%12 == 0 ? 12 : hr%12) << "," << std::endl;
+            break;
+        case 2:
+            format = "y M d ABCDEF";
+            ss_res << yr << " " << mnth << " " << dy << " ABCDEF" << "," << std::endl;
+            break;
+        case 3:
+            format = "W h:MMMM";
+            ss_res << "W " << (hr%12 == 0 ? 12 : hr%12) << ":" << months[mnth-1] << "," << std::endl;
+            break;
+        case 4:
+            format = "H:m:s";
+            ss_res << hr << ":" << mint << ":" << sec << "," << std::endl;
+            break;
+      }
+
+      ss_out << yr << "-" << std::setw(2) << std::setfill('0') << mnth << "-" << std::setw(2) << std::setfill('0') << dy << "T" <<std::setw(2) << std::setfill('0') << hr << ":" << std::setw(2) << std::setfill('0') << mint << ":" << std::setw(2) << std::setfill('0') <<sec << "." << frac_sec << "Z" << "," << format << "," << std::endl;
+    }
+  }
+  out = ss_out.str();
+  result = ss_res.str();
+}
+
 TEST(TestS3selectFunctions, sum)
 {
     s3select s3select_syntax;
@@ -1329,6 +1390,31 @@ TEST(TestS3selectFunctions, test_version)
   ASSERT_NE(s3select_result_1,failure_sign);
 
   ASSERT_EQ(s3select_result_1, "41.a,\n");
+}
+
+TEST(TestS3selectFunctions, multirow_datetime_to_string_constant)
+{
+  std::string input, expected_res;
+  std::string format = "yyyysMMMMMdddSSSSSSSSSSSMMMM HHa:m -:-";
+  size_t size = 100;
+
+  generate_rand_csv_datetime_to_string(input, expected_res, size);
+
+  const std::string input_query = "select to_string(to_timestamp(_1), \'" + format + "\') from s3object;";
+  std::string s3select_result = run_s3select(input_query, input);
+  EXPECT_EQ(s3select_result, expected_res);
+}
+
+TEST(TestS3selectFunctions, multirow_datetime_to_string_dynamic)
+{
+  std::string input, expected_res;
+  size_t size = 100;
+
+  generate_rand_csv_datetime_to_string(input, expected_res, size, false);
+
+  const std::string input_query = "select to_string(to_timestamp(_1), _2) from s3object;";
+  std::string s3select_result = run_s3select(input_query, input);
+  EXPECT_EQ(s3select_result, expected_res);
 }
 
 TEST(TestS3selectFunctions, test_date_time_expressions)
