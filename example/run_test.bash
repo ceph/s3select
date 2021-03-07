@@ -33,7 +33,7 @@ expr_test()
 ## test the arithmetic evaluation of s3select against C program 
 for i in {1..100}
 do
-	e=$(python2 "$PREFIX"/expr_genrator.py 5)
+	e=$(python3 "$PREFIX"/expr_genrator.py 5)
 	echo expression["$i"]="$e"
 	r1=$(s3select_calc "$e")
 	r2=$(c_calc "$e")
