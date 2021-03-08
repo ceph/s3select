@@ -1534,52 +1534,47 @@ public:
   }
   virtual value& eval_internal()
   {
-    bool res;
     if (!l || !r)
     {
       throw base_s3select_exception("missing operand for logical ", base_s3select_exception::s3select_exp_en_t::FATAL);
     }
     value a = l->eval();
-    if (_oplog == oplog_t::AND)
-    {
+    if (_oplog == oplog_t::AND) {
       if (!a.is_null() && a.i64() == false) {
-        res = false ^ negation_result;
-        return var_value = res;
+        bool res = false ^ negation_result;
+        var_value = res;
       } 
       value b = r->eval();
       if(!b.is_null() && b.i64() == false) {
-        res = false ^ negation_result;
-        return var_value = res;
+        bool res = false ^ negation_result;
+        var_value = res;
       } else {
         if (a.is_null() || b.is_null()) {
           var_value.setnull();
-          return var_value;
         } else {
-          res =  true ^ negation_result ;
-          return var_value =res;
+          bool res =  true ^ negation_result ;
+          var_value = res;
         }
       }   
-    }
-    else
-    {
+    } else {
       if (a.is_true()) {
-        res = true ^ negation_result;
-        return var_value = res;
+        bool res = true ^ negation_result;
+        var_value = res;
       } 
       value b = r->eval();
-      if(b.is_true() == true) {
-        res = true ^ negation_result;
-        return var_value = res;
+      if (b.is_true() == true) {
+        bool res = true ^ negation_result;
+        var_value = res;
       } else {
         if (a.is_null() || b.is_null()) {
           var_value.setnull();
-          return var_value;
         } else {
-          res =  false ^ negation_result ;
-          return var_value =res;
+          bool res = false ^ negation_result ;
+          var_value = res;
         }
       }
     }
+    return var_value;
   }
 };
 
