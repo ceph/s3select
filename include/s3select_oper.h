@@ -446,28 +446,28 @@ public:
   } ;
   value_En_t type;
 
-  value(int64_t n) : type(value_En_t::DECIMAL)
+  explicit value(int64_t n) : type(value_En_t::DECIMAL)
   {
     __val.num = n;
   }
-  value(int n) : type(value_En_t::DECIMAL)
+  explicit value(int n) : type(value_En_t::DECIMAL)
   {
     __val.num = n;
   }
-  value(bool b) : type(value_En_t::DECIMAL)
+  explicit value(bool b) : type(value_En_t::DECIMAL)
   {
     __val.num = (int64_t)b;
   }
-  value(double d) : type(value_En_t::FLOAT)
+  explicit value(double d) : type(value_En_t::FLOAT)
   {
     __val.dbl = d;
   }
-  value(boost::posix_time::ptime* timestamp) : type(value_En_t::TIMESTAMP)
+  explicit value(boost::posix_time::ptime* timestamp) : type(value_En_t::TIMESTAMP)
   {
     __val.timestamp = timestamp;
   }
 
-  value(const char* s) : type(value_En_t::STRING)
+  explicit value(const char* s) : type(value_En_t::STRING)
   {
     m_str_value.assign(s);
     __val.str = m_str_value.data();
@@ -913,7 +913,7 @@ public:
 
   value operator++(int)
   {
-    *this = *this + 1;
+    *this = *this + static_cast<value>(1);
     return *this;
   }
     
@@ -1151,13 +1151,13 @@ private:
 public:
   variable():m_var_type(var_t::NA), _name(""), column_pos(-1) {}
 
-  variable(int64_t i) : m_var_type(var_t::COL_VALUE), column_pos(-1), var_value(i) {}
+  explicit variable(int64_t i) : m_var_type(var_t::COL_VALUE), column_pos(-1), var_value(i) {}
 
-  variable(double d) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1), var_value(d) {}
+  explicit variable(double d) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1), var_value(d) {}
 
-  variable(int i) : m_var_type(var_t::COL_VALUE), column_pos(-1), var_value(i) {}
+  explicit variable(int i) : m_var_type(var_t::COL_VALUE), column_pos(-1), var_value(i) {}
 
-  variable(const std::string& n) : m_var_type(var_t::VAR), _name(n), column_pos(-1) {}
+  explicit variable(const std::string& n) : m_var_type(var_t::VAR), _name(n), column_pos(-1) {}
 
   variable(const std::string& n,  var_t tp) : m_var_type(var_t::NA)
   {
@@ -1183,7 +1183,7 @@ public:
     }
   }
 
-  variable(s3select_reserved_word::reserve_word_en_t reserve_word)
+  explicit variable(s3select_reserved_word::reserve_word_en_t reserve_word)
   {
     if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_NULL)
     {
@@ -1470,7 +1470,7 @@ public:
 
   arithmetic_operand(base_statement* _l, cmp_t c, base_statement* _r):l(_l), r(_r), _cmp(c),negation_result(false) {}
   
-  arithmetic_operand(base_statement* p)//NOT operator 
+  explicit arithmetic_operand(base_statement* p)//NOT operator 
   {
     l = dynamic_cast<arithmetic_operand*>(p)->l;
     r = dynamic_cast<arithmetic_operand*>(p)->r;
@@ -1515,7 +1515,7 @@ public:
 
   logical_operand(base_statement* _l, oplog_t _o, base_statement* _r):l(_l), r(_r), _oplog(_o),negation_result(false) {}
 
-  logical_operand(base_statement * p)//NOT operator
+  explicit logical_operand(base_statement * p)//NOT operator
   {
     l = dynamic_cast<logical_operand*>(p)->l;
     r = dynamic_cast<logical_operand*>(p)->r;
@@ -1534,7 +1534,6 @@ public:
   }
   virtual value& eval_internal()
   {
-    bool res;
     if (!l || !r)
     {
       throw base_s3select_exception("missing operand for logical ", base_s3select_exception::s3select_exp_en_t::FATAL);
@@ -1543,19 +1542,19 @@ public:
     if (_oplog == oplog_t::AND)
     {
       if (!a.is_null() && a.i64() == false) {
-        res = false ^ negation_result;
+        bool res = false ^ negation_result;
         return var_value = res;
       } 
       value b = r->eval();
       if(!b.is_null() && b.i64() == false) {
-        res = false ^ negation_result;
+        bool res = false ^ negation_result;
         return var_value = res;
       } else {
         if (a.is_null() || b.is_null()) {
           var_value.setnull();
           return var_value;
         } else {
-          res =  true ^ negation_result ;
+          bool res =  true ^ negation_result ;
           return var_value =res;
         }
       }   
@@ -1563,19 +1562,19 @@ public:
     else
     {
       if (a.is_true()) {
-        res = true ^ negation_result;
+        bool res = true ^ negation_result;
         return var_value = res;
       } 
       value b = r->eval();
       if(b.is_true() == true) {
-        res = true ^ negation_result;
+        bool res = true ^ negation_result;
         return var_value = res;
       } else {
         if (a.is_null() || b.is_null()) {
           var_value.setnull();
           return var_value;
         } else {
-          res =  false ^ negation_result ;
+          bool res =  false ^ negation_result ;
           return var_value =res;
         }
       }
@@ -1734,7 +1733,7 @@ class negate_function_operation : public base_statement
   
   public:
 
-  negate_function_operation(base_statement *f):function_to_negate(f){}
+  explicit negate_function_operation(base_statement *f):function_to_negate(f){}
 
   virtual std::string print(int ident)
   {

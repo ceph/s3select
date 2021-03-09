@@ -491,7 +491,7 @@ struct _fn_avg : public base_function
 
     void get_aggregate_result(variable *result) override
     {
-        if(count == 0) {
+        if(count == static_cast<value>(0)) {
             throw base_s3select_exception("count cannot be zero!");
         } else {
             *result = sum/count ;
@@ -1234,7 +1234,7 @@ struct _fn_like : public base_function
   value res;
   std::regex compiled_regex;
 
-  _fn_like(value s)
+  explicit _fn_like(value s)
   {
     std::string string_value = s.to_string();
     transform(string_value);
