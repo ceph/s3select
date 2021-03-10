@@ -139,8 +139,11 @@ private:
         break;
 
       default:
-        //throw base_s3select_exception("some parquet type not supported",s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);//TODO better message
-        return -1;
+        {
+        std::stringstream err;
+        err << "some parquet type not supported";
+        throw std::runtime_error(err.str());
+        }
       }
 
       m_column_readers.push_back(new column_reader_wrap(m_parquet_reader,i));
@@ -275,36 +278,75 @@ private:
     int64_t rows_read;
     int32_t i32_val;
 
+    auto error_msg = [&](std::exception &e)
+    {
+      std::stringstream err;
+      err << "what() :" << e.what() << std::endl;
+      err << "failed to parse column id:" << this->m_col_id << " name:" <<this->m_parquet_reader->metadata()->schema()->Column(m_col_id)->name();
+      return err;
+    };
 
     switch (get_type())
     {
     case parquet::Type::type::INT32:
       int32_reader = static_cast<parquet::Int32Reader *>(m_ColumnReader.get());
-      rows_read = int32_reader->ReadBatch(1, nullptr, nullptr,&i32_val, values_read);
+      try {
+        rows_read = int32_reader->ReadBatch(1, nullptr, nullptr,&i32_val, values_read);
+      }
+      catch(std::exception &e)
+      {
+         throw std::runtime_error(error_msg(e).str());
+      }
+
       values->num = i32_val;
       values->type = column_reader_wrap::parquet_type::INT32;
       break;
 
     case parquet::Type::type::INT64:
       int64_reader = static_cast<parquet::Int64Reader *>(m_ColumnReader.get());
-      rows_read = int64_reader->ReadBatch(1, nullptr, nullptr, (int64_t *)&(values->num), values_read);
+      try{
+        rows_read = int64_reader->ReadBatch(1, nullptr, nullptr, (int64_t *)&(values->num), values_read);
+      }
+      catch(std::exception &e)
+      {
+         throw std::runtime_error(error_msg(e).str());
+      }
       values->type = column_reader_wrap::parquet_type::INT64;
       break;
 
     case parquet::Type::type::DOUBLE:
-      double_reader = static_cast<parquet::DoubleReader *>(m_ColumnReader.get());
+      try{
+        double_reader = static_cast<parquet::DoubleReader *>(m_ColumnReader.get());
+      }
+      catch(std::exception &e)
+      {
+         throw std::runtime_error(error_msg(e).str());
+      }
       rows_read = double_reader->ReadBatch(1, nullptr, nullptr, (double *)&(values->dbl), values_read);
       values->type = column_reader_wrap::parquet_type::DOUBLE;
       break;
 
     case parquet::Type::type::BYTE_ARRAY:
       byte_array_reader = static_cast<parquet::ByteArrayReader *>(m_ColumnReader.get());
-      rows_read = byte_array_reader->ReadBatch(1, nullptr, nullptr, &str_value , values_read);
+      try{
+        rows_read = byte_array_reader->ReadBatch(1, nullptr, nullptr, &str_value , values_read);
+      }
+      catch(std::exception &e)
+      {
+         throw std::runtime_error(error_msg(e).str());
+      }
       values->str = (char*)str_value.ptr;
       values->str_len = str_value.len;
       values->type = column_reader_wrap::parquet_type::STRING;
       break;
-    //TODO default; exception
+
+    default:
+      {
+        std::stringstream err;
+        err << "wrong type" << std::endl;
+        throw std::runtime_error(err.str());
+      }
+
     }
 
     return rows_read;
@@ -320,29 +362,66 @@ private:
     parquet::ByteArray str_value;
     int64_t rows_read;
 
+    auto error_msg = [&](std::exception &e)
+    {
+      std::stringstream err;
+      err << "what() :" << e.what() << std::endl;
+      err << "failed to parse column id:" << this->m_col_id << " name:" <<this->m_parquet_reader->metadata()->schema()->Column(m_col_id)->name();
+      return err;
+    };
 
     switch (get_type())
     {
     case parquet::Type::type::INT32:
       int32_reader = static_cast<parquet::Int32Reader *>(m_ColumnReader.get());
-      rows_read = int32_reader->Skip(rows_to_skip);
+      try{
+        rows_read = int32_reader->Skip(rows_to_skip);
+      }
+      catch(std::exception &e)
+      {
+        throw std::runtime_error(error_msg(e).str());
+      }
       break;
 
     case parquet::Type::type::INT64:
       int64_reader = static_cast<parquet::Int64Reader *>(m_ColumnReader.get());
-      rows_read = int64_reader->Skip(rows_to_skip);
+      try{
+        rows_read = int64_reader->Skip(rows_to_skip);
+      }
+      catch(std::exception &e)
+      {
+        throw std::runtime_error(error_msg(e).str());
+      }
       break;
 
     case parquet::Type::type::DOUBLE:
       double_reader = static_cast<parquet::DoubleReader *>(m_ColumnReader.get());
-      rows_read = double_reader->Skip(rows_to_skip);
+      try {
+        rows_read = double_reader->Skip(rows_to_skip);
+      }
+      catch(std::exception &e)
+      {
+        throw std::runtime_error(error_msg(e).str());
+      }
       break;
 
     case parquet::Type::type::BYTE_ARRAY:
       byte_array_reader = static_cast<parquet::ByteArrayReader *>(m_ColumnReader.get());
-      rows_read = byte_array_reader->Skip(rows_to_skip);
+      try{
+      	rows_read = byte_array_reader->Skip(rows_to_skip);
+      }
+      catch(std::exception &e)
+      {
+        throw std::runtime_error(error_msg(e).str());
+      }
       break;
-    //TODO default; exception
+    
+    default:
+      {
+        std::stringstream err;
+        err << "wrong type" << std::endl;
+        throw std::runtime_error(err.str());
+      }
     }
 
     return rows_read;

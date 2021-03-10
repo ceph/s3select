@@ -2106,6 +2106,16 @@ public:
           return -1;
         }
       }
+      catch (std::exception &e)
+      {
+        std::cout << e.what() << std::endl;
+        m_error_description = e.what();
+        m_error_count++;
+        if (m_error_count > 100) //abort query execution
+        {
+          return -1;
+        }
+      }
 
       if (status < 0)
       {
