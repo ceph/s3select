@@ -1459,6 +1459,38 @@ TEST(TestS3selectFunctions, test_date_time_expressions)
   std::string s3select_result_6 = run_s3select(input_query_6,input);
 
   ASSERT_EQ(s3select_result_6, s3select_result_4);
+
+  std::string input_query_7 = "select extract(year from to_timestamp(_1)) from stdin;";
+  std::string s3select_result_7 = run_s3select(input_query_7, input);
+  ASSERT_NE(s3select_result_7, failure_sign);
+  std::string input_query_8 = "select substring(_1, 1, 4) from stdin;";
+  std::string s3select_result_8 = run_s3select(input_query_8, input);
+  ASSERT_NE(s3select_result_8, failure_sign);
+  EXPECT_EQ(s3select_result_7, s3select_result_8);
+
+  input_query_7 = "select to_timestamp(_1) from stdin where extract(month from to_timestamp(_1)) == 5;";
+  s3select_result_7 = run_s3select(input_query_7, input);
+  ASSERT_NE(s3select_result_7, failure_sign);
+  input_query_8 = "select substring(_1, 1, char_length(_1)-1) from stdin where _1 like \'____-05%\';";
+  s3select_result_8 = run_s3select(input_query_8, input);
+  ASSERT_NE(s3select_result_8, failure_sign);
+  EXPECT_EQ(s3select_result_7, s3select_result_8);
+
+  input_query_7 = "select * from stdin where extract(month from to_timestamp(_1)) == 5 or extract(month from to_timestamp(_1)) == 6;";
+  s3select_result_7 = run_s3select(input_query_7,input);
+  ASSERT_NE(s3select_result_7, failure_sign);
+  input_query_8 = "select * from stdin where to_string(to_timestamp(_1), 'MMMM') in ('May', 'June');";
+  s3select_result_8 = run_s3select(input_query_8,input);
+  ASSERT_NE(s3select_result_8, failure_sign);
+  EXPECT_EQ(s3select_result_7, s3select_result_8);
+
+  input_query_7 = "select to_string(to_timestamp(_1), 'y,M,H,m') from stdin where cast(to_string(to_timestamp(_1), 'd') as int) >= 1 and cast(to_string(to_timestamp(_1), 'd') as int) <= 10;";
+  s3select_result_7 = run_s3select(input_query_7, input);
+  ASSERT_NE(s3select_result_7, failure_sign);
+  input_query_8 = "select extract(year from to_timestamp(_1)), extract(month from to_timestamp(_1)), extract(hour from to_timestamp(_1)), extract(minute from to_timestamp(_1)) from stdin where  int(substring(_1, 9, 2)) between 1 and 10;";
+  s3select_result_8 = run_s3select(input_query_8, input);
+  ASSERT_NE(s3select_result_8, failure_sign);
+  EXPECT_EQ(s3select_result_7, s3select_result_8);
 }
 
 TEST(TestS3selectFunctions, test_like_expressions)
