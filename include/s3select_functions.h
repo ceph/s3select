@@ -1234,40 +1234,54 @@ struct _fn_like : public base_function
   value res;
   std::regex compiled_regex;
   bool constant_state;
+  value like_expr_val;
+  value escape_expr_val;
 
 
-  explicit _fn_like(base_statement* esc, base_statement* li)
+  explicit _fn_like(base_statement* esc, base_statement* like_expr)
   {
-    value escape = esc->eval();
-    value l = li->eval();
-    std::string like_string = l.to_string();
-    std::string escape_char;
     constant_state = false;
+
     auto is_constant = [&](base_statement* bs) {
-      if (dynamic_cast<variable*>(li) && dynamic_cast<variable*>(li)->m_var_type == variable::var_t::COL_VALUE) {
+      if (dynamic_cast<variable*>(bs) && dynamic_cast<variable*>(bs)->m_var_type == variable::var_t::COL_VALUE) {
         return true;
       } else {
         return false;
       }
     };
-    escape_char = escape.to_string();
-    if (is_constant(esc) && is_constant(li)) {
+
+    if (is_constant(esc) && is_constant(like_expr)) {
       constant_state = true;
     }
-    
-    std::vector<char> like = transform(like_string, escape_char[0]);
-    std::string str(like.begin(), like.end());
-    compiled_regex = std::regex(str);
+
+    if(constant_state == true)
+    {
+      escape_expr_val = esc->eval();
+      like_expr_val = like_expr->eval();
+
+      if (like_expr_val.type != value::value_En_t::STRING)  {
+        throw base_s3select_exception("like expression must be string");
+      }
+
+      if (escape_expr_val.type != value::value_En_t::STRING)  {
+        throw base_s3select_exception("escape expression must be string");
+      }
+
+      std::vector<char> like_as_regex = transform(like_expr_val.str(), *escape_expr_val.str());
+      std::string like_as_regex_str(like_as_regex.begin(), like_as_regex.end());
+      compiled_regex = std::regex(like_as_regex_str);
+    }
+
   }
 
-  std::vector<char> transform( std::string& s, char escape)
+  std::vector<char> transform(const char* s, char escape)
   {   
   enum  state_expr_t {START , ESCAPE, START_STAR_CHAR , START_METACHAR, START_ANYCHAR , METACHAR, STAR_CHAR, ANYCHAR, END };
   state_expr_t st{START};
 
-  const char *p = s.c_str();
-  int size = s.size();
-  int i = 0;
+  const char *p = s;
+  size_t size = strlen(s);
+  size_t i = 0;
   std::vector<char> v;
   
   while(*p)
@@ -1456,33 +1470,32 @@ bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     auto iter = args->begin();
 
-    std::string like_string;
-    std::string escape_char;
-
     base_statement* escape_expr = *iter;
     iter++;
     base_statement* like_expr = *iter;
     iter++;
     base_statement* main_expr = *iter;
 
-    value like_expr_val = like_expr->eval();
-    value escape_expr_val = escape_expr->eval();
-      
+    if (constant_state == false){
+      like_expr_val = like_expr->eval();
+      escape_expr_val = escape_expr->eval();
+
+      if (like_expr_val.type != value::value_En_t::STRING)  {
+        throw base_s3select_exception("like expression must be string");
+      }
+
+      if (escape_expr_val.type != value::value_En_t::STRING)  {
+        throw base_s3select_exception("esacpe expression must be string");
+      }
+
+      std::vector<char> like_as_regex = transform(like_expr_val.str(), *escape_expr_val.str());
+      std::string like_as_regex_str(like_as_regex.begin(), like_as_regex.end());
+      compiled_regex = std::regex(like_as_regex_str);
+    }
+
     value main_expr_val = main_expr->eval();
     if (main_expr_val.type != value::value_En_t::STRING)  {
         throw base_s3select_exception("main expression must be string");
-    }
-    if (like_expr_val.type != value::value_En_t::STRING)  {
-        throw base_s3select_exception("like expression must be string");
-    }
-
-    if (constant_state == false)  {
-      like_string = like_expr_val.to_string();
-      escape_char = escape_expr_val.to_string();
-
-      std::vector<char> like = transform(like_string, escape_char[0]);
-      std::string str(like.begin(), like.end());
-      std::regex compiled_regex = std::regex(str);
     }
          
     if ( std::regex_match(main_expr_val.to_string(), compiled_regex)) {

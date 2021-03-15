@@ -1223,7 +1223,7 @@ void push_like_predicate_no_escape::builder(s3select* self, const char* a, const
 
   __function* func = S3SELECT_NEW(self, __function, in_function.c_str(), self->getS3F());
   
-  variable* v = S3SELECT_NEW(self, variable, '\\');
+  variable* v = S3SELECT_NEW(self, variable, "\\",variable::var_t::COL_VALUE);
   func->push_argument(v);
   
   base_statement* like_expr = self->getAction()->exprQ.back();
