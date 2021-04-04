@@ -62,7 +62,86 @@ ARROW_EXPORT
 // ReadableFileImpl an implementation layer to ObjectInterface objects
 // ReadableFile a layer which call to ReadableFileImpl, enable runtime switching between implementations 
 // ParquetFileReader is the main interface (underline implementation is transparent to this layer) 
-//
+// 
+
+
+namespace arrow {
+class Buffer;
+namespace io {
+
+class ObjectInterface {
+
+#define NOT_IMPLEMENTED {std::cout << "not implemented" << std::endl;}
+
+//purpose: to implement the range-request from single object
+public:
+  ObjectInterface() : fd_(-1), is_open_(false), size_(-1), need_seeking_(false) {}
+
+  virtual ~ObjectInterface(){}
+
+  // Note: only one of the Open* methods below may be called on a given instance
+
+  virtual Status OpenWritable(const std::string& path, bool truncate, bool append, bool write_only){return  Status::OK();}
+
+  // This is different from OpenWritable(string, ...) in that it doesn't
+  // truncate nor mandate a seekable file
+  virtual Status OpenWritable(int fd){return  Status::OK();} 
+
+  virtual Status OpenReadable(const std::string& path){return  Status::OK();}
+
+  virtual Status OpenReadable(int fd){return  Status::OK();}
+
+  virtual Status CheckClosed() const {return  Status::OK();}
+
+  virtual Status Close(){return  Status::OK();} 
+
+  virtual Result<int64_t> Read(int64_t nbytes, void* out){return Result<int64_t>(-1);}
+
+  virtual Result<int64_t> ReadAt(int64_t position, int64_t nbytes, void* out){return Result<int64_t>(-1);}
+
+  virtual Status Seek(int64_t pos){return  Status::OK();}
+
+  virtual Result<int64_t> Tell() const {return Result<int64_t>(-1);}
+
+  virtual Status Write(const void* data, int64_t length){return  Status::OK();}
+
+  virtual int fd() const{return -1;}
+
+  virtual bool is_open() const{return false;}
+
+  virtual int64_t size() const{return -1;}
+
+  virtual FileMode::type mode() const{return FileMode::READ;}
+
+  #if 0
+  std::mutex& lock(){}
+  #endif
+
+ protected:
+  virtual Status SetFileName(const std::string& file_name){return  Status::OK();}
+
+  virtual Status SetFileName(int fd){return  Status::OK();}
+
+  virtual Status CheckPositioned(){return  Status::OK();}
+
+  ::arrow::internal::PlatformFilename file_name_;
+
+  std::mutex lock_;
+
+  // File descriptor
+  int fd_;
+
+  FileMode::type mode_;
+
+  bool is_open_;
+  int64_t size_;
+  // Whether ReadAt made the file position non-deterministic.
+  std::atomic<bool> need_seeking_;
+
+}; //ObjectInterface
+
+} //namespace io
+} //namespace arrow
 
 namespace arrow {
 
@@ -70,7 +149,7 @@ using internal::IOErrorFromErrno;
 
 namespace io {
 
-class OSFile {
+class OSFile : public ObjectInterface {
  public:
   OSFile() : fd_(-1), is_open_(false), size_(-1), need_seeking_(false) {}
 
@@ -79,7 +158,7 @@ class OSFile {
   // Note: only one of the Open* methods below may be called on a given instance
 
   Status OpenWritable(const std::string& path, bool truncate, bool append,
-                      bool write_only) {
+                      bool write_only) override {
     RETURN_NOT_OK(SetFileName(path));
 
     ARROW_ASSIGN_OR_RAISE(fd_, ::arrow::internal::FileOpenWritable(file_name_, write_only,
@@ -97,7 +176,7 @@ class OSFile {
 
   // This is different from OpenWritable(string, ...) in that it doesn't
   // truncate nor mandate a seekable file
-  Status OpenWritable(int fd) {
+  Status OpenWritable(int fd) override {
     auto result = ::arrow::internal::FileGetSize(fd);
     if (result.ok()) {
       size_ = *result;
@@ -112,7 +191,7 @@ class OSFile {
     return Status::OK();
   }
 
-  Status OpenReadable(const std::string& path) {
+  Status OpenReadable(const std::string& path) override {
     RETURN_NOT_OK(SetFileName(path));
 
     ARROW_ASSIGN_OR_RAISE(fd_, ::arrow::internal::FileOpenReadable(file_name_));
@@ -123,7 +202,7 @@ class OSFile {
     return Status::OK();
   }
 
-  Status OpenReadable(int fd) {
+  Status OpenReadable(int fd) override {
     ARROW_ASSIGN_OR_RAISE(size_, ::arrow::internal::FileGetSize(fd));
     RETURN_NOT_OK(SetFileName(fd));
     is_open_ = true;
@@ -132,14 +211,14 @@ class OSFile {
     return Status::OK();
   }
 
-  Status CheckClosed() const {
+  Status CheckClosed() const override {
     if (!is_open_) {
       return Status::Invalid("Invalid operation on closed file");
     }
     return Status::OK();
   }
 
-  Status Close() {
+  Status Close() override {
     if (is_open_) {
       // Even if closing fails, the fd will likely be closed (perhaps it's
       // already closed).
@@ -151,13 +230,13 @@ class OSFile {
     return Status::OK();
   }
 
-  Result<int64_t> Read(int64_t nbytes, void* out) {
+  Result<int64_t> Read(int64_t nbytes, void* out) override {
     RETURN_NOT_OK(CheckClosed());
     RETURN_NOT_OK(CheckPositioned());
     return ::arrow::internal::FileRead(fd_, reinterpret_cast<uint8_t*>(out), nbytes);
   }
 
-  Result<int64_t> ReadAt(int64_t position, int64_t nbytes, void* out) {
+  Result<int64_t> ReadAt(int64_t position, int64_t nbytes, void* out) override {
     RETURN_NOT_OK(CheckClosed());
     RETURN_NOT_OK(internal::ValidateRange(position, nbytes));
     // ReadAt() leaves the file position undefined, so require that we seek
@@ -168,7 +247,7 @@ class OSFile {
                                          nbytes);
   }
 
-  Status Seek(int64_t pos) {
+  Status Seek(int64_t pos) override {
     RETURN_NOT_OK(CheckClosed());
     if (pos < 0) {
       return Status::Invalid("Invalid position");
@@ -180,12 +259,12 @@ class OSFile {
     return st;
   }
 
-  Result<int64_t> Tell() const {
+  Result<int64_t> Tell() const override {
     RETURN_NOT_OK(CheckClosed());
     return ::arrow::internal::FileTell(fd_);
   }
 
-  Status Write(const void* data, int64_t length) {
+  Status Write(const void* data, int64_t length) override {
     RETURN_NOT_OK(CheckClosed());
 
     std::lock_guard<std::mutex> guard(lock_);
@@ -197,28 +276,28 @@ class OSFile {
                                         length);
   }
 
-  int fd() const { return fd_; }
+  int fd() const override { return fd_; }
 
-  bool is_open() const { return is_open_; }
+  bool is_open() const override { return is_open_; }
 
-  int64_t size() const { return size_; }
+  int64_t size() const override { return size_; }
 
-  FileMode::type mode() const { return mode_; }
+  FileMode::type mode() const override { return mode_; }
 
   std::mutex& lock() { return lock_; }
 
  protected:
-  Status SetFileName(const std::string& file_name) {
+  Status SetFileName(const std::string& file_name) override {
     return ::arrow::internal::PlatformFilename::FromString(file_name).Value(&file_name_);
   }
 
-  Status SetFileName(int fd) {
+  Status SetFileName(int fd) override {
     std::stringstream ss;
     ss << "<fd " << fd << ">";
     return SetFileName(ss.str());
   }
 
-  Status CheckPositioned() {
+  Status CheckPositioned() override {
     if (need_seeking_.load()) {
       return Status::Invalid(
           "Need seeking after ReadAt() before "
@@ -248,7 +327,7 @@ namespace arrow {
 class Buffer;
 namespace io {
 
-class RGWimpl {
+class RGWimpl : public ObjectInterface {
 
 //purpose: to implement the range-request from single object
 public:
@@ -258,35 +337,75 @@ public:
 
   // Note: only one of the Open* methods below may be called on a given instance
 
-  Status OpenWritable(const std::string& path, bool truncate, bool append, bool write_only) { return Status::OK(); }
+  Status OpenWritable(const std::string& path, bool truncate, bool append, bool write_only) { abort();return Status::OK(); }
 
   // This is different from OpenWritable(string, ...) in that it doesn't
   // truncate nor mandate a seekable file
-  Status OpenWritable(int fd) { return Status::OK(); }
+  Status OpenWritable(int fd) {abort();return Status::OK(); }
 
-  Status OpenReadable(const std::string& path) { return Status::OK(); }
+  Status OpenReadable(const std::string& path) {
+    //RGW-implement 
+    RETURN_NOT_OK(SetFileName(path));
 
-  Status OpenReadable(int fd) { return Status::OK(); }
+    ARROW_ASSIGN_OR_RAISE(fd_, ::arrow::internal::FileOpenReadable(file_name_));
+    ARROW_ASSIGN_OR_RAISE(size_, ::arrow::internal::FileGetSize(fd_));
 
-  Status CheckClosed() const { return Status::OK(); }
+    is_open_ = true;
+    mode_ = FileMode::READ;
+    return Status::OK();
+  }
 
-  Status Close() { return Status::OK(); }
+  Status OpenReadable(int fd) {abort();return Status::OK(); }
+
+  Status CheckClosed() const {
+    //RGW-implement 
+    if (!is_open_) {
+      return Status::Invalid("Invalid operation on closed file");
+    }
+    return Status::OK();
+  }
+
+  Status Close() {
+    //RGW-implement 
+    if (is_open_) {
+      // Even if closing fails, the fd will likely be closed (perhaps it's
+      // already closed).
+      is_open_ = false;
+      int fd = fd_;
+      fd_ = -1;
+      RETURN_NOT_OK(::arrow::internal::FileClose(fd));
+    }
+    return Status::OK();
+  }
 
   Result<int64_t> Read(int64_t nbytes, void* out) {
-    return Result<int64_t>(0);
+    //RGW-implement 
+    RETURN_NOT_OK(CheckClosed());
+    RETURN_NOT_OK(CheckPositioned());
+    return ::arrow::internal::FileRead(fd_, reinterpret_cast<uint8_t*>(out), nbytes);
   }
 
   Result<int64_t> ReadAt(int64_t position, int64_t nbytes, void* out) {
-    return Result<int64_t>(0);
+    //RGW-implement 
+    RETURN_NOT_OK(CheckClosed());
+    RETURN_NOT_OK(internal::ValidateRange(position, nbytes));
+    // ReadAt() leaves the file position undefined, so require that we seek
+    // before calling Read() or Write().
+    std::cout << "ReadAt " << position << " " << nbytes << std::endl;
+    need_seeking_.store(true);
+    return ::arrow::internal::FileReadAt(fd_, reinterpret_cast<uint8_t*>(out), position,
+                                         nbytes);
   }
 
-  Status Seek(int64_t pos) { return Status::OK(); }
+  Status Seek(int64_t pos) {abort();return Status::OK(); }
 
   Result<int64_t> Tell() const {
+    abort();
     return Result<int64_t>(0);
   }
 
   Status Write(const void* data, int64_t length) {
+    abort();
     return Status::OK();
   }
 
@@ -301,11 +420,13 @@ public:
   std::mutex& lock() { return lock_; }
 
  protected:
-  Status SetFileName(const std::string& file_name) { return Status::OK(); }
+  Status SetFileName(const std::string& file_name) override {
+    return ::arrow::internal::PlatformFilename::FromString(file_name).Value(&file_name_);
+  }
 
-  Status SetFileName(int fd) { return Status::OK(); }
+  Status SetFileName(int fd) {abort(); return Status::OK(); }
 
-  Status CheckPositioned() { return Status::OK(); }
+  Status CheckPositioned() {abort(); return Status::OK(); }
 
   ::arrow::internal::PlatformFilename file_name_;
 
@@ -321,11 +442,6 @@ public:
   // Whether ReadAt made the file position non-deterministic.
   std::atomic<bool> need_seeking_;
 
-};
-
-//ObjectInterface wrapper for different implementations
-class ObjectInterface : public OSFile {
-//class ObjectInterface : public RGWimpl {
 };
 
 } //namespace io
@@ -410,15 +526,20 @@ namespace ceph {
 
 class ReadableFile::ReadableFileImpl : public ObjectInterface {
  public:
-  explicit ReadableFileImpl(MemoryPool* pool) : ObjectInterface(), pool_(pool) {}
+  //explicit ReadableFileImpl(MemoryPool* pool) : ObjectInterface(), pool_(pool) {}
+#ifdef CEPH_USE_FS
+  explicit ReadableFileImpl(MemoryPool* pool) :  pool_(pool) {IMPL=new OSFile();}
+#endif
+  explicit ReadableFileImpl(MemoryPool* pool) :  pool_(pool) {IMPL=new RGWimpl();}
 
-  Status Open(const std::string& path) { return OpenReadable(path); }
-  Status Open(int fd) { return OpenReadable(fd); }
+  Status Open(const std::string& path) { return IMPL->OpenReadable(path); }
+
+  Status Open(int fd) { return IMPL->OpenReadable(fd); }
 
   Result<std::shared_ptr<Buffer>> ReadBuffer(int64_t nbytes) {
     ARROW_ASSIGN_OR_RAISE(auto buffer, AllocateResizableBuffer(nbytes, pool_));
 
-    ARROW_ASSIGN_OR_RAISE(int64_t bytes_read, Read(nbytes, buffer->mutable_data()));
+    ARROW_ASSIGN_OR_RAISE(int64_t bytes_read, IMPL->Read(nbytes, buffer->mutable_data()));
     if (bytes_read < nbytes) {
       RETURN_NOT_OK(buffer->Resize(bytes_read));
       buffer->ZeroPadding();
@@ -430,7 +551,7 @@ class ReadableFile::ReadableFileImpl : public ObjectInterface {
     ARROW_ASSIGN_OR_RAISE(auto buffer, AllocateResizableBuffer(nbytes, pool_));
 
     ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
-                          ReadAt(position, nbytes, buffer->mutable_data()));
+                          IMPL->ReadAt(position, nbytes, buffer->mutable_data()));
     if (bytes_read < nbytes) {
       RETURN_NOT_OK(buffer->Resize(bytes_read));
       buffer->ZeroPadding();
@@ -459,8 +580,12 @@ class ReadableFile::ReadableFileImpl : public ObjectInterface {
     return Status::OK();
   }
 
+  ObjectInterface *IMPL;//TODO to declare in ObjectInterface 
+
  private:
+ 
   MemoryPool* pool_;
+  
 };
 
 // ReadableFile implemmetation 
@@ -492,11 +617,11 @@ Status ReadableFile::WillNeed(const std::vector<ReadRange>& ranges) {
 Result<int64_t> ReadableFile::DoTell() const { return impl_->Tell(); }
 
 Result<int64_t> ReadableFile::DoRead(int64_t nbytes, void* out) {
-  return impl_->Read(nbytes, out);
+  return impl_->IMPL->Read(nbytes, out);
 }
 
 Result<int64_t> ReadableFile::DoReadAt(int64_t position, int64_t nbytes, void* out) {
-  return impl_->ReadAt(position, nbytes, out);
+  return impl_->IMPL->ReadAt(position, nbytes, out);
 }
 
 Result<std::shared_ptr<Buffer>> ReadableFile::DoReadAt(int64_t position, int64_t nbytes) {
@@ -507,11 +632,11 @@ Result<std::shared_ptr<Buffer>> ReadableFile::DoRead(int64_t nbytes) {
   return impl_->ReadBuffer(nbytes);
 }
 
-Result<int64_t> ReadableFile::DoGetSize() { return impl_->size(); }
+Result<int64_t> ReadableFile::DoGetSize() { return impl_->IMPL->size(); }
 
-Status ReadableFile::DoSeek(int64_t pos) { return impl_->Seek(pos); }
+Status ReadableFile::DoSeek(int64_t pos) { return impl_->IMPL->Seek(pos); }
 
-int ReadableFile::file_descriptor() const { return impl_->fd(); }
+int ReadableFile::file_descriptor() const { return impl_->IMPL->fd(); }
 
 } // namepace ceph
 } // namespace io
