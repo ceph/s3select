@@ -2162,6 +2162,12 @@ public:
     return object_reader.end_of_stream();
   }
 
+  void set_rgw_api(int64_t(*range_req_fptr)(int64_t,int64_t,void*) ,size_t (*get_size_fptr)(void))
+  {
+    g_rgw_s3select_api.set_range_req_api(range_req_fptr);
+    g_rgw_s3select_api.set_get_size_api(get_size_fptr);
+  }
+
   int getMatchRow(std::string &result) //TODO virtual ? getResult
   {
 

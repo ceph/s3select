@@ -20,6 +20,32 @@
 
 /******************************************/
 /******************************************/
+
+class rgw_s3select_api {
+
+  // global object for setting interface between RGW and parquet-reader
+  private:
+
+  public:
+
+  int64_t (*range_req_fptr)(int64_t,int64_t,void*);//range request from object
+
+  size_t (*get_size_fptr)(void);//get object size
+  
+  void set_range_req_api(int64_t(*fptr)(int64_t,int64_t,void*))
+  {
+    range_req_fptr = fptr;
+  }
+
+  void set_get_size_api(size_t(*fptr)(void))
+  {
+    get_size_fptr = fptr; 
+  }
+
+} g_rgw_s3select_api;
+
+/******************************************/
+/******************************************/
 /******************************************/
 
 static constexpr uint8_t kParquetMagic[4] = {'P', 'A', 'R', '1'};
@@ -345,10 +371,14 @@ public:
 
   Status OpenReadable(const std::string& path) {
     //RGW-implement 
-    RETURN_NOT_OK(SetFileName(path));
+    
+    RETURN_NOT_OK(SetFileName(path));//TODO can skip that
+    size_ = g_rgw_s3select_api.get_size_fptr();
+#if 0
 
     ARROW_ASSIGN_OR_RAISE(fd_, ::arrow::internal::FileOpenReadable(file_name_));
     ARROW_ASSIGN_OR_RAISE(size_, ::arrow::internal::FileGetSize(fd_));
+#endif 
 
     is_open_ = true;
     mode_ = FileMode::READ;
@@ -379,6 +409,7 @@ public:
   }
 
   Result<int64_t> Read(int64_t nbytes, void* out) {
+    abort();
     //RGW-implement 
     RETURN_NOT_OK(CheckClosed());
     RETURN_NOT_OK(CheckPositioned());
@@ -386,6 +417,12 @@ public:
   }
 
   Result<int64_t> ReadAt(int64_t position, int64_t nbytes, void* out) {
+
+     Result<int64_t> status =  g_rgw_s3select_api.range_req_fptr(position,nbytes,out);
+
+     return status;
+
+#if 0 
     //RGW-implement 
     RETURN_NOT_OK(CheckClosed());
     RETURN_NOT_OK(internal::ValidateRange(position, nbytes));
@@ -395,6 +432,8 @@ public:
     need_seeking_.store(true);
     return ::arrow::internal::FileReadAt(fd_, reinterpret_cast<uint8_t*>(out), position,
                                          nbytes);
+#endif
+
   }
 
   Status Seek(int64_t pos) {abort();return Status::OK(); }
@@ -417,7 +456,7 @@ public:
 
   FileMode::type mode() const { return mode_; }
 
-  std::mutex& lock() { return lock_; }
+  std::mutex& lock() { return lock_; } //TODO skip
 
  protected:
   Status SetFileName(const std::string& file_name) override {
