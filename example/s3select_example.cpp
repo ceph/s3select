@@ -274,7 +274,37 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
     return -1;
   }
 
-  parquet_object parquet_processor(input_file,&s3select_syntax);
+  FILE *fp;
+
+  fp=fopen(input_file,"r");
+
+  if(!fp){
+    std::cout << "can not open " << input_file << std::endl;
+    return -1;
+  }
+
+  std::function<int(void)> fp_get_size=[&]()
+  {
+    struct stat l_buf;
+    lstat(input_file,&l_buf);
+    return l_buf.st_size;
+  };
+
+  std::function<size_t(int64_t,int64_t,void*)> fp_range_req=[&](int64_t start,int64_t length,void *buff)
+  {
+    fseek(fp,start,SEEK_SET);
+    fread(buff, length, 1, fp);
+    return length;
+  };
+
+  rgw_s3select_api rgw;
+  rgw.set_get_size_api(fp_get_size);
+  rgw.set_range_req_api(fp_range_req);
+  
+  std::function<int(std::string&)> fp_s3select_result_format = [](std::string& result){std::cout << result << std::endl;result.clear();return 0;};
+  std::function<int(std::string&)> fp_s3select_header_format = [](std::string& result){result="";return 0;};
+
+  parquet_object parquet_processor(input_file,&s3select_syntax,&rgw);
 
   std::string result;
 
@@ -282,7 +312,7 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
   {
     try
     {
-      status = parquet_processor.run_s3select_on_object(result); //TODO error description
+      status = parquet_processor.run_s3select_on_object(result,fp_s3select_result_format,fp_s3select_header_format);
     }
     catch (base_s3select_exception &e)
     {
@@ -300,7 +330,7 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
     if (status < 0)
       break;
 
-  } while (1);
+  } while (0);
 
   return 0;
 }

@@ -15,12 +15,15 @@
 #include <utility>
 
 #include <mutex>
+#include <functional>
+
 #include "internal_file_decryptor.h"
 #include "encryption_internal.h"
 
 /******************************************/
 /******************************************/
 
+namespace s3selectEngine {
 class rgw_s3select_api {
 
   // global object for setting interface between RGW and parquet-reader
@@ -28,21 +31,20 @@ class rgw_s3select_api {
 
   public:
 
-  int64_t (*range_req_fptr)(int64_t,int64_t,void*);//range request from object
+  std::function<int(int64_t,int64_t,void*)> range_req_fptr;
+  std::function<size_t(void)> get_size_fptr;
 
-  size_t (*get_size_fptr)(void);//get object size
-  
-  void set_range_req_api(int64_t(*fptr)(int64_t,int64_t,void*))
+  void set_range_req_api(std::function<int(int64_t,int64_t,void*)> fp)
   {
-    range_req_fptr = fptr;
+    range_req_fptr = fp;
   }
 
-  void set_get_size_api(size_t(*fptr)(void))
+  void set_get_size_api(std::function<size_t(void)> fp)
   {
-    get_size_fptr = fptr; 
+    get_size_fptr = fp;
   }
-
-} g_rgw_s3select_api;
+};
+}
 
 /******************************************/
 /******************************************/
@@ -357,35 +359,36 @@ class RGWimpl : public ObjectInterface {
 
 //purpose: to implement the range-request from single object
 public:
-  RGWimpl() : fd_(-1), is_open_(false), size_(-1), need_seeking_(false) {}
+  RGWimpl(s3selectEngine::rgw_s3select_api* rgw) : fd_(-1), is_open_(false), size_(-1), need_seeking_(false),m_rgw_impl(rgw) {}
 
   ~RGWimpl(){}
 
+#define NOT_IMPLEMENT { \
+    std::stringstream ss; \
+    ss << " method " << __FUNCTION__ << " is not implemented;"; \
+    throw parquet::ParquetException(ss.str()); \
+  }
+
   // Note: only one of the Open* methods below may be called on a given instance
 
-  Status OpenWritable(const std::string& path, bool truncate, bool append, bool write_only) { abort();return Status::OK(); }
+  Status OpenWritable(const std::string& path, bool truncate, bool append, bool write_only) { NOT_IMPLEMENT;return Status::OK(); }
 
   // This is different from OpenWritable(string, ...) in that it doesn't
   // truncate nor mandate a seekable file
-  Status OpenWritable(int fd) {abort();return Status::OK(); }
+  Status OpenWritable(int fd) {NOT_IMPLEMENT;return Status::OK(); }
 
   Status OpenReadable(const std::string& path) {
     //RGW-implement 
     
     RETURN_NOT_OK(SetFileName(path));//TODO can skip that
-    size_ = g_rgw_s3select_api.get_size_fptr();
-#if 0
-
-    ARROW_ASSIGN_OR_RAISE(fd_, ::arrow::internal::FileOpenReadable(file_name_));
-    ARROW_ASSIGN_OR_RAISE(size_, ::arrow::internal::FileGetSize(fd_));
-#endif 
+    size_ = m_rgw_impl->get_size_fptr();
 
     is_open_ = true;
     mode_ = FileMode::READ;
     return Status::OK();
   }
 
-  Status OpenReadable(int fd) {abort();return Status::OK(); }
+  Status OpenReadable(int fd) {NOT_IMPLEMENT;return Status::OK(); }
 
   Status CheckClosed() const {
     //RGW-implement 
@@ -401,16 +404,15 @@ public:
       // Even if closing fails, the fd will likely be closed (perhaps it's
       // already closed).
       is_open_ = false;
-      int fd = fd_;
+      //int fd = fd_;
       fd_ = -1;
-      RETURN_NOT_OK(::arrow::internal::FileClose(fd));
+      //RETURN_NOT_OK(::arrow::internal::FileClose(fd));
     }
     return Status::OK();
   }
 
   Result<int64_t> Read(int64_t nbytes, void* out) {
-    abort();
-    //RGW-implement 
+    NOT_IMPLEMENT;
     RETURN_NOT_OK(CheckClosed());
     RETURN_NOT_OK(CheckPositioned());
     return ::arrow::internal::FileRead(fd_, reinterpret_cast<uint8_t*>(out), nbytes);
@@ -418,33 +420,20 @@ public:
 
   Result<int64_t> ReadAt(int64_t position, int64_t nbytes, void* out) {
 
-     Result<int64_t> status =  g_rgw_s3select_api.range_req_fptr(position,nbytes,out);
+     Result<int64_t> status =  m_rgw_impl->range_req_fptr(position,nbytes,out);
 
      return status;
-
-#if 0 
-    //RGW-implement 
-    RETURN_NOT_OK(CheckClosed());
-    RETURN_NOT_OK(internal::ValidateRange(position, nbytes));
-    // ReadAt() leaves the file position undefined, so require that we seek
-    // before calling Read() or Write().
-    std::cout << "ReadAt " << position << " " << nbytes << std::endl;
-    need_seeking_.store(true);
-    return ::arrow::internal::FileReadAt(fd_, reinterpret_cast<uint8_t*>(out), position,
-                                         nbytes);
-#endif
-
   }
 
-  Status Seek(int64_t pos) {abort();return Status::OK(); }
+  Status Seek(int64_t pos) {NOT_IMPLEMENT;return Status::OK(); }
 
   Result<int64_t> Tell() const {
-    abort();
+    NOT_IMPLEMENT;
     return Result<int64_t>(0);
   }
 
   Status Write(const void* data, int64_t length) {
-    abort();
+    NOT_IMPLEMENT;
     return Status::OK();
   }
 
@@ -463,9 +452,9 @@ public:
     return ::arrow::internal::PlatformFilename::FromString(file_name).Value(&file_name_);
   }
 
-  Status SetFileName(int fd) {abort(); return Status::OK(); }
+  Status SetFileName(int fd) {NOT_IMPLEMENT; return Status::OK(); }
 
-  Status CheckPositioned() {abort(); return Status::OK(); }
+  Status CheckPositioned() {NOT_IMPLEMENT; return Status::OK(); }
 
   ::arrow::internal::PlatformFilename file_name_;
 
@@ -481,6 +470,9 @@ public:
   // Whether ReadAt made the file position non-deterministic.
   std::atomic<bool> need_seeking_;
 
+private:
+
+  s3selectEngine::rgw_s3select_api* m_rgw_impl;
 };
 
 } //namespace io
@@ -510,7 +502,7 @@ class ARROW_EXPORT ReadableFile
   /// \param[in] pool a MemoryPool for memory allocations
   /// \return ReadableFile instance
   static Result<std::shared_ptr<ReadableFile>> Open(
-      const std::string& path, MemoryPool* pool = default_memory_pool());
+      const std::string& path,s3selectEngine::rgw_s3select_api* rgw,MemoryPool* pool = default_memory_pool());
 
   /// \brief Open a local file for reading
   /// \param[in] fd file descriptor
@@ -531,7 +523,7 @@ class ARROW_EXPORT ReadableFile
  private:
   friend RandomAccessFileConcurrencyWrapper<ReadableFile>;
 
-  explicit ReadableFile(MemoryPool* pool);
+  explicit ReadableFile(MemoryPool* pool,s3selectEngine::rgw_s3select_api* rgw);
 
   Status DoClose();
   Result<int64_t> DoTell() const;
@@ -565,11 +557,10 @@ namespace ceph {
 
 class ReadableFile::ReadableFileImpl : public ObjectInterface {
  public:
-  //explicit ReadableFileImpl(MemoryPool* pool) : ObjectInterface(), pool_(pool) {}
 #ifdef CEPH_USE_FS
   explicit ReadableFileImpl(MemoryPool* pool) :  pool_(pool) {IMPL=new OSFile();}
 #endif
-  explicit ReadableFileImpl(MemoryPool* pool) :  pool_(pool) {IMPL=new RGWimpl();}
+  explicit ReadableFileImpl(MemoryPool* pool,s3selectEngine::rgw_s3select_api* rgw) :  pool_(pool) {IMPL=new RGWimpl(rgw);}
 
   Status Open(const std::string& path) { return IMPL->OpenReadable(path); }
 
@@ -628,19 +619,22 @@ class ReadableFile::ReadableFileImpl : public ObjectInterface {
 };
 
 // ReadableFile implemmetation 
-ReadableFile::ReadableFile(MemoryPool* pool) { impl_.reset(new ReadableFileImpl(pool)); }
+ReadableFile::ReadableFile(MemoryPool* pool,s3selectEngine::rgw_s3select_api* rgw) { impl_.reset(new ReadableFileImpl(pool,rgw)); }
 
 ReadableFile::~ReadableFile() { internal::CloseFromDestructor(this); }
 
 Result<std::shared_ptr<ReadableFile>> ReadableFile::Open(const std::string& path,
-                                                         MemoryPool* pool) {
-  auto file = std::shared_ptr<ReadableFile>(new ReadableFile(pool));
+                                                         s3selectEngine::rgw_s3select_api* rgw,
+                                                         MemoryPool* pool
+                                                         ) {
+  auto file = std::shared_ptr<ReadableFile>(new ReadableFile(pool,rgw));
   RETURN_NOT_OK(file->impl_->Open(path));
   return file;
 }
 
 Result<std::shared_ptr<ReadableFile>> ReadableFile::Open(int fd, MemoryPool* pool) {
-  auto file = std::shared_ptr<ReadableFile>(new ReadableFile(pool));
+  NOT_IMPLEMENT;
+  auto file = std::shared_ptr<ReadableFile>(new ReadableFile(pool,0));
   RETURN_NOT_OK(file->impl_->Open(fd));
   return file;
 }
@@ -761,9 +755,10 @@ class PARQUET_EXPORT ParquetFileReader {
   // API Convenience to open a serialized Parquet file on disk, using Arrow IO
   // interfaces.
   static std::unique_ptr<ParquetFileReader> OpenFile(
-      const std::string& path, bool memory_map = true,
+      const std::string& path,s3selectEngine::rgw_s3select_api* rgw, bool memory_map = true,
       const ReaderProperties& props = default_reader_properties(),
-      std::shared_ptr<FileMetaData> metadata = NULLPTR);
+      std::shared_ptr<FileMetaData> metadata = NULLPTR
+      );
 
   void Open(std::unique_ptr<Contents> contents);
   void Close();
@@ -1337,7 +1332,7 @@ std::unique_ptr<ParquetFileReader> ParquetFileReader::Open(
 #endif
 
 std::unique_ptr<ParquetFileReader> ParquetFileReader::OpenFile(
-    const std::string& path, bool memory_map, const ReaderProperties& props,
+    const std::string& path, s3selectEngine::rgw_s3select_api* rgw, bool memory_map, const ReaderProperties& props,
     std::shared_ptr<FileMetaData> metadata) {
   std::shared_ptr<::arrow::io::RandomAccessFile> source;
   if (memory_map) {
@@ -1345,8 +1340,7 @@ std::unique_ptr<ParquetFileReader> ParquetFileReader::OpenFile(
         source, ::arrow::io::MemoryMappedFile::Open(path, ::arrow::io::FileMode::READ));//GAL change that also, or to remove?
   } else {
     PARQUET_ASSIGN_OR_THROW(source,
-                            //::arrow::io::ReadableFile::Open(path, props.memory_pool()));
-                            ::arrow::io::ceph::ReadableFile::Open(path, props.memory_pool()));
+                            ::arrow::io::ceph::ReadableFile::Open(path, rgw, props.memory_pool()));
   }
 
   return Open(std::move(source), props, std::move(metadata));
@@ -1535,15 +1529,17 @@ private:
   std::shared_ptr<parquet::FileMetaData> m_file_metadata;
   std::unique_ptr<parquet::ceph::ParquetFileReader> m_parquet_reader;
   std::vector<column_reader_wrap*> m_column_readers;
+  s3selectEngine::rgw_s3select_api* m_rgw_s3select_api;
 
   public:
 
-  parquet_file_parser(std::string parquet_file_name) : 
+  parquet_file_parser(std::string parquet_file_name,s3selectEngine::rgw_s3select_api* rgw_api) : 
                                    m_parquet_file_name(parquet_file_name),
                                    m_num_of_columms(0),
                                    m_num_of_rows(0),
                                    m_rownum(0),
-                                   m_num_row_groups(0)
+                                   m_num_row_groups(0),
+                                   m_rgw_s3select_api(rgw_api)
                                    
                                    
   {
@@ -1552,7 +1548,7 @@ private:
 
   int load_meta_data()
   {
-    m_parquet_reader = parquet::ceph::ParquetFileReader::OpenFile(m_parquet_file_name, false);
+    m_parquet_reader = parquet::ceph::ParquetFileReader::OpenFile(m_parquet_file_name,m_rgw_s3select_api,false);
     m_file_metadata = m_parquet_reader->metadata();
     m_num_of_columms = m_parquet_reader->metadata()->num_columns();
     m_num_row_groups = m_file_metadata->num_row_groups();

@@ -13,7 +13,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/bind.hpp>
-#include <s3select_parquet_intrf.h> //NOTE: should include first (c++11 std::string_view)
+#include "s3select_parquet_intrf.h" //NOTE: should include first (c++11 std::string_view)
 
 namespace bsc = BOOST_SPIRIT_CLASSIC_NS;
 

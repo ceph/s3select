@@ -2061,37 +2061,46 @@ private:
   std::string m_error_description;
   s3select *m_s3_select;
   size_t m_error_count;
-  parquet_file_parser object_reader;
+  parquet_file_parser* object_reader;
   parquet_file_parser::column_pos_t m_where_clause_columns;
   parquet_file_parser::column_pos_t m_projections_columns;
   std::vector<parquet_file_parser::parquet_value_t> m_predicate_values;
   std::vector<parquet_file_parser::parquet_value_t> m_projections_values;
 
 public:
-  parquet_object(std::string parquet_file_name, s3select *s3_query) : base_s3object(s3_query->get_scratch_area()),object_reader(parquet_file_name)
+  parquet_object(std::string parquet_file_name, s3select *s3_query,s3selectEngine::rgw_s3select_api* rgw) : base_s3object(s3_query->get_scratch_area())
   {
+    try{
+    
+      object_reader = new parquet_file_parser(parquet_file_name,rgw); //TODO uniq ptr
+    } catch(std::exception &e)
+    { 
+      throw base_s3select_exception(std::string("failure while processing parquet meta-data ") + std::string(e.what()) ,base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
+
     set(s3_query);
+    
     s3_query->get_scratch_area()->set_parquet_type();
 
     load_meta_data_into_scratch_area();
 
     for(auto x : m_s3_select->get_projections_list())
     {
-        x->extract_columns(m_projections_columns,object_reader.get_num_of_columns());
+        x->extract_columns(m_projections_columns,object_reader->get_num_of_columns());
     }
 
     if(m_s3_select->get_filter())
-        m_s3_select->get_filter()->extract_columns(m_where_clause_columns,object_reader.get_num_of_columns());
+        m_s3_select->get_filter()->extract_columns(m_where_clause_columns,object_reader->get_num_of_columns());
   }
 
-  int run_s3select_on_object(std::string &result)
+  int run_s3select_on_object(std::string &result,
+        std::function<int(std::string&)> fp_s3select_result_format,
+        std::function<int(std::string&)> fp_s3select_header_format)
   {
+    int status = 0;
 
-    result.clear();
     do
     {
-
-      int status = 0;
       try
       {
         status = getMatchRow(result);
@@ -2117,20 +2126,38 @@ public:
         }
       }
 
-      if (status < 0)
+#define S3SELECT_RESPONSE_SIZE_LIMIT (4 * 1024 * 1024)
+      if (result.size() > S3SELECT_RESPONSE_SIZE_LIMIT)
+      {//AWS-cli limits response size the following callbacks send response upon some threshold
+        fp_s3select_result_format(result);
+
+        if (!is_end_of_stream())
+        {
+          fp_s3select_header_format(result);
+        }
+      }
+      else
+      {
+        if (is_end_of_stream())
+        {
+          fp_s3select_result_format(result);
+        }
+      }
+
+      if (status < 0 || is_end_of_stream())
       {
         break;
       }
 
     } while (1);
 
-    return -1;
+    return status;
   }
 
   void load_meta_data_into_scratch_area()
   {
     int i=0;
-    for(auto x : object_reader.get_schema())
+    for(auto x : object_reader->get_schema())
     {
       m_s3_select->get_scratch_area()->set_column_pos(x.first.c_str(),i++); 
     }
@@ -2159,13 +2186,7 @@ public:
 
   bool is_end_of_stream()
   {
-    return object_reader.end_of_stream();
-  }
-
-  void set_rgw_api(int64_t(*range_req_fptr)(int64_t,int64_t,void*) ,size_t (*get_size_fptr)(void))
-  {
-    g_rgw_s3select_api.set_range_req_api(range_req_fptr);
-    g_rgw_s3select_api.set_get_size_api(get_size_fptr);
+    return object_reader->end_of_stream();
   }
 
   int getMatchRow(std::string &result) //TODO virtual ? getResult
@@ -2194,7 +2215,7 @@ public:
             }
           }
 
-          return -1; //TODO negative number is end of stream
+          return 0;
         }
 
         if ((*m_projections.begin())->is_set_last_call())
@@ -2204,7 +2225,7 @@ public:
         }
 
         //TODO if (m_where_clause)
-        object_reader.get_column_values_by_positions(m_where_clause_columns, m_predicate_values); //TODO status should indicate error/end-of-stream/success
+        object_reader->get_column_values_by_positions(m_where_clause_columns, m_predicate_values); //TODO status should indicate error/end-of-stream/success
 
         m_sa->update(m_predicate_values, m_where_clause_columns);
 
@@ -2215,7 +2236,7 @@ public:
 
         if (!m_where_clause || m_where_clause->eval().i64() == true)
         {
-          object_reader.get_column_values_by_positions(m_projections_columns, m_projections_values);
+          object_reader->get_column_values_by_positions(m_projections_columns, m_projections_values);
           m_sa->update(m_projections_values, m_projections_columns);
           for (auto i : m_projections)
           {
@@ -2223,7 +2244,7 @@ public:
           }
         }
 
-        object_reader.increase_rownum();
+        object_reader->increase_rownum();
 
       } while (1);
     }
@@ -2239,14 +2260,14 @@ public:
             a.second->invalidate_cache_result();
           }
 
-          object_reader.get_column_values_by_positions(m_where_clause_columns, m_predicate_values); //TODO status should indicate error/end-of-stream/success
+          object_reader->get_column_values_by_positions(m_where_clause_columns, m_predicate_values); //TODO status should indicate error/end-of-stream/success
 
           m_sa->update(m_predicate_values, m_where_clause_columns);
 
           if (m_where_clause->eval().i64() == true)
             break;
           else
-            next_rownum_status = object_reader.increase_rownum();
+            next_rownum_status = object_reader->increase_rownum();
 
         } while (next_rownum_status);
 
@@ -2261,7 +2282,7 @@ public:
         }
       }
 
-      object_reader.get_column_values_by_positions(m_projections_columns, m_projections_values);
+      object_reader->get_column_values_by_positions(m_projections_columns, m_projections_values);
       m_sa->update(m_projections_values, m_projections_columns);
 
       for (auto i : m_projections)
@@ -2271,11 +2292,11 @@ public:
       }
       result.append("\n");
 
-      object_reader.increase_rownum();
+      object_reader->increase_rownum();
 
       if (is_end_of_stream())
       {
-        return -1;
+        return 0;
       }
     }
 
