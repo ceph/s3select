@@ -290,7 +290,7 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
     return l_buf.st_size;
   };
 
-  std::function<size_t(int64_t,int64_t,void*)> fp_range_req=[&](int64_t start,int64_t length,void *buff)
+  std::function<size_t(int64_t,int64_t,void*,optional_yield*)> fp_range_req=[&](int64_t start,int64_t length,void *buff,optional_yield*y)
   {
     fseek(fp,start,SEEK_SET);
     fread(buff, length, 1, fp);

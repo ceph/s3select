@@ -22,7 +22,7 @@
 
 /******************************************/
 /******************************************/
-
+class optional_yield;
 namespace s3selectEngine {
 class rgw_s3select_api {
 
@@ -31,10 +31,11 @@ class rgw_s3select_api {
 
   public:
 
-  std::function<int(int64_t,int64_t,void*)> range_req_fptr;
+  std::function<int(int64_t,int64_t,void*,optional_yield*)> range_req_fptr;
   std::function<size_t(void)> get_size_fptr;
+  optional_yield *m_y;
 
-  void set_range_req_api(std::function<int(int64_t,int64_t,void*)> fp)
+  void set_range_req_api(std::function<int(int64_t,int64_t,void*,optional_yield*)> fp)
   {
     range_req_fptr = fp;
   }
@@ -420,7 +421,7 @@ public:
 
   Result<int64_t> ReadAt(int64_t position, int64_t nbytes, void* out) {
 
-     Result<int64_t> status =  m_rgw_impl->range_req_fptr(position,nbytes,out);
+     Result<int64_t> status =  m_rgw_impl->range_req_fptr(position,nbytes,out,m_rgw_impl->m_y);
 
      return status;
   }
