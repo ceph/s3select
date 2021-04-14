@@ -5,6 +5,8 @@
 #include <algorithm>
 #include "boost/date_time/gregorian/gregorian.hpp"
 #include "boost/date_time/posix_time/posix_time.hpp"
+#define FMT_HEADER_ONLY
+#include <fmt/format.h>
 
 using namespace s3selectEngine;
 
@@ -566,89 +568,70 @@ TEST(TestS3selectFunctions, add)
 }
 
 void generate_fix_columns_csv(std::string& out, size_t size) {
-  std::stringstream ss;
   for (auto i = 0U; i < size; ++i) {
-    ss << 1 << "," << 2 << "," << 3 << "," << 4 << "," << 5 << std::endl;
+    out += fmt::format("{},{},{},{},{}\n", 1,2,3,4,5);
   }
-  out = ss.str();
 }
 
 void generate_rand_csv(std::string& out, size_t size) {
   // schema is: int, float, string, string
-  std::stringstream ss;
   for (auto i = 0U; i < size; ++i) {
-    ss << rand()%1000 << "," << rand()%1000 << "," << rand()%1000 << "," << "foo"+std::to_string(i) << "," << std::to_string(i)+"bar" << std::endl;
+    out += fmt::format("{},{},{},{},{}\n", rand()%1000,rand()%1000,rand()%1000,"foo"+std::to_string(i),std::to_string(i)+"bar");
   }
-  out = ss.str();
 }
 
 void generate_csv(std::string& out, size_t size) {
   // schema is: int, float, string, string
-  std::stringstream ss;
   for (auto i = 0U; i < size; ++i) {
-    ss << i << "," << i/10.0 << "," << "foo"+std::to_string(i) << "," << std::to_string(i)+"bar" << std::endl;
+    out += fmt::format("{},{},{},{}\n",i,i/10.0,"foo"+std::to_string(i),std::to_string(i)+"bar");
   }
-  out = ss.str();
 }
 
 void generate_csv_escape(std::string& out, size_t size) {
   // schema is: int, float, string, string
-  std::stringstream ss;
   for (auto i = 0U; i < size; ++i) {
-    ss << "_ar" << "," << "aeio_" << "," << "foo"+std::to_string(i) << "," << std::to_string(i)+"bar" << std::endl;
+    out += fmt::format("{},{},{},{}\n", "_ar","aeiou_","foo"+std::to_string(i) ,std::to_string(i)+"bar",5);
   }
-  out = ss.str();
 }
 
 void generate_columns_csv(std::string& out, size_t size) {
-  std::stringstream ss;
 
   for (auto i = 0U; i < size; ++i) {
-    ss << i << "," << i+1 << "," << i << "," << i << "," << i << "," << i << "," << i << "," << i << "," << i << "," << i << std::endl;
+    out += fmt::format("{},{},{},{},{},{},{},{},{},{}\n", i,i+1,i,i,i,i,i,i,i,i);
   }
-  out = ss.str();
 }
 
 void generate_rand_columns_csv(std::string& out, size_t size) {
-  std::stringstream ss;
   auto r = [](){return rand()%1000;};
 
   for (auto i = 0U; i < size; ++i) {
-    ss << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << std::endl;
+    out += fmt::format("{},{},{},{},{},{},{},{},{},{}\n", r(),r(),r(),r(),r(),r(),r(),r(),r(),r());
   }
-  out = ss.str();
 }
 
 void generate_rand_columns_csv_with_null(std::string& out, size_t size) {
-  std::stringstream ss;
   auto r = [](){ int x=rand()%1000;if (x<100) return std::string(""); else return std::to_string(x);};
 
   for (auto i = 0U; i < size; ++i) {
-    ss << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << "," << r() << std::endl;
+    out += fmt::format("{},{},{},{},{},{},{},{},{},{}\n", r(),r(),r(),r(),r(),r(),r(),r(),r(),r());
   }
-  out = ss.str();
 }
 
 void generate_csv_trim(std::string& out, size_t size) {
   // schema is: int, float, string, string
-  std::stringstream ss;
   for (auto i = 0U; i < size; ++i) {
-    ss << "     aeiou     " << "," << std::endl;
+    out += fmt::format("{},\n", "     aeiou     ");
   }
-  out = ss.str();
 }
 
 void generate_csv_like(std::string& out, size_t size) {
   // schema is: int, float, string, string
-  std::stringstream ss;
   for (auto i = 0U; i < size; ++i) {
-    ss << "fooaeioubrs" << "," << std::endl;
+    out += fmt::format("{},\n", "fooaeioubrs");
   }
-  out = ss.str();
 }
 
 void generate_rand_columns_csv_datetime(std::string& out, size_t size) {
-  std::stringstream ss;
   auto year = [](){return rand()%100 + 1900;};
   auto month = [](){return 1 + rand()%12;};
   auto day = [](){return 1 + rand()%28;};
@@ -657,13 +640,11 @@ void generate_rand_columns_csv_datetime(std::string& out, size_t size) {
   auto seconds = [](){return rand()%60;};
 
   for (auto i = 0U; i < size; ++i) {
-    ss << year() << "-" << std::setw(2) << std::setfill('0')<< month() << "-" << std::setw(2) << std::setfill('0')<< day() << "T" <<std::setw(2) << std::setfill('0')<< hours() << ":" << std::setw(2) << std::setfill('0')<< minutes() << ":" << std::setw(2) << std::setfill('0')<<seconds() << "Z" << "," << std::endl;
+    out += fmt::format("{}-{:0>2}-{:0>2}T{:0>2}:{:0>2}:{:0>2}Z\n", year(),month(),day(),hours(),minutes(),seconds());
   }
-  out = ss.str();
 }
 
 void generate_rand_csv_datetime_to_string(std::string& out, std::string& result, size_t size, bool const_frmt = true) {
-  std::stringstream ss_out, ss_res;
   std::string format = "yyyysMMMMMdddSSSSSSSSSSSMMMM HHa:m -:-";
   std::string months[12] = {"January", "February", "March","April", "May", "June", "July", "August", "September", "October", "November", "December"};
   auto year = [](){return rand()%100 + 1900;};
@@ -686,9 +667,9 @@ void generate_rand_csv_datetime_to_string(std::string& out, std::string& result,
 
     if (const_frmt)
     {
-      ss_out << yr << "-" << std::setw(2) << std::setfill('0') << mnth << "-" << std::setw(2) << std::setfill('0') << dy << "T" <<std::setw(2) << std::setfill('0') << hr << ":" << std::setw(2) << std::setfill('0') << mint << ":" << std::setw(2) << std::setfill('0') <<sec << "." << frac_sec << "Z" << "," << std::endl;
+      out += fmt::format("{}-{:0>2}-{:0>2}T{:0>2}:{:0>2}:{:0>2}.{}Z,\n", yr,mnth,dy,hr,mint,sec,frac_sec);
 
-      ss_res << yr << sec << months[mnth-1].substr(0, 1) << std::setw(2) << std::setfill('0') << dy << dy << frac_sec << std::string(11 - std::to_string(frac_sec).length(), '0') << months[mnth-1] << " " << std::setw(2) << std::setfill('0') << hr << (hr < 12 ? "AM" : "PM") << ":" << mint << " -:-" << "," << std::endl;
+      result += fmt::format("{}{}{}{:0>2}{}{}{}{} {:0>2}{}:{} -:-,\n", yr,sec,months[mnth-1].substr(0,1),dy,dy,frac_sec,std::string(11 - std::to_string(frac_sec).length(), '0'),months[mnth-1],hr,hr < 12 ? "AM" : "PM",mint);
     }
     else
     {
@@ -696,31 +677,29 @@ void generate_rand_csv_datetime_to_string(std::string& out, std::string& result,
       {
         case 0:
             format = "yyyysMMMMMdddSSSSSSSSSSSMMMM HHa:m -:-";
-            ss_res << yr << sec << months[mnth-1].substr(0, 1) << std::setw(2) << std::setfill('0') << dy << dy << frac_sec << std::string(11 - std::to_string(frac_sec).length(), '0') << months[mnth-1] << " " << std::setw(2) << std::setfill('0') << hr << (hr < 12 ? "AM" : "PM") << ":" << mint << " -:-" << "," << std::endl;
+            result += fmt::format("{}{}{}{:0>2}{}{}{}{} {:0>2}{}:{} -:-,\n", yr,sec,months[mnth-1].substr(0,1),dy,dy,frac_sec,std::string(11 - std::to_string(frac_sec).length(), '0'),months[mnth-1],hr,hr < 12 ? "AM" : "PM",mint);
             break;
         case 1:
             format = "aMMhh";
-            ss_res << (hr < 12 ? "AM" : "PM") << std::setw(2) << std::setfill('0') << mnth << std::setw(2) << std::setfill('0') << (hr%12 == 0 ? 12 : hr%12) << "," << std::endl;
+            out += fmt::format("{}{:0>2}{:0>2},\n", hr < 12 ? "AM" : "PM",mnth,hr%12 == 0 ? 12 : hr%12);
             break;
         case 2:
             format = "y M d ABCDEF";
-            ss_res << yr << " " << mnth << " " << dy << " ABCDEF" << "," << std::endl;
+            result += fmt::format("{} {} {} ABCDEF,\n", yr,mnth,dy);
             break;
         case 3:
             format = "W h:MMMM";
-            ss_res << "W " << (hr%12 == 0 ? 12 : hr%12) << ":" << months[mnth-1] << "," << std::endl;
+            result += fmt::format("W {}:{},\n",hr%12 == 0 ? 12 : hr%12,months[mnth-1]);
             break;
         case 4:
             format = "H:m:s";
-            ss_res << hr << ":" << mint << ":" << sec << "," << std::endl;
+            result += fmt::format("{}:{}:{},\n", hr,mint,sec);
             break;
       }
+      out += fmt::format("{}-{:0>2}-{:0>2}T{:0>2}:{:0>2}:{:0>2}.{}Z,{},\n", yr,mnth,dy,hr,mint,sec,frac_sec,format);
 
-      ss_out << yr << "-" << std::setw(2) << std::setfill('0') << mnth << "-" << std::setw(2) << std::setfill('0') << dy << "T" <<std::setw(2) << std::setfill('0') << hr << ":" << std::setw(2) << std::setfill('0') << mint << ":" << std::setw(2) << std::setfill('0') <<sec << "." << frac_sec << "Z" << "," << format << "," << std::endl;
     }
   }
-  out = ss_out.str();
-  result = ss_res.str();
 }
 
 TEST(TestS3selectFunctions, sum)
@@ -1327,7 +1306,7 @@ TEST(TestS3selectFunctions, multirow_datetime_to_string_constant)
 TEST(TestS3selectFunctions, multirow_datetime_to_string_dynamic)
 {
   std::string input, expected_res;
-  size_t size = 100;
+  size_t size = 5;
 
   generate_rand_csv_datetime_to_string(input, expected_res, size, false);
 
