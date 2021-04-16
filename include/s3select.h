@@ -69,7 +69,7 @@ struct actionQ
 
   size_t when_then_count;
 
-  actionQ(): inMainArg(0),from_clause("##"),projection_or_predicate_state(true),when_then_count(0){}//TODO remove when_then_count
+  actionQ(): inMainArg(0),from_clause("##"),when_then_count(0){}//TODO remove when_then_count
 
   std::map<const void*,std::vector<const char*> *> x_map;
 
@@ -101,9 +101,6 @@ struct actionQ
     }
     return false;
   }
-
-  uint64_t in_set_count;
-
 
 };
 
@@ -745,10 +742,8 @@ void push_from_clause::builder(s3select* self, const char* a, const char* b) con
 
   self->getAction()->from_clause = token;
 
-
   self->getAction()->exprQ.clear();
 
-  self->getAction()->projection_or_predicate_state = false;//parser is now on where-clause 
 }
 
 void push_number::builder(s3select* self, const char* a, const char* b) const
@@ -830,7 +825,6 @@ void push_variable::builder(s3select* self, const char* a, const char* b) const
   }
   
   self->getAction()->exprQ.push_back(v);
-
 }
 
 void push_addsub::builder(s3select* self, const char* a, const char* b) const
@@ -1104,7 +1098,6 @@ void push_column_pos::builder(s3select* self, const char* a, const char* b) cons
   }
 
   self->getAction()->exprQ.push_back(v);
-
 }
 
 void push_projection::builder(s3select* self, const char* a, const char* b) const

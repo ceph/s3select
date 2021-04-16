@@ -1461,7 +1461,7 @@ private:
   int64_t m_rownum;
   parquet::Type::type m_type;
   std::shared_ptr<parquet::ceph::RowGroupReader> m_row_group_reader;
-  uint32_t m_row_grouop_id;
+  int m_row_grouop_id;
   uint16_t m_col_id;
   parquet::ceph::ParquetFileReader* m_parquet_reader;
   std::shared_ptr<parquet::ColumnReader> m_ColumnReader;
@@ -1555,7 +1555,7 @@ private:
     m_num_row_groups = m_file_metadata->num_row_groups();
     m_num_of_rows = m_file_metadata->num_rows();
 
-    for (int i = 0; i < m_num_of_columms; i++)
+    for (uint32_t i = 0; i < m_num_of_columms; i++)
     {
       parquet::Type::type tp = m_file_metadata->schema()->Column(i)->physical_type();
       std::pair<std::string, column_reader_wrap::parquet_type> elm;
