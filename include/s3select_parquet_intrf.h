@@ -1476,7 +1476,9 @@ public:
     STRING,
     INT32,
     INT64,
-    DOUBLE
+    DOUBLE,
+    TIMESTAMP,
+    PARQUET_NULL
   };
 
   typedef struct
@@ -1656,7 +1658,7 @@ private:
 
 
   column_reader_wrap::column_reader_wrap(std::unique_ptr<parquet::ceph::ParquetFileReader> & parquet_reader,uint16_t col_id):
-  m_rownum(0),
+  m_rownum(-1),
   m_type(parquet::Type::type::UNDEFINED),
   m_row_grouop_id(0),
   m_col_id(col_id),
@@ -1729,6 +1731,8 @@ private:
       err << "failed to parse column id:" << this->m_col_id << " name:" <<this->m_parquet_reader->metadata()->schema()->Column(m_col_id)->name();
       return err;
     };
+	int16_t defintion_level;
+	int16_t repeat_level;
 
     switch (get_type())
     {
@@ -1773,7 +1777,7 @@ private:
     case parquet::Type::type::BYTE_ARRAY:
       byte_array_reader = static_cast<parquet::ByteArrayReader *>(m_ColumnReader.get());
       try{
-        rows_read = byte_array_reader->ReadBatch(1, nullptr, nullptr, &str_value , values_read);
+        rows_read = byte_array_reader->ReadBatch(1, &defintion_level, &repeat_level, &str_value , values_read);
       }
       catch(std::exception &e)
       {
@@ -1781,7 +1785,13 @@ private:
       }
       values->str = (char*)str_value.ptr;
       values->str_len = str_value.len;
-      values->type = column_reader_wrap::parquet_type::STRING;
+      if(defintion_level == 0)
+      {
+	values->type = column_reader_wrap::parquet_type::PARQUET_NULL;
+      } else
+      {
+	values->type = column_reader_wrap::parquet_type::STRING;
+      }
       break;
 
     default:

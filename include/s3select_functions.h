@@ -1908,7 +1908,7 @@ struct _fn_string : public base_function
 
     base_statement* expr = *iter;
     value expr_val = expr->eval();
-    result->set_value((expr_val.to_string()).c_str());
+    result->set_value((expr_val.to_string()));
     return true;
   }
 };

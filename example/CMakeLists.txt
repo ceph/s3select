@@ -1,6 +1,9 @@
 add_executable(s3select_example s3select_example.cpp)
+add_executable(csv_to_parquet csv_to_parquet.cpp)
 target_include_directories(s3select_example PUBLIC ../include)
+target_include_directories(csv_to_parquet PUBLIC ../include)
 target_link_libraries(s3select_example boost_date_time boost_system boost_thread parquet arrow_shared)
+target_link_libraries(csv_to_parquet boost_date_time boost_system boost_thread parquet arrow_shared)
 
 add_executable(generate_rand_csv generate_rand_csv.c)
 
