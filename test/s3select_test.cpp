@@ -1,6 +1,7 @@
 #include "s3select.h"
 #include "gtest/gtest.h"
 #include <string>
+#include <fstream>
 #include <iomanip>
 #include <algorithm>
 #include "boost/date_time/gregorian/gregorian.hpp"
@@ -2454,4 +2455,67 @@ TEST(TestS3selectFunctions, test_escape_expressions)
   std::string s3select_result_4 = run_s3select(input_query_4,input);
 
   ASSERT_EQ(s3select_result_3, s3select_result_4);
+}
+
+TEST(TestS3selectFunctions, nested_query_single_row_result)
+{
+  std::fstream query_file, result_file, input_csv;
+  query_file.open("./test/test_queries_single.txt", std::ios::in);
+  result_file.open("./test/test_key_single.txt", std::ios::in);
+  ASSERT_EQ(query_file.is_open(), true);
+  ASSERT_EQ(result_file.is_open(), true);
+
+  std::string input_query, expected_res;
+  int i = 1;
+  while(getline(query_file, input_query)  && getline(result_file, expected_res))
+  {
+    std::cout << "Running query: " << i << std::endl;
+    auto s3select_res = run_s3select(input_query);
+    EXPECT_EQ(s3select_res, expected_res);
+    i++;
+  }
+
+  query_file.close();
+  result_file.close();
+}
+
+TEST(TestS3selectFunctions, nested_multirow_queries)
+{
+  std::fstream query_file, result_file, input_csv;
+  query_file.open("./test/test_queries_multirow.txt", std::ios::in);
+  result_file.open("./test/test_key_multirow.txt", std::ios::in);
+  input_csv.open("./test/test_data.csv", std::ios::in);
+  ASSERT_EQ(query_file.is_open(), true);
+  ASSERT_EQ(result_file.is_open(), true);
+  ASSERT_EQ(input_csv.is_open(), true);
+
+  std::string input, temp;
+  while (std::getline(input_csv, temp))
+  {
+    input += temp;
+    input.push_back('\n');
+  }
+
+  std::string input_query, expected_res;
+  int i = 1;
+  while (getline(query_file, input_query)  && getline(result_file, temp))
+  {
+    expected_res = temp;
+
+    while (getline(result_file, temp))
+    {
+      if (temp == "-----***-----")
+        break;
+      expected_res.push_back('\n');
+      expected_res += temp;
+    }
+
+    std::cout << "Running query: " << i << std::endl;
+    auto s3select_res = run_s3select(input_query, input);
+    EXPECT_EQ(s3select_res, expected_res);
+    i++;
+  }
+
+  query_file.close();
+  result_file.close();
 }
