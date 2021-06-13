@@ -9,6 +9,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Boost REQUIRED)
 find_package(GTest REQUIRED)
 
+if(DEFINED ENV{NANO_SEC})
+  add_definitions(-DBOOST_DATE_TIME_POSIX_TIME_STD_CONFIG)
+endif()
+
 enable_testing() 
 
 add_subdirectory(example)

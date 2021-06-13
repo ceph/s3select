@@ -349,7 +349,11 @@ TEST(TestS3selectFunctions, to_timestamp)
     EXPECT_EQ(s3select_res, out_timestamp);
 
     timestamp = "2007-09-17T17:56:05.234Z";
-    out_timestamp = "2007-09-17T17:56:05.234000Z";
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        out_timestamp = "2007-09-17T17:56:05.234000000Z";
+    #else
+        out_timestamp = "2007-09-17T17:56:05.234000Z";
+    #endif
     input_query = "select to_timestamp(\'" + timestamp + "\') from stdin;" ;
     s3select_res = run_s3select(input_query);
     EXPECT_EQ(s3select_res, out_timestamp);
@@ -367,10 +371,32 @@ TEST(TestS3selectFunctions, to_timestamp)
     EXPECT_EQ(s3select_res, out_timestamp);
 
     timestamp = "2007-09-17T17:56:05.234+02:44";
-    out_timestamp = "2007-09-17T17:56:05.234000+02:44";
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        out_timestamp = "2007-09-17T17:56:05.234000000+02:44";
+    #else
+        out_timestamp = "2007-09-17T17:56:05.234000+02:44";
+    #endif
     input_query = "select to_timestamp(\'" + timestamp + "\') from stdin;" ;
     s3select_res = run_s3select(input_query);
     EXPECT_EQ(s3select_res, out_timestamp);
+
+    timestamp = "2007-09-17T17:56:05.00234+02:44";
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        out_timestamp = "2007-09-17T17:56:05.002340000+02:44";
+    #else
+        out_timestamp = "2007-09-17T17:56:05.002340+02:44";
+    #endif
+    input_query = "select to_timestamp(\'" + timestamp + "\') from stdin;" ;
+    s3select_res = run_s3select(input_query);
+    EXPECT_EQ(s3select_res, out_timestamp);
+
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        timestamp = "2007-09-17T17:56:05.012345678-00:45";
+        out_timestamp = "2007-09-17T17:56:05.012345678-00:45";
+        input_query = "select to_timestamp(\'" + timestamp + "\') from stdin;" ;
+        s3select_res = run_s3select(input_query);
+        EXPECT_EQ(s3select_res, out_timestamp);
+    #endif
 
 }
 
@@ -448,28 +474,58 @@ TEST(TestS3selectFunctions, date_diff)
 TEST(TestS3selectFunctions, date_add)
 {
     std::string input_query = "select date_add(year, 2, to_timestamp(\'2009-09-17T17:56:06.234567Z\')) from stdin;" ;
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        std::string expected_res = "2011-09-17T17:56:06.234567000Z";
+    #else
+        std::string expected_res = "2011-09-17T17:56:06.234567Z";
+    #endif
     auto s3select_res = run_s3select(input_query);
-    EXPECT_EQ(s3select_res, "2011-09-17T17:56:06.234567Z");
+    EXPECT_EQ(s3select_res, expected_res);
 
     input_query = "select date_add(month, -5, to_timestamp(\'2009-09-17T17:56:06.234567Z\')) from stdin;" ;
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        expected_res = "2009-04-17T17:56:06.234567000Z";
+    #else
+        expected_res = "2009-04-17T17:56:06.234567Z";
+    #endif
     s3select_res = run_s3select(input_query);
-    EXPECT_EQ(s3select_res, "2009-04-17T17:56:06.234567Z");
+    EXPECT_EQ(s3select_res, expected_res);
 
-    input_query = "select date_add(day, 3, to_timestamp(\'2009-09-17T17:56:06.234567Z\')) from stdin;" ;
+    input_query = "select date_add(day, 3, to_timestamp(\'2009-09-17T17:56:06.234567-09:15\')) from stdin;" ;
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        expected_res = "2009-09-20T17:56:06.234567000-09:15";
+    #else
+        expected_res = "2009-09-20T17:56:06.234567-09:15";
+    #endif
     s3select_res = run_s3select(input_query);
-    EXPECT_EQ(s3select_res, "2009-09-20T17:56:06.234567Z");
+    EXPECT_EQ(s3select_res, expected_res);
 
     input_query = "select date_add(hour, 1, to_timestamp(\'2007-09-17T17:56:06.234567Z\')) from stdin;" ;
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        expected_res = "2007-09-17T18:56:06.234567000Z";
+    #else
+        expected_res = "2007-09-17T18:56:06.234567Z";
+    #endif
     s3select_res = run_s3select(input_query);
-    EXPECT_EQ(s3select_res, "2007-09-17T18:56:06.234567Z");
+    EXPECT_EQ(s3select_res, expected_res);
 
-    input_query = "select date_add(minute, 14, to_timestamp(\'2007-09-17T17:56:06.234567Z\')) from stdin;" ;
+    input_query = "select date_add(minute, 14, to_timestamp(\'2007-09-17T17:56:06.234567+11:00\')) from stdin;" ;
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        expected_res = "2007-09-17T18:10:06.234567000+11:00";
+    #else
+        expected_res = "2007-09-17T18:10:06.234567+11:00";
+    #endif
     s3select_res = run_s3select(input_query);
-    EXPECT_EQ(s3select_res, "2007-09-17T18:10:06.234567Z");
+    EXPECT_EQ(s3select_res, expected_res);
 
-    input_query = "select date_add(second, -26, to_timestamp(\'2009-09-17T17:56:06.234567Z\')) from stdin;" ;
+    input_query = "select date_add(second, -26, to_timestamp(\'2009-09-17T17:56:06.234567-00:30\')) from stdin;" ;
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        expected_res = "2009-09-17T17:55:40.234567000-00:30";
+    #else
+        expected_res = "2009-09-17T17:55:40.234567-00:30";
+    #endif
     s3select_res = run_s3select(input_query);
-    EXPECT_EQ(s3select_res, "2009-09-17T17:55:40.234567Z");
+    EXPECT_EQ(s3select_res, expected_res);
 }
 
 TEST(TestS3selectFunctions, extract)
@@ -548,6 +604,18 @@ TEST(TestS3selectFunctions, to_string)
     input_query = "select to_string(to_timestamp(\'2009-03-07T01:08:06.234567+12:05\'), \'X XX XXX XXXX XXXXX x xx xxx xxxx xxxxx\') from stdin;" ;
     s3select_res = run_s3select(input_query);
     EXPECT_EQ(s3select_res, "+12 +1205 +12:05 +1205 +12:05 12 1205 +12:05 1205 +12:05");
+
+    input_query = "select to_string(to_timestamp(\'2009-03-07T01:08:06.2345+00:00\'), \'n SSS SSSSSS SSSSSSSSS SSSSSSSSSSS\') from stdin;" ;
+    s3select_res = run_s3select(input_query);
+    EXPECT_EQ(s3select_res, "234500000 234 234500 234500000 23450000000");
+
+    input_query = "select to_string(to_timestamp(\'2009-03-07T01:08:06.002345Z\'), \'n SSS SSSSSS SSSSSSSSS SSSSSSSSSSS\') from stdin;" ;
+    s3select_res = run_s3select(input_query);
+    EXPECT_EQ(s3select_res, "2345000 002 002345 002345000 00234500000");
+
+    input_query = "select to_string(to_timestamp(\'2009-03-07T01:08:06Z\'), \'n SSS SSSSSS SSSSSSSSS SSSSSSSSSSS\') from stdin;" ;
+    s3select_res = run_s3select(input_query);
+    EXPECT_EQ(s3select_res, "0 000 000000 000000000 00000000000");
 }
 
 TEST(TestS3selectFunctions, utcnow)
@@ -2461,7 +2529,11 @@ TEST(TestS3selectFunctions, nested_query_single_row_result)
 {
   std::fstream query_file, result_file, input_csv;
   query_file.open("./test/test_queries_single.txt", std::ios::in);
-  result_file.open("./test/test_key_single.txt", std::ios::in);
+  #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+    result_file.open("./test/test_key_singlerow_nanosec.txt", std::ios::in);
+  #else
+    result_file.open("./test/test_key_singlerow_microsec.txt", std::ios::in);
+  #endif
   ASSERT_EQ(query_file.is_open(), true);
   ASSERT_EQ(result_file.is_open(), true);
 
@@ -2479,11 +2551,15 @@ TEST(TestS3selectFunctions, nested_query_single_row_result)
   result_file.close();
 }
 
-TEST(TestS3selectFunctions, nested_multirow_queries)
+TEST(TestS3selectFunctions, nested_query_multirow_result)
 {
   std::fstream query_file, result_file, input_csv;
   query_file.open("./test/test_queries_multirow.txt", std::ios::in);
-  result_file.open("./test/test_key_multirow.txt", std::ios::in);
+  #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+    result_file.open("./test/test_key_multirow_nanosec.txt", std::ios::in);
+  #else
+    result_file.open("./test/test_key_multirow_microsec.txt", std::ios::in);
+  #endif
   input_csv.open("./test/test_data.csv", std::ios::in);
   ASSERT_EQ(query_file.is_open(), true);
   ASSERT_EQ(result_file.is_open(), true);

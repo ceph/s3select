@@ -2157,6 +2157,11 @@ class derive_frac_sec : public base_time_to_string
     std::string print_time(boost::posix_time::ptime& new_ptime, boost::posix_time::time_duration& td, uint32_t param)
     {
       std::string frac_seconds = std::to_string(new_ptime.time_of_day().fractional_seconds());
+      #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+        frac_seconds = std::string(9 - frac_seconds.length(), '0') + frac_seconds;
+      #else
+        frac_seconds = std::string(6 - frac_seconds.length(), '0') + frac_seconds;
+      #endif
       if (param >= frac_seconds.length())
       {
         return frac_seconds + std::string(param - frac_seconds.length(), '0');
@@ -2173,8 +2178,18 @@ class derive_n : public base_time_to_string
   public:
     std::string print_time(boost::posix_time::ptime& new_ptime, boost::posix_time::time_duration& td, uint32_t param)
     {
-      std::string frac_seconds = std::to_string(new_ptime.time_of_day().fractional_seconds());
-      return frac_seconds + std::string(9 - frac_seconds.length(), '0');
+      int frac_seconds = new_ptime.time_of_day().fractional_seconds();
+
+      if(frac_seconds == 0)
+        return std::to_string(frac_seconds);
+      else
+      {
+        #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+          return std::to_string(frac_seconds);
+        #else
+          return std::to_string(frac_seconds) + std::string(3, '0');
+        #endif
+      }
     }
 } n_to_string;
 

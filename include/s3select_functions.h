@@ -15,6 +15,11 @@ using namespace std::string_literals;
 namespace s3selectEngine
 {
 
+constexpr double sec_scale(int n)
+{
+    return pow(10, n);
+}
+
 struct push_char
 {
   void operator()(const char* a, const char* b, uint32_t* n) const
@@ -24,16 +29,6 @@ struct push_char
 
 };
 static push_char g_push_char;
-
-struct push_1dig
-{
-  void operator()(const char* a, const char* b, uint32_t* n) const
-  {
-    *n = (static_cast<char>(*a) - 48);
-  }
-
-};
-static push_1dig g_push_1dig;
 
 struct push_2dig
 {
@@ -45,16 +40,6 @@ struct push_2dig
 };
 static push_2dig g_push_2dig;
 
-struct push_3dig
-{
-  void operator()(const char* a, const char* b, uint32_t* n) const
-  {
-    *n = (static_cast<char>(*a) - 48) * 100 + (static_cast<char>(*(a+1)) - 48) * 10 + (static_cast<char>(*(a+2)) - 48);
-  }
-
-};
-static push_3dig g_push_3dig;
-
 struct push_4dig
 {
   void operator()(const char* a, const char* b, uint32_t* n) const
@@ -65,25 +50,136 @@ struct push_4dig
 };
 static push_4dig g_push_4dig;
 
-struct push_5dig
+struct push_1fdig
 {
   void operator()(const char* a, const char* b, uint32_t* n) const
   {
-    *n = (static_cast<char>(*a) - 48) * 10000 + (static_cast<char>(*(a+1)) - 48) * 1000 + (static_cast<char>(*(a+2)) - 48) * 100  + (static_cast<char>(*(a+3)) - 48) * 10 + (static_cast<char>(*(a+4)) - 48);
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+      const double scale = sec_scale(9-1);    //nano-sec
+    #else
+      const double scale = sec_scale(6-1);    //micro-sec
+    #endif
+
+    *n = ((static_cast<char>(*a) - 48)) * scale;
   }
 
 };
-static push_5dig g_push_5dig;
+static push_1fdig g_push_1fdig;
 
-struct push_6dig
+struct push_2fdig
 {
   void operator()(const char* a, const char* b, uint32_t* n) const
   {
-    *n = (static_cast<char>(*a) - 48) * 100000 + (static_cast<char>(*(a+1)) - 48) * 10000 + (static_cast<char>(*(a+2)) - 48) * 1000 + (static_cast<char>(*(a+3)) - 48) * 100 + (static_cast<char>(*(a+4)) - 48) * 10 + (static_cast<char>(*(a+5)) - 48);
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+      const double scale = sec_scale(9-2);    //nano-sec
+    #else
+      const double scale = sec_scale(6-2);    //micro-sec
+    #endif
+
+    *n = ((static_cast<char>(*a) - 48) * 10 + (static_cast<char>(*(a+1)) - 48)) * scale;
   }
 
 };
-static push_6dig g_push_6dig;
+static push_2fdig g_push_2fdig;
+
+struct push_3fdig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+      const double scale = sec_scale(9-3);    //nano-sec
+    #else
+      const double scale = sec_scale(6-3);    //micro-sec
+    #endif
+
+    *n = ((static_cast<char>(*a) - 48) * 100 + (static_cast<char>(*(a+1)) - 48) * 10 + (static_cast<char>(*(a+2)) - 48)) * scale;
+  }
+
+};
+static push_3fdig g_push_3fdig;
+
+struct push_4fdig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+      const double scale = sec_scale(9-4);    //nano-sec
+    #else
+      const double scale = sec_scale(6-4);    //micro-sec
+    #endif
+
+    *n = ((static_cast<char>(*a) - 48) * 1000 + (static_cast<char>(*(a+1)) - 48) * 100 + (static_cast<char>(*(a+2)) - 48) * 10 + (static_cast<char>(*(a+3)) - 48)) * scale;
+  }
+
+};
+static push_4fdig g_push_4fdig;
+
+struct push_5fdig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+      const double scale = sec_scale(9-5);    //nano-sec
+    #else
+      const double scale = sec_scale(6-5);    //micro-sec
+    #endif
+
+    *n = ((static_cast<char>(*a) - 48) * 10000 + (static_cast<char>(*(a+1)) - 48) * 1000 + (static_cast<char>(*(a+2)) - 48) * 100  + (static_cast<char>(*(a+3)) - 48) * 10 + (static_cast<char>(*(a+4)) - 48)) * scale;
+  }
+
+};
+static push_5fdig g_push_5fdig;
+
+struct push_6fdig
+{
+  void operator()(const char* a, const char* b, uint32_t* n) const
+  {
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+      const double scale = sec_scale(9-6);    //nano-sec
+    #else
+      const double scale = sec_scale(6-6);    //micro-sec
+    #endif
+
+    *n = ((static_cast<char>(*a) - 48) * 100000 + (static_cast<char>(*(a+1)) - 48) * 10000 + (static_cast<char>(*(a+2)) - 48) * 1000 + (static_cast<char>(*(a+3)) - 48) * 100 + (static_cast<char>(*(a+4)) - 48) * 10 + (static_cast<char>(*(a+5)) - 48)) * scale;
+  }
+
+};
+static push_6fdig g_push_6fdig;
+
+#if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+  struct push_7fdig
+  {
+    void operator()(const char* a, const char* b, uint32_t* n) const
+    {
+      const double scale = sec_scale(9-7);    //nano-sec
+      *n = ((static_cast<char>(*a) - 48) * 1000000 + (static_cast<char>(*(a+1)) - 48) * 100000 + (static_cast<char>(*(a+2)) - 48) * 10000 + (static_cast<char>(*(a+3)) - 48) * 1000 + (static_cast<char>(*(a+4)) - 48) * 100 + (static_cast<char>(*(a+5)) - 48) * 10 + (static_cast<char>(*(a+6)) - 48)) * scale;
+    }
+
+  };
+  static push_7fdig g_push_7fdig;
+
+  struct push_8fdig
+  {
+    void operator()(const char* a, const char* b, uint32_t* n) const
+    {
+      const double scale = sec_scale(9-8);    //nano-sec
+      *n = ((static_cast<char>(*a) - 48) * 10000000 + (static_cast<char>(*(a+1)) - 48) * 1000000 + (static_cast<char>(*(a+2)) - 48) * 100000 + (static_cast<char>(*(a+3)) - 48) * 10000 + (static_cast<char>(*(a+4)) - 48) * 1000 + (static_cast<char>(*(a+5)) - 48) * 100 + (static_cast<char>(*(a+6)) - 48) * 10 + (static_cast<char>(*(a+7)) - 48)) * scale;
+    }
+
+  };
+  static push_8fdig g_push_8fdig;
+
+  struct push_9fdig
+  {
+    void operator()(const char* a, const char* b, uint32_t* n) const
+    {
+      const double scale = sec_scale(9-9);    //nano-sec
+      *n = ((static_cast<char>(*a) - 48) * 100000000 + (static_cast<char>(*(a+1)) - 48) * 10000000 + (static_cast<char>(*(a+2)) - 48) * 1000000 + (static_cast<char>(*(a+3)) - 48) * 100000 + (static_cast<char>(*(a+4)) - 48) * 10000 + (static_cast<char>(*(a+5)) - 48) * 1000 + (static_cast<char>(*(a+6)) - 48) * 100 + (static_cast<char>(*(a+7)) - 48) * 10 + (static_cast<char>(*(a+8)) - 48)) * scale;
+    }
+
+  };
+  static push_9fdig g_push_9fdig;
+#endif
 
 enum class s3select_func_En_t {ADD,
                                SUM,
@@ -673,28 +769,50 @@ struct _fn_to_timestamp : public base_function
   bsc::rule<> timezone_sign = bsc::ch_p("-") | bsc::ch_p("+");
 
   uint32_t yr = 1700, mo = 1, dy = 1;
-  bsc::rule<> dig6 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
-  bsc::rule<> dig5 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
   bsc::rule<> dig4 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
-  bsc::rule<> dig3 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
   bsc::rule<> dig2 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p];
-  bsc::rule<> dig1 = bsc::lexeme_d[bsc::digit_p];
 
   bsc::rule<> d_yyyy_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(delimiter));
   bsc::rule<> d_yyyymmdd_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(date_separator)
                                 >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mo)]) >> *(date_separator)
                                 >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &dy)]) >> *(delimiter));
 
-  uint32_t hr = 0, mn = 0, sc = 0, frac_sec = 0, tz_hr = 0, tz_mn = 0, sign, tm_zone = '0';
+  uint32_t hr = 0, mn = 0, sc = 0,  frac_sec = 0, tz_hr = 0, tz_mn = 0, sign, tm_zone = '0';
+
+  #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+    bsc::rule<> fdig9 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+    bsc::rule<> fdig8 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+    bsc::rule<> fdig7 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+  #endif
+
+  bsc::rule<> fdig6 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+  bsc::rule<> fdig5 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+  bsc::rule<> fdig4 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+  bsc::rule<> fdig3 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+  bsc::rule<> fdig2 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p];
+  bsc::rule<> fdig1 = bsc::lexeme_d[bsc::digit_p];
+
   bsc::rule<> d_timezone_dig =  ((timezone_sign[BOOST_BIND_ACTION_PARAM(push_char, &sign)]) >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &tz_hr)]) >> *(time_separator)
                                 >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &tz_mn)])) | (zero_timezone[BOOST_BIND_ACTION_PARAM(push_char, &tm_zone)]);
 
-  bsc::rule<> fraction_sec = (dig6[BOOST_BIND_ACTION_PARAM(push_6dig, &frac_sec)]) |
-                             (dig5[BOOST_BIND_ACTION_PARAM(push_5dig, &frac_sec)]) |
-			     (dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &frac_sec)]) |
-			     (dig3[BOOST_BIND_ACTION_PARAM(push_3dig, &frac_sec)]) |
-			     (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &frac_sec)]) |
-			     (dig1[BOOST_BIND_ACTION_PARAM(push_1dig, &frac_sec)]);
+  #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+    bsc::rule<> fraction_sec = (fdig9[BOOST_BIND_ACTION_PARAM(push_9fdig, &frac_sec)]) |
+                               (fdig8[BOOST_BIND_ACTION_PARAM(push_8fdig, &frac_sec)]) |
+                               (fdig7[BOOST_BIND_ACTION_PARAM(push_7fdig, &frac_sec)]) |
+                               (fdig6[BOOST_BIND_ACTION_PARAM(push_6fdig, &frac_sec)]) |
+                               (fdig5[BOOST_BIND_ACTION_PARAM(push_5fdig, &frac_sec)]) |
+                               (fdig4[BOOST_BIND_ACTION_PARAM(push_4fdig, &frac_sec)]) |
+                               (fdig3[BOOST_BIND_ACTION_PARAM(push_3fdig, &frac_sec)]) |
+                               (fdig2[BOOST_BIND_ACTION_PARAM(push_2fdig, &frac_sec)]) |
+                               (fdig1[BOOST_BIND_ACTION_PARAM(push_1fdig, &frac_sec)]);
+  #else
+    bsc::rule<> fraction_sec = (fdig6[BOOST_BIND_ACTION_PARAM(push_6fdig, &frac_sec)]) |
+                               (fdig5[BOOST_BIND_ACTION_PARAM(push_5fdig, &frac_sec)]) |
+                               (fdig4[BOOST_BIND_ACTION_PARAM(push_4fdig, &frac_sec)]) |
+                               (fdig3[BOOST_BIND_ACTION_PARAM(push_3fdig, &frac_sec)]) |
+                               (fdig2[BOOST_BIND_ACTION_PARAM(push_2fdig, &frac_sec)]) |
+                               (fdig1[BOOST_BIND_ACTION_PARAM(push_1fdig, &frac_sec)]);
+  #endif
 
   bsc::rule<> d_time_dig = ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(time_separator)
                             >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> *(time_separator)
@@ -820,26 +938,18 @@ struct _fn_to_timestamp : public base_function
 
     boost::posix_time::ptime new_ptime;
 
-    #if NANO_SEC
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
       new_ptime = boost::posix_time::ptime(boost::gregorian::date(yr, mo, dy),
                           boost::posix_time::hours(hr) +
                           boost::posix_time::minutes(mn) +
                           boost::posix_time::seconds(sc) +
-                          boost::posix_time::nanoseconds(frac_sec*1000000000));
+                          boost::posix_time::nanoseconds(frac_sec));
     #else
-      if (frac_sec < 10)
-              frac_sec = frac_sec * 100000;
-      else if (frac_sec >= 10 && frac_sec < 100)
-              frac_sec = frac_sec * 10000;
-      else if (frac_sec >= 100 && frac_sec < 1000)
-              frac_sec = frac_sec * 1000;
-      else if (frac_sec >= 1000 && frac_sec < 10000)
-              frac_sec = frac_sec * 100;
-      else if (frac_sec < 100000)
-              frac_sec = frac_sec * 10;
-
       new_ptime = boost::posix_time::ptime(boost::gregorian::date(yr, mo, dy),
-                          boost::posix_time::time_duration(hr, mn, sc, frac_sec));
+                          boost::posix_time::hours(hr) +
+                          boost::posix_time::minutes(mn) +
+                          boost::posix_time::seconds(sc) +
+                          boost::posix_time::microseconds(frac_sec));
     #endif
 
     tmstmp = std::make_tuple(new_ptime, boost::posix_time::time_duration(tz_hour, tz_min, 0), (char)tm_zone == 'Z');
