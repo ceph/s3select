@@ -685,7 +685,7 @@ struct _fn_to_timestamp : public base_function
                                 >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mo)]) >> *(date_separator)
                                 >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &dy)]) >> *(delimiter));
 
-  uint32_t hr = 0, mn = 0, sc = 0, frac_sec = 0, tz_hr = 0, tz_mn = 0, sign, tm_zone;
+  uint32_t hr = 0, mn = 0, sc = 0, frac_sec = 0, tz_hr = 0, tz_mn = 0, sign, tm_zone = '0';
   bsc::rule<> d_timezone_dig =  ((timezone_sign[BOOST_BIND_ACTION_PARAM(push_char, &sign)]) >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &tz_hr)]) >> *(time_separator)
                                 >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &tz_mn)])) | (zero_timezone[BOOST_BIND_ACTION_PARAM(push_char, &tm_zone)]);
 
@@ -710,7 +710,7 @@ struct _fn_to_timestamp : public base_function
 
   timestamp_t tmstmp;
   value v_str;
-  int tz_hour;
+  int tz_hour, tz_min;
 
   bool datetime_validation()
   {
@@ -784,6 +784,7 @@ struct _fn_to_timestamp : public base_function
     frac_sec = 0;
     tz_hr = 0;
     tz_mn = 0;
+    tm_zone = '0';
 
     auto iter = args->begin();
     int args_size = args->size();
@@ -805,9 +806,11 @@ struct _fn_to_timestamp : public base_function
     bsc::parse_info<> info_dig = bsc::parse(v_str.str(), d_date_time);
 
     tz_hour = tz_hr;
+    tz_min = tz_mn;
     if ((char)sign == '-')
     {
       tz_hour *= -1;
+      tz_min *= -1;
     }
 
     if(datetime_validation()==false or !info_dig.full)
@@ -839,7 +842,7 @@ struct _fn_to_timestamp : public base_function
                           boost::posix_time::time_duration(hr, mn, sc, frac_sec));
     #endif
 
-    tmstmp = std::make_tuple(new_ptime, boost::posix_time::time_duration(tz_hour, tz_mn, 0), (char)tm_zone == 'Z');
+    tmstmp = std::make_tuple(new_ptime, boost::posix_time::time_duration(tz_hour, tz_min, 0), (char)tm_zone == 'Z');
 
     result->set_value(&tmstmp);
 
