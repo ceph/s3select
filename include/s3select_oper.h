@@ -217,6 +217,7 @@ class scratch_area
 private:
   std::vector<std::string_view> m_columns{128};
   int m_upper_bound;
+  char m_column_delimiter;
 
   std::vector<std::pair<std::string, int >> m_column_name_pos;
 
@@ -227,10 +228,11 @@ public:
     m_column_name_pos.push_back( std::pair<const char*, int>(n, pos));
   }
 
-  void update(std::vector<char*>& tokens, size_t num_of_tokens)
+  void update(std::vector<char*>& tokens, size_t num_of_tokens, char& column_delimiter)
   {
     std::copy_n(tokens.begin(), num_of_tokens, m_columns.begin());
     m_upper_bound = num_of_tokens;
+	m_column_delimiter = column_delimiter;
   }
 
   int get_column_pos(const char* n)
@@ -261,6 +263,11 @@ public:
   int get_num_of_columns()
   {
     return m_upper_bound;
+  }
+  
+  char get_column_delimiter()
+  {
+    return m_column_delimiter;
   }
 };
 
@@ -1306,6 +1313,7 @@ public:
     int i;
     size_t pos=0;
     int num_of_columns = m_scratch->get_num_of_columns();
+    char column_delimiter = m_scratch->get_column_delimiter();
     for(i=0; i<num_of_columns-1; i++)
     {
       size_t len = m_scratch->get_column_value(i).size();
@@ -1316,7 +1324,7 @@ public:
 
       memcpy(&m_star_op_result_charc[pos], m_scratch->get_column_value(i).data(), len);
       pos += len;
-      m_star_op_result_charc[ pos ] = ',';//TODO need for another abstraction (per file type)
+      m_star_op_result_charc[ pos ] = column_delimiter;
       pos ++;
 
     }

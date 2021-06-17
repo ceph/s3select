@@ -1816,17 +1816,18 @@ public:
     {
       do
       {
-
         number_of_tokens = getNextRow();
         if (number_of_tokens < 0) //end of stream
         {
           if (m_is_to_aggregate)
-            for (auto& i : m_projections)
+            for (auto iter = m_projections.begin(); iter != m_projections.end(); iter++)
             {
-              i->set_last_call();
-              i->set_skip_non_aggregate(false);//projection column is set to be runnable
-              result.append( i->eval().to_string() );
-              result.append(",");
+              (*iter)->set_last_call();
+              (*iter)->set_skip_non_aggregate(false);//projection column is set to be runnable
+              result.append( (*iter)->eval().to_string() );
+              if ( iter != m_projections.end() - 1 ) {
+                result.append(1u, m_csv_defintion.column_delimiter);
+              }
             }
 
           return number_of_tokens;
@@ -1838,7 +1839,7 @@ public:
           throw base_s3select_exception("on aggregation query , can not stream row data post do-aggregate call", base_s3select_exception::s3select_exp_en_t::FATAL);
         }
 
-        m_sa->update(m_row_tokens, number_of_tokens);
+        m_sa->update(m_row_tokens, number_of_tokens, m_csv_defintion.column_delimiter);
         for (auto& a : *m_s3_select->get_aliases()->get())
         {
           a.second->invalidate_cache_result();
@@ -1865,7 +1866,7 @@ public:
           return number_of_tokens;
         }
 
-        m_sa->update(m_row_tokens, number_of_tokens);
+        m_sa->update(m_row_tokens, number_of_tokens, m_csv_defintion.column_delimiter);
         for (auto& a : *m_s3_select->get_aliases()->get())
         {
           a.second->invalidate_cache_result();
@@ -1874,12 +1875,14 @@ public:
       }
       while (m_where_clause && !m_where_clause->eval().is_true());
 
-      for (auto& i : m_projections)
+      for (auto iter = m_projections.begin(); iter != m_projections.end(); iter++)
       {
-        result.append( i->eval().to_string() );
-        result.append(",");
+        result.append( (*iter)->eval().to_string() );
+        if ( iter != m_projections.end() - 1 ) {
+          result.append(1u, m_csv_defintion.column_delimiter);
+        }
       }
-      result.append("\n");
+      result.append(1u, m_csv_defintion.row_delimiter);
     }
 
     return number_of_tokens; //TODO wrong
