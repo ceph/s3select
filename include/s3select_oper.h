@@ -232,7 +232,7 @@ public:
   {
     std::copy_n(tokens.begin(), num_of_tokens, m_columns.begin());
     m_upper_bound = num_of_tokens;
-	m_column_delimiter = column_delimiter;
+    m_column_delimiter = column_delimiter;
   }
 
   int get_column_pos(const char* n)
