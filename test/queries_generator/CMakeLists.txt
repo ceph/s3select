@@ -1,0 +1,2 @@
+add_executable(queries_generator queries_generator.cpp)
+add_executable(generate_aws_cmds generate_aws_cmds.cpp)
