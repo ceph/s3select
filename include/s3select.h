@@ -13,10 +13,10 @@
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
 #include <functional>
+#include <boost/algorithm/string.hpp>
 
 
 #define _DEBUG_TERM {string  token(a,b);std::cout << __FUNCTION__ << token << std::endl;}
-
 
 namespace s3selectEngine
 {
@@ -576,38 +576,57 @@ public:
     {
       ///// s3select syntax rules and actions for building AST
 
-      select_expr = bsc::str_p("select")  >> projections >> bsc::str_p("from") >> (s3_object)[BOOST_BIND_ACTION(push_from_clause)] >> !where_clause >> ';';
+      //should define globally 
+      auto my_upper = [](const char*c)
+      {
+	  std::string cp;
+	  cp.assign(c);
+
+	  std::string up =  boost::to_upper_copy<std::string>(cp);
+	  return up;
+      };
+
+      //TODO shoud define globaly (use template defintion)
+      //#define ncslit( x ) (bsc::str_p(x)|bsc::str_p(my_upper(x).data()))
+      #define ncslit( x ) (bsc::str_p(x))
+
+      select_expr =  (select_expr_base >> ';') | select_expr_base;
+
+      select_expr_base =  (ncslit("select")|bsc::str_p("SELECT")) >> projections >> (ncslit("from")|bsc::str_p("FROM")) >> (from_expression)[BOOST_BIND_ACTION(push_from_clause)] >> !where_clause ;
 
       projections = projection_expression >> *( ',' >> projection_expression) ;
 
       projection_expression = (when_case_else_projection|when_case_value_when) [BOOST_BIND_ACTION(push_projection)] | 
-                              (arithmetic_expression >> bsc::str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] | 
+                              (arithmetic_expression >> ncslit("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] | 
                               (arithmetic_expression)[BOOST_BIND_ACTION(push_projection)] | 
-			      (arithmetic_predicate >> bsc::str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] |
+			      (arithmetic_predicate >> ncslit("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] |
                               (arithmetic_predicate)[BOOST_BIND_ACTION(push_projection)] ;
 
       alias_name = bsc::lexeme_d[(+bsc::alpha_p >> *bsc::digit_p)] ;
 
-      when_case_else_projection = (bsc::str_p("case")  >> (+when_stmt) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
+      when_case_else_projection = (ncslit("case")  >> (+when_stmt) >> ncslit("else") >> arithmetic_expression >> ncslit("end")) [BOOST_BIND_ACTION(push_case_when_else)];
 
-      when_stmt = (bsc::str_p("when") >> condition_expression >> bsc::str_p("then") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_condition_then)];
+      when_stmt = (ncslit("when") >> condition_expression >> ncslit("then") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_condition_then)];
 
-      when_case_value_when = (bsc::str_p("case") >> arithmetic_expression[BOOST_BIND_ACTION(push_case_value)]  >> 
-                              (+when_value_then) >> bsc::str_p("else") >> arithmetic_expression >> bsc::str_p("end")) [BOOST_BIND_ACTION(push_case_when_else)];
+      when_case_value_when = (ncslit("case") >> arithmetic_expression[BOOST_BIND_ACTION(push_case_value)]  >> 
+                              (+when_value_then) >> ncslit("else") >> arithmetic_expression >> ncslit("end")) [BOOST_BIND_ACTION(push_case_when_else)];
 
-      when_value_then = (bsc::str_p("when") >> arithmetic_expression >> bsc::str_p("then") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_value_then)];
+      when_value_then = (ncslit("when") >> arithmetic_expression >> ncslit("then") >> arithmetic_expression)[BOOST_BIND_ACTION(push_when_value_then)];
 
-      s3_object = bsc::str_p("stdin") | bsc::str_p("s3object")  | object_path ;
+      from_expression = (s3_object >> (variable - (ncslit("where")|bsc::str_p("WHERE")) )) | s3_object;
+
+      //the stdin and object_path are for debug purposes(not part of the specs)
+      s3_object = ncslit("stdin") | ncslit("s3object") | bsc::str_p("S3Object") | object_path ;
 
       object_path = "/" >> *( fs_type >> "/") >> fs_type;
 
       fs_type = bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p(".")  | bsc::str_p("_")) ];
 
-      where_clause = bsc::str_p("where") >> condition_expression;
+      where_clause = (bsc::str_p("WHERE")|bsc::str_p("where")) >> condition_expression;
 
       condition_expression = arithmetic_predicate;
 
-      arithmetic_predicate = (bsc::str_p("not") >> logical_predicate)[BOOST_BIND_ACTION(push_negation)] | logical_predicate;
+      arithmetic_predicate = (ncslit("not") >> logical_predicate)[BOOST_BIND_ACTION(push_negation)] | logical_predicate;
 
       logical_predicate =  (logical_and) >> *(or_op[BOOST_BIND_ACTION(push_logical_operator)] >> (logical_and)[BOOST_BIND_ACTION(push_logical_predicate)]);
 
@@ -617,19 +636,19 @@ public:
 
       special_predicates = (is_null) | (is_not_null) | (between_predicate) | (in_predicate) | (like_predicate);
 
-      is_null = ((factor) >> bsc::str_p("is") >> bsc::str_p("null"))[BOOST_BIND_ACTION(push_is_null_predicate)];
+      is_null = ((factor) >> ncslit("is") >> ncslit("null"))[BOOST_BIND_ACTION(push_is_null_predicate)];
 
-      is_not_null = ((factor) >> bsc::str_p("is") >> bsc::str_p("not") >> bsc::str_p("null"))[BOOST_BIND_ACTION(push_is_null_predicate)];
+      is_not_null = ((factor) >> ncslit("is") >> ncslit("not") >> ncslit("null"))[BOOST_BIND_ACTION(push_is_null_predicate)];
 
-      between_predicate = (arithmetic_expression >> bsc::str_p("between") >> arithmetic_expression >> bsc::str_p("and") >> arithmetic_expression)[BOOST_BIND_ACTION(push_between_filter)];
+      between_predicate = (arithmetic_expression >> ncslit("between") >> arithmetic_expression >> ncslit("and") >> arithmetic_expression)[BOOST_BIND_ACTION(push_between_filter)];
 
-      in_predicate = (arithmetic_expression >> bsc::str_p("in") >> '(' >> arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_first_arg)] >> *(',' >> arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_arguments)]) >> ')')[BOOST_BIND_ACTION(push_in_predicate)];
+      in_predicate = (arithmetic_expression >> ncslit("in") >> '(' >> arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_first_arg)] >> *(',' >> arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_arguments)]) >> ')')[BOOST_BIND_ACTION(push_in_predicate)];
       
       like_predicate = (like_predicate_escape) |(like_predicate_no_escape);
 
-      like_predicate_no_escape = (arithmetic_expression >> bsc::str_p("like") >> arithmetic_expression)[BOOST_BIND_ACTION(push_like_predicate_no_escape)];
+      like_predicate_no_escape = (arithmetic_expression >> ncslit("like") >> arithmetic_expression)[BOOST_BIND_ACTION(push_like_predicate_no_escape)];
 
-      like_predicate_escape = (arithmetic_expression >> bsc::str_p("like") >> arithmetic_expression >> bsc::str_p("escape") >> arithmetic_expression)[BOOST_BIND_ACTION(push_like_predicate_escape)];
+      like_predicate_escape = (arithmetic_expression >> ncslit("like") >> arithmetic_expression >> ncslit("escape") >> arithmetic_expression)[BOOST_BIND_ACTION(push_like_predicate_escape)];
 
       factor = arithmetic_expression  | ( '(' >> arithmetic_predicate >> ')' ) ; 
 
@@ -648,41 +667,41 @@ public:
                             (cast) | (substr) | (trim) |
                             (function) | (variable)[BOOST_BIND_ACTION(push_variable)]; //function is pushed by right-term
 
-      cast = (bsc::str_p("cast") >> '(' >> arithmetic_expression >> bsc::str_p("as") >> (data_type)[BOOST_BIND_ACTION(push_data_type)] >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
+      cast = (ncslit("cast") >> '(' >> arithmetic_expression >> ncslit("as") >> (data_type)[BOOST_BIND_ACTION(push_data_type)] >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
 
-      data_type = (bsc::str_p("int") | bsc::str_p("float") | bsc::str_p("string") |  bsc::str_p("timestamp") | bsc::str_p("bool") );
+      data_type = (ncslit("int") | ncslit("float") | ncslit("string") |  ncslit("timestamp") | ncslit("bool") );
      
       substr = (substr_from) | (substr_from_for);
       
-      substr_from = (bsc::str_p("substring") >> '(' >> (arithmetic_expression >> bsc::str_p("from") >> arithmetic_expression) >> ')') [BOOST_BIND_ACTION(push_substr_from)];
+      substr_from = (ncslit("substring") >> '(' >> (arithmetic_expression >> ncslit("from") >> arithmetic_expression) >> ')') [BOOST_BIND_ACTION(push_substr_from)];
 
-      substr_from_for = (bsc::str_p("substring") >> '(' >> (arithmetic_expression >> bsc::str_p("from") >> arithmetic_expression >> bsc::str_p("for") >> arithmetic_expression) >> ')') [BOOST_BIND_ACTION(push_substr_from_for)];
+      substr_from_for = (ncslit("substring") >> '(' >> (arithmetic_expression >> ncslit("from") >> arithmetic_expression >> ncslit("for") >> arithmetic_expression) >> ')') [BOOST_BIND_ACTION(push_substr_from_for)];
       
       trim = (trim_whitespace_both) | (trim_one_side_whitespace) | (trim_anychar_anyside);
 
-      trim_one_side_whitespace = (bsc::str_p("trim") >> '(' >> (trim_type)[BOOST_BIND_ACTION(push_trim_type)] >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_trim_expr_one_side_whitespace)];
+      trim_one_side_whitespace = (ncslit("trim") >> '(' >> (trim_type)[BOOST_BIND_ACTION(push_trim_type)] >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_trim_expr_one_side_whitespace)];
 
-      trim_whitespace_both = (bsc::str_p("trim") >> '(' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_trim_whitespace_both)];
+      trim_whitespace_both = (ncslit("trim") >> '(' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_trim_whitespace_both)];
 
-      trim_anychar_anyside = (bsc::str_p("trim") >> '(' >> ((trim_remove_type)[BOOST_BIND_ACTION(push_trim_type)] >> arithmetic_expression >> bsc::str_p("from") >> arithmetic_expression)  >> ')') [BOOST_BIND_ACTION(push_trim_expr_anychar_anyside)];
+      trim_anychar_anyside = (ncslit("trim") >> '(' >> ((trim_remove_type)[BOOST_BIND_ACTION(push_trim_type)] >> arithmetic_expression >> ncslit("from") >> arithmetic_expression)  >> ')') [BOOST_BIND_ACTION(push_trim_expr_anychar_anyside)];
       
-      trim_type = ((bsc::str_p("leading") >> bsc::str_p("from")) | ( bsc::str_p("trailing") >> bsc::str_p("from")) | (bsc::str_p("both") >> bsc::str_p("from")) | bsc::str_p("from") ); 
+      trim_type = ((ncslit("leading") >> ncslit("from")) | ( ncslit("trailing") >> ncslit("from")) | (ncslit("both") >> ncslit("from")) | ncslit("from") ); 
 
-      trim_remove_type = (bsc::str_p("leading") | bsc::str_p("trailing") | bsc::str_p("both") );
+      trim_remove_type = (ncslit("leading") | ncslit("trailing") | ncslit("both") );
 
-      datediff = (bsc::str_p("date_diff") >> '(' >> date_part >> ',' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_datediff)];
+      datediff = (ncslit("date_diff") >> '(' >> date_part >> ',' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_datediff)];
 
-      dateadd = (bsc::str_p("date_add") >> '(' >> date_part >> ',' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_dateadd)];
+      dateadd = (ncslit("date_add") >> '(' >> date_part >> ',' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_dateadd)];
 
-      extract = (bsc::str_p("extract") >> '(' >> (date_part_extract)[BOOST_BIND_ACTION(push_date_part)] >> bsc::str_p("from") >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_extract)];
+      extract = (ncslit("extract") >> '(' >> (date_part_extract)[BOOST_BIND_ACTION(push_date_part)] >> ncslit("from") >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_extract)];
 
-      date_part = (bsc::str_p("year") | bsc::str_p("month") | bsc::str_p("day") | bsc::str_p("hour")  | bsc::str_p("minute") | bsc::str_p("second")) [BOOST_BIND_ACTION(push_date_part)];
+      date_part = (ncslit("year") | ncslit("month") | ncslit("day") | ncslit("hour")  | ncslit("minute") | ncslit("second")) [BOOST_BIND_ACTION(push_date_part)];
 
-      date_part_extract = ((date_part) |  bsc::str_p("week") | bsc::str_p("timezone_hour") | bsc::str_p("timezone_minute"));
+      date_part_extract = ((date_part) |  ncslit("week") | ncslit("timezone_hour") | ncslit("timezone_minute"));
 
-      time_to_string_constant = (bsc::str_p("to_string") >> '(' >> arithmetic_expression >> ',' >> (string)[BOOST_BIND_ACTION(push_string)] >> ')') [BOOST_BIND_ACTION(push_time_to_string_constant)];
+      time_to_string_constant = (ncslit("to_string") >> '(' >> arithmetic_expression >> ',' >> (string)[BOOST_BIND_ACTION(push_string)] >> ')') [BOOST_BIND_ACTION(push_time_to_string_constant)];
 
-      time_to_string_dynamic = (bsc::str_p("to_string") >> '(' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_time_to_string_dynamic)];
+      time_to_string_dynamic = (ncslit("to_string") >> '(' >> arithmetic_expression >> ',' >> arithmetic_expression >> ')') [BOOST_BIND_ACTION(push_time_to_string_dynamic)];
 
       number = bsc::int_p;
 
@@ -690,7 +709,9 @@ public:
 
       string = (bsc::str_p("\"") >> *( bsc::anychar_p - bsc::str_p("\"") ) >> bsc::str_p("\"")) | (bsc::str_p("\'") >> *( bsc::anychar_p - bsc::str_p("\'") ) >> bsc::str_p("\'")) ;
 
-      column_pos = ('_'>>+(bsc::digit_p) ) | '*' ;
+      column_pos = (variable_name >> "." >> column_pos_name) | column_pos_name; //TODO what about space
+
+      column_pos_name = ('_'>>+(bsc::digit_p) ) | '*' ;
 
       muldiv_operator = bsc::str_p("*") | bsc::str_p("/") | bsc::str_p("^") | bsc::str_p("%");// got precedense
 
@@ -698,27 +719,29 @@ public:
 
       arith_cmp = bsc::str_p(">=") | bsc::str_p("<=") | bsc::str_p("=") | bsc::str_p("<") | bsc::str_p(">") | bsc::str_p("!=");
 
-      and_op =  bsc::str_p("and");
+      and_op =  ncslit("and");
 
-      or_op =  bsc::str_p("or");
+      or_op =  ncslit("or");
 
-      variable =  bsc::lexeme_d[(+bsc::alpha_p >> *( bsc::alpha_p | bsc::digit_p | '_') ) -  bsc::str_p("not")] ;
+      variable_name =  bsc::lexeme_d[(+bsc::alpha_p >> *( bsc::alpha_p | bsc::digit_p | '_') ) -  ncslit("not")];
+
+      variable = (variable_name >> "." >> variable_name) | variable_name;
     }
 
 
-    bsc::rule<ScannerT> cast, data_type, variable,  select_expr, s3_object, where_clause, number, float_number, string;
+    bsc::rule<ScannerT> cast, data_type, variable,  variable_name, select_expr, select_expr_base, s3_object, where_clause, number, float_number, string, from_expression;
     bsc::rule<ScannerT> cmp_operand, arith_cmp, condition_expression, arithmetic_predicate, logical_predicate, factor; 
     bsc::rule<ScannerT> trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside, trim_type, trim_remove_type, substr, substr_from, substr_from_for;
     bsc::rule<ScannerT> datediff, dateadd, extract, date_part, date_part_extract, time_to_string_constant, time_to_string_dynamic;
     bsc::rule<ScannerT> special_predicates, between_predicate, in_predicate, like_predicate, like_predicate_escape, like_predicate_no_escape, is_null, is_not_null;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
-    bsc::rule<ScannerT> projections, projection_expression, alias_name, column_pos;
+    bsc::rule<ScannerT> projections, projection_expression, alias_name, column_pos,column_pos_name;
     bsc::rule<ScannerT> when_case_else_projection, when_case_value_when, when_stmt, when_value_then;
     bsc::rule<ScannerT> logical_and,and_op,or_op;
     bsc::rule<ScannerT> const& start() const
     {
-      return select_expr;
+      return  select_expr ;
     }
   };
 };
@@ -735,9 +758,21 @@ void base_ast_builder::operator()(s3select *self, const char *a, const char *b) 
 
 void push_from_clause::builder(s3select* self, const char* a, const char* b) const
 {
-  std::string token(a, b);
+  std::string token(a, b),table_name,alias_name;
 
-  self->getAction()->from_clause = token;
+  //should search for generic space
+  if(token.find(' ') != std::string::npos)
+  {
+    size_t pos = token.find(' '); 
+    table_name = token.substr(0,pos);
+    
+    pos = token.rfind(' ');
+    alias_name = token.substr(pos+1,token.size());
+
+    token = table_name;
+  }
+
+  self->getAction()->from_clause = token; //TODO add table alias 
 
   self->getAction()->exprQ.clear();
 
@@ -818,6 +853,12 @@ void push_variable::builder(s3select* self, const char* a, const char* b) const
   }
   else
   {
+    size_t pos = token.find('.');
+    if(pos != std::string::npos)
+    {
+      pos ++;
+      token = token.substr(pos,token.size());
+    }
     v = S3SELECT_NEW(self, variable, token);
   }
   
@@ -1091,6 +1132,12 @@ void push_column_pos::builder(s3select* self, const char* a, const char* b) cons
   }
   else
   {
+    size_t pos = token.find('.');
+    if(pos != std::string::npos)
+    {
+      pos ++;
+      token = token.substr(pos,token.size());
+    }
     v = S3SELECT_NEW(self, variable, token, variable::var_t::POS);
   }
 
