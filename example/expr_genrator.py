@@ -6,4 +6,4 @@ def expr(depth):
         return str(int(random.random() * 100) + 1)+".0"
     return '(' + expr(depth-1) + random.choice(['+','-','*','/']) + expr(depth-1) + ')'
 
-print expr( int(sys.argv[1]) )
+print (expr( int(sys.argv[1]) ))

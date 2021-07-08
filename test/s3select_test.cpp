@@ -9,6 +9,261 @@
 
 using namespace s3selectEngine;
 
+// parquet conversion 
+// ============================================================ //
+#include <cassert>
+#include <fstream>
+#include <iostream>
+#include <memory>
+
+#include <arrow/io/file.h>
+#include <arrow/util/logging.h>
+
+#include <parquet/api/reader.h>
+#include <parquet/api/writer.h>
+
+using parquet::ConvertedType;
+using parquet::Repetition;
+using parquet::Type;
+using parquet::schema::GroupNode;
+using parquet::schema::PrimitiveNode;
+
+
+constexpr int NUM_ROWS = 100000;
+constexpr int64_t ROW_GROUP_SIZE = 1024 * 1024;  
+const char PARQUET_FILENAME[] = "/tmp/csv_converted.parquet"; 
+
+class tokenize {
+
+  public:
+  const char *s;
+  std::string input;
+  const char *p;
+  bool last_token;
+
+  tokenize(std::string& in):s(0),input(in),p(input.c_str()),last_token(false)
+  {
+  };
+
+  void get_token(std::string& token)
+  {
+     if(!*p)
+     {
+      token = "";
+      last_token = true;
+      return;
+     }
+
+     s=p;
+     while(*p && *p != ',' && *p != '\n') p++;
+
+     token = std::string(s,p);
+     p++;
+  }
+
+  bool is_last()
+  {
+    return last_token == true;
+  }
+};
+
+static std::shared_ptr<GroupNode> column_string_2(uint32_t num_of_columns) {
+
+    parquet::schema::NodeVector fields;
+
+    for(uint32_t i=0;i<num_of_columns;i++)
+    {
+      std::string column_name = "column_" + std::to_string(i) ;
+      fields.push_back(PrimitiveNode::Make(column_name, Repetition::OPTIONAL,  Type::BYTE_ARRAY,
+	  ConvertedType::NONE));
+    }
+
+  return std::static_pointer_cast<GroupNode>(
+      GroupNode::Make("schema", Repetition::REQUIRED, fields));
+}
+
+int csv_to_parquet(std::string & csv_object)
+{
+
+  auto csv_num_of_columns = std::count( csv_object.begin(),csv_object.begin() + csv_object.find('\n'),',')+1;
+  auto csv_num_of_rows = std::count(csv_object.begin(),csv_object.end(),'\n');
+
+  tokenize csv_tokens(csv_object);
+
+  try {
+    // Create a local file output stream instance.
+
+    using FileClass = ::arrow::io::FileOutputStream;
+    std::shared_ptr<FileClass> out_file;
+    PARQUET_ASSIGN_OR_THROW(out_file, FileClass::Open(PARQUET_FILENAME));
+
+    // Setup the parquet schema
+    std::shared_ptr<GroupNode> schema = column_string_2(csv_num_of_columns); 
+
+    // Add writer properties
+    parquet::WriterProperties::Builder builder;
+    // builder.compression(parquet::Compression::SNAPPY);
+    std::shared_ptr<parquet::WriterProperties> props = builder.build();
+
+    // Create a ParquetFileWriter instance
+    std::shared_ptr<parquet::ParquetFileWriter> file_writer =
+      parquet::ParquetFileWriter::Open(out_file, schema, props);
+
+    // Append a BufferedRowGroup to keep the RowGroup open until a certain size
+    parquet::RowGroupWriter* rg_writer = file_writer->AppendBufferedRowGroup();
+
+    int num_columns = file_writer->num_columns();
+    std::vector<int64_t> buffered_values_estimate(num_columns, 0);
+
+    for (int i = 0; !csv_tokens.is_last() && i<csv_num_of_rows; i++) { 
+      int64_t estimated_bytes = 0;
+      // Get the estimated size of the values that are not written to a page yet
+      for (int n = 0; n < num_columns; n++) {
+	estimated_bytes += buffered_values_estimate[n];
+      }
+
+      // We need to consider the compressed pages
+      // as well as the values that are not compressed yet
+      if ((rg_writer->total_bytes_written() + rg_writer->total_compressed_bytes() +
+	    estimated_bytes) > ROW_GROUP_SIZE) {
+	rg_writer->Close();
+	std::fill(buffered_values_estimate.begin(), buffered_values_estimate.end(), 0);
+	rg_writer = file_writer->AppendBufferedRowGroup();
+      }
+
+
+      int col_id;
+      for(col_id=0;col_id<num_columns && !csv_tokens.is_last();col_id++)
+      {
+	// Write the byte-array column
+	parquet::ByteArrayWriter* ba_writer =
+	  static_cast<parquet::ByteArrayWriter*>(rg_writer->column(col_id));
+	parquet::ByteArray ba_value;
+
+	std::string token;
+	csv_tokens.get_token(token);
+	if(token.size() == 0)
+	{//null column
+	  int16_t definition_level = 0;
+	  ba_writer->WriteBatch(1, &definition_level, nullptr, nullptr);
+	}
+	else
+	{
+	  int16_t definition_level = 1;
+	  ba_value.ptr = (uint8_t*)(token.data());
+	  ba_value.len = token.size();
+	  ba_writer->WriteBatch(1, &definition_level, nullptr, &ba_value);
+	}
+
+	buffered_values_estimate[col_id] = ba_writer->EstimatedBufferedValueBytes();
+
+
+      } //end-for columns
+
+      if(csv_tokens.is_last() && col_id<num_columns)
+      {
+	for(;col_id<num_columns;col_id++)
+	{
+	  parquet::ByteArrayWriter* ba_writer =
+	    static_cast<parquet::ByteArrayWriter*>(rg_writer->column(col_id));
+	  
+	  int16_t definition_level = 0;
+	  ba_writer->WriteBatch(1, &definition_level, nullptr, nullptr);
+
+	  buffered_values_estimate[col_id] = ba_writer->EstimatedBufferedValueBytes();
+	}
+
+      }
+
+    }  // end-for rows
+
+    // Close the RowGroupWriter
+    rg_writer->Close();
+    // Close the ParquetFileWriter
+    file_writer->Close();
+
+    // Write the bytes to file
+    DCHECK(out_file->Close().ok());
+
+  } catch (const std::exception& e) {
+    std::cerr << "Parquet write error: " << e.what() << std::endl;
+    return -1;
+  }
+
+  return 0;
+}
+
+int run_query_on_parquet_file(const char* input_query, const char* input_file, std::string &result)
+{
+  int status;
+  s3select s3select_syntax;
+  result.clear();
+
+  status = s3select_syntax.parse_query(input_query);
+  if (status != 0)
+  {
+    std::cout << "failed to parse query " << s3select_syntax.get_error_description() << std::endl;
+    return -1;
+  }
+
+  FILE *fp;
+
+  fp=fopen(input_file,"r");
+
+  if(!fp){
+    std::cout << "can not open " << input_file << std::endl;
+    return -1;
+  }
+
+  std::function<int(void)> fp_get_size=[&]()
+  {
+    struct stat l_buf;
+    lstat(input_file,&l_buf);
+    return l_buf.st_size;
+  };
+
+  std::function<size_t(int64_t,int64_t,void*,optional_yield*)> fp_range_req=[&](int64_t start,int64_t length,void *buff,optional_yield*y)
+  {
+    fseek(fp,start,SEEK_SET);
+    fread(buff, length, 1, fp);
+    return length;
+  };
+
+  rgw_s3select_api rgw;
+  rgw.set_get_size_api(fp_get_size);
+  rgw.set_range_req_api(fp_range_req);
+  
+  std::function<int(std::string&)> fp_s3select_result_format = [](std::string& result){return 0;};//append 
+  std::function<int(std::string&)> fp_s3select_header_format = [](std::string& result){return 0;};//append 
+
+  parquet_object parquet_processor(input_file,&s3select_syntax,&rgw);
+
+  //std::string result;
+
+  do
+  {
+    try
+    {
+      status = parquet_processor.run_s3select_on_object(result,fp_s3select_result_format,fp_s3select_header_format);
+    }
+    catch (base_s3select_exception &e)
+    {
+      if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL) //abort query execution
+      {
+        return -1;
+      }
+    }
+
+    if (status < 0)
+      break;
+
+  } while (0);
+
+  return 0;
+}// ============================================================ //
+
+
+
 std::string run_expression_in_C_prog(const char* expression)
 {
 //purpose: per use-case a c-file is generated, compiles , and finally executed.
@@ -125,6 +380,11 @@ public:
 
 const std::string failure_sign("#failure#");
 
+void parquet_csv_report_error(std::string a, std::string b)
+{
+  ASSERT_EQ(a,b);
+}
+
 std::string run_s3select(std::string expression)
 {//purpose: run query on single row and return result(single projections).
   s3select s3select_syntax;
@@ -137,10 +397,18 @@ std::string run_s3select(std::string expression)
   std::string s3select_result;
   s3selectEngine::csv_object  s3_csv_object(&s3select_syntax);
   std::string in = "1,1,1,1\n";
+  std::string csv_obj = in;
+  std::string parquet_result;
 
   s3_csv_object.run_s3select_on_object(s3select_result, in.c_str(), in.size(), false, false, true);
 
   s3select_result = s3select_result.substr(0, s3select_result.find_first_of(","));
+
+  csv_to_parquet(csv_obj);
+  run_query_on_parquet_file(expression.c_str(),PARQUET_FILENAME,parquet_result);
+  parquet_result = parquet_result.substr(0, parquet_result.find_first_of(","));
+
+  parquet_csv_report_error(parquet_result,s3select_result);
 
   return s3select_result;
 }
@@ -148,6 +416,7 @@ std::string run_s3select(std::string expression)
 std::string run_s3select(std::string expression,std::string input)
 {//purpose: run query on multiple rows and return result(multiple projections).
   s3select s3select_syntax;
+  std::string parquet_input = input;
 
   int status = s3select_syntax.parse_query(expression.c_str());
 
@@ -158,6 +427,12 @@ std::string run_s3select(std::string expression,std::string input)
   s3selectEngine::csv_object  s3_csv_object(&s3select_syntax);
 
   s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), false, false, true);
+
+  csv_to_parquet(parquet_input);
+  std::string parquet_result;
+  run_query_on_parquet_file(expression.c_str(),PARQUET_FILENAME,parquet_result);
+ 
+  parquet_csv_report_error(parquet_result,s3select_result);
 
   return s3select_result;
 }
@@ -284,18 +559,19 @@ TEST(TestS3SElect, floatnan_compare_operator)
 
 TEST(TestS3SElect, null_arithmetic_operator)
 {
+  const char *cnull = "null";
   value a(7), d, e(0);
   d.setnull();
-  ASSERT_EQ((a + d).to_string(), "null" );
-  ASSERT_EQ((a - d).to_string(), "null" );
-  ASSERT_EQ((a * d).to_string(), "null" );
-  ASSERT_EQ((a / d).to_string(), "null" ); 
-  ASSERT_EQ((a / e).to_string(), "null" ); 
-  ASSERT_EQ((d + a).to_string(), "null" );
-  ASSERT_EQ((d - a).to_string(), "null" );
-  ASSERT_EQ((d * a).to_string(), "null" );
-  ASSERT_EQ((d / a).to_string(), "null" ); 
-  ASSERT_EQ((e / a).to_string(), "null" );
+
+  ASSERT_EQ(*(a - d).to_string(), *cnull );
+  ASSERT_EQ(*(a * d).to_string(), *cnull );
+  ASSERT_EQ(*(a / d).to_string(), *cnull ); 
+  ASSERT_EQ(*(a / e).to_string(), *cnull ); 
+  ASSERT_EQ(*(d + a).to_string(), *cnull );
+  ASSERT_EQ(*(d - a).to_string(), *cnull );
+  ASSERT_EQ(*(d * a).to_string(), *cnull );
+  ASSERT_EQ(*(d / a).to_string(), *cnull ); 
+  ASSERT_EQ(*(e / a).to_string(), *cnull );
 }
 
 TEST(TestS3SElect, nan_arithmetic_operator)
@@ -884,6 +1160,11 @@ void test_single_column_single_row(const char* input_query,const char* expected_
     std::string input;
     size_t size = 1;
     generate_csv(input, size);
+
+    csv_to_parquet(input);
+    std::string parquet_result;
+    run_query_on_parquet_file(input_query,PARQUET_FILENAME,parquet_result);
+    
     status = s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(),
         false, // dont skip first line
         false, // dont skip last line
@@ -901,6 +1182,7 @@ void test_single_column_single_row(const char* input_query,const char* expected_
     }
 
     ASSERT_EQ(status, 0);
+    parquet_csv_report_error(parquet_result,s3select_result);
     ASSERT_EQ(s3select_result, std::string(expected_result));
 }
 
@@ -1467,7 +1749,7 @@ TEST(TestS3selectFunctions, test_date_time_expressions)
   std::string input_query_11 = "select * from stdin where extract(month from to_timestamp(_1)) = 5 or extract(month from to_timestamp(_1)) = 6;";
   std::string s3select_result_11 = run_s3select(input_query_11,input);
   ASSERT_NE(s3select_result_11, failure_sign);
-  std::string input_query_12 = "select * from stdin where to_string(to_timestamp(_1), 'MMMM') in ('May', 'June');";
+  std::string input_query_12 = "select _1 from stdin where to_string(to_timestamp(_1), 'MMMM') in ('May', 'June');";
   std::string s3select_result_12 = run_s3select(input_query_12,input);
   ASSERT_NE(s3select_result_12, failure_sign);
   EXPECT_EQ(s3select_result_11, s3select_result_12);

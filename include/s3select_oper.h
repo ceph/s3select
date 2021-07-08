@@ -13,6 +13,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/bind.hpp>
+#include "s3select_parquet_intrf.h" //NOTE: should include first (c++11 std::string_view)
+
 namespace bsc = BOOST_SPIRIT_CLASSIC_NS;
 
 namespace s3selectEngine
@@ -155,7 +157,7 @@ private:
   std::vector<char*> list_of_buff;
   u_int32_t m_idx;
 
-#define __S3_ALLOCATION_BUFF__ (8*1024)
+#define __S3_ALLOCATION_BUFF__ (16*1024)
   void check_capacity(size_t sz)
   {
     if (sz>__S3_ALLOCATION_BUFF__)
@@ -210,59 +212,6 @@ public:
             auto res=new (self->getAllocator()->alloc(sizeof(type))) type(__VA_ARGS__); \
             return res; \
         }();
-
-class scratch_area
-{
-
-private:
-  std::vector<std::string_view> m_columns{128};
-  int m_upper_bound;
-
-  std::vector<std::pair<std::string, int >> m_column_name_pos;
-
-public:
-
-  void set_column_pos(const char* n, int pos)//TODO use std::string
-  {
-    m_column_name_pos.push_back( std::pair<const char*, int>(n, pos));
-  }
-
-  void update(std::vector<char*>& tokens, size_t num_of_tokens)
-  {
-    std::copy_n(tokens.begin(), num_of_tokens, m_columns.begin());
-    m_upper_bound = num_of_tokens;
-  }
-
-  int get_column_pos(const char* n)
-  {
-    //done only upon building the AST, not on "runtime"
-
-    for( auto iter : m_column_name_pos)
-    {
-      if (!strcmp(iter.first.c_str(), n))
-      {
-        return iter.second;
-      }
-    }
-
-    return -1;
-  }
-
-  std::string_view get_column_value(int column_pos)
-  {
-    if ((column_pos >= m_upper_bound) || column_pos < 0)
-    {
-      throw base_s3select_exception("column_position_is_wrong", base_s3select_exception::s3select_exp_en_t::ERROR);
-    }
-
-    return m_columns[column_pos];
-  }
-
-  int get_num_of_columns()
-  {
-    return m_upper_bound;
-  }
-};
 
 class s3select_reserved_word
 {
@@ -430,9 +379,9 @@ public:
 private:
   value_t __val;
   //std::string m_to_string;
-  std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,256>> m_to_string;
+  std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,512>> m_to_string;
   //std::string m_str_value;
-  std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,256>> m_str_value;
+  std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,512>> m_str_value;
 
 public:
   enum class value_En_t
@@ -545,7 +494,7 @@ public:
     type = value_En_t::S3NULL;
   }
 
-  std::string to_string()  //TODO very intensive , must improve this
+  const char* to_string()  //TODO very intensive , must improve this
   {
 
     if (type != value_En_t::STRING)
@@ -606,7 +555,7 @@ public:
       m_to_string.assign( __val.str );
     }
 
-    return std::string( m_to_string.c_str() );
+    return  m_to_string.c_str();
   }
 
 
@@ -977,6 +926,170 @@ public:
   }
 };
 
+class scratch_area
+{
+
+private:
+  std::vector<std::string_view> m_columns{128};//TODO not correct
+  std::vector<value> *m_schema_values; //values got a type
+  int m_upper_bound;
+
+  std::vector<std::pair<std::string, int >> m_column_name_pos;
+  bool parquet_type;
+  char str_buff[4096];
+  uint16_t buff_loc;
+public:
+
+  scratch_area():m_upper_bound(-1),parquet_type(false),buff_loc(0)
+  {
+    //TODO its a leak, to use s3select_new 
+    m_schema_values = new std::vector<value>(128,value(""));
+  }
+
+  void set_column_pos(const char* n, int pos)//TODO use std::string
+  {
+    m_column_name_pos.push_back( std::pair<const char*, int>(n, pos));
+  }
+
+  void update(std::vector<char*>& tokens, size_t num_of_tokens)
+  {
+    size_t i=0;
+    for(auto s : tokens)
+    {
+      if (i>=num_of_tokens)
+      {
+        break;
+      }
+
+      m_columns[i++] = s;//TODO no need for copy, could use reference to tokens
+    }
+    m_upper_bound = i;
+
+  }
+
+  int get_column_pos(const char* n)
+  {
+    //done only upon building the AST, not on "runtime"
+
+    for( auto iter : m_column_name_pos)
+    {
+      if (!strcmp(iter.first.c_str(), n))
+      {
+        return iter.second;
+      }
+    }
+
+    return -1;
+  }
+
+  void set_parquet_type()
+  {
+    parquet_type = true;
+  }
+
+  void get_column_value(uint16_t column_pos, value &v)
+  {
+
+    if (parquet_type == false)
+    {
+      if (column_pos >= m_upper_bound) //|| column_pos < 0)
+      {
+        throw base_s3select_exception("column_position_is_wrong", base_s3select_exception::s3select_exp_en_t::ERROR);
+      }
+      
+      v = m_columns[ column_pos ].data();
+    }
+    else
+    {
+      v = (*m_schema_values)[ column_pos ];
+    }
+    
+  }
+
+
+  std::string_view get_column_value(int column_pos)//TODO reuse it
+  {
+    if ((column_pos >= m_upper_bound) || column_pos < 0)
+    {
+      throw base_s3select_exception("column_position_is_wrong", base_s3select_exception::s3select_exp_en_t::ERROR);
+    }
+
+     if (parquet_type == false)
+     {
+      return m_columns[column_pos];
+     }
+     else
+     {
+       return  (*m_schema_values)[ column_pos ].to_string();
+     }
+  }
+
+
+  int get_num_of_columns()
+  {
+    return m_upper_bound;
+  }
+
+  void init_string_buff() //TODO temporary
+  {
+    buff_loc=0;
+  }
+
+  int update(std::vector<parquet_file_parser::parquet_value_t> &parquet_row_value, parquet_file_parser::column_pos_t &column_positions)
+  {
+    //TODO no need for copy , possible to save referece (its save last row for calculation)
+
+    parquet_file_parser::column_pos_t::iterator column_pos_iter = column_positions.begin();
+    m_upper_bound =0;
+    buff_loc=0;
+
+    for(auto v : parquet_row_value)
+    {
+      //TODO (parquet_value_t) --> (value) , or better get it as value (i.e. parquet reader know class-value)
+      //TODO temporary 
+      switch( v.type )
+      {
+        case  parquet_file_parser::parquet_type::INT32:
+              //TODO waste of CPU
+              (*m_schema_values)[ *column_pos_iter ] = value( v.num ).i64();
+              break;
+
+        case  parquet_file_parser::parquet_type::INT64:
+              //TODO waste of CPU
+              (*m_schema_values)[ *column_pos_iter ] = value( v.num ).i64();
+              break;
+
+        case  parquet_file_parser::parquet_type::DOUBLE:
+              //TODO waste of CPU
+              (*m_schema_values)[ *column_pos_iter ] = value( v.dbl ).dbl();
+              break;
+
+        case  parquet_file_parser::parquet_type::STRING:
+              //TODO waste of CPU
+              //TODO value need to present string with char* and length
+
+              memcpy(str_buff+buff_loc, v.str, v.str_len);
+              str_buff[buff_loc+v.str_len] = 0;
+              (*m_schema_values)[ *column_pos_iter ] = str_buff+buff_loc;
+              buff_loc += v.str_len+1;
+              break;
+
+        case  parquet_file_parser::parquet_type::PARQUET_NULL:
+	      
+              (*m_schema_values)[ *column_pos_iter ].setnull();
+	      break;
+
+        default:
+        return -1;
+      }
+      m_upper_bound++;
+      column_pos_iter ++;
+    }
+    return 0;
+  }
+
+};
+
 class base_statement
 {
 
@@ -1021,6 +1134,9 @@ public:
 
   virtual value& eval_internal() = 0;
   
+  bool parquet_type; //TODO enum switch (csv,json,parquet,other)
+
+public:
   virtual base_statement* left() const
   {
     return 0;
@@ -1088,6 +1204,9 @@ public:
   bool is_column_reference() const;
   bool mark_aggreagtion_subtree_to_execute();
 
+
+  void extract_columns(parquet_file_parser::column_pos_t &cols,const uint16_t max_columns);
+
   virtual void set_last_call()
   {
     is_last_call = true;
@@ -1143,6 +1262,16 @@ public:
   void dtor()
   {
     this->~base_statement();
+  }
+
+  scratch_area* getScratchArea()
+  {
+    return m_scratch;
+  }
+
+  projection_alias* getAlias()
+  {
+    return m_aliases;
   }
 
 };
@@ -1213,13 +1342,13 @@ public:
     if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_NULL)
     {
       m_var_type = variable::var_t::COL_VALUE;
-      column_pos = -1;
+      column_pos = undefined_column_pos;
       var_value.type = value::value_En_t::S3NULL;//TODO use set_null
     }
     else if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_NAN)
     {
       m_var_type = variable::var_t::COL_VALUE;
-      column_pos = -1;
+      column_pos = undefined_column_pos;
       var_value.set_nan();
     }
     else if (reserve_word == s3select_reserved_word::reserve_word_en_t::S3S_TRUE)
@@ -1238,7 +1367,7 @@ public:
     {
       _name = "#";
       m_var_type = var_t::NA;
-      column_pos = -1;
+      column_pos = undefined_column_pos;
     }
   }
 
@@ -1282,7 +1411,7 @@ public:
 
   virtual bool is_column() const //is reference to column.
   {
-    if(m_var_type == var_t::VAR || m_var_type == var_t::POS)
+    if(m_var_type == var_t::VAR || m_var_type == var_t::POS || m_var_type == var_t::STAR_OPERATION)
     {
       return true;
     }
@@ -1293,6 +1422,17 @@ public:
   {
     return var_value; //TODO is it correct
   }
+
+  std::string get_name()
+  {
+    return _name;
+  }
+
+  int get_column_pos()
+  {
+    return column_pos;
+  }
+
   virtual value::value_En_t get_value_type()
   {
     return var_value.type;
@@ -1308,13 +1448,14 @@ public:
     int num_of_columns = m_scratch->get_num_of_columns();
     for(i=0; i<num_of_columns-1; i++)
     {
-      size_t len = m_scratch->get_column_value(i).size();
+      std::string_view col_value = m_scratch->get_column_value(i);
+      size_t len = col_value.size();
       if((pos+len)>sizeof(m_star_op_result_charc))
       {
         throw base_s3select_exception("result line too long", base_s3select_exception::s3select_exp_en_t::FATAL);
       }
 
-      memcpy(&m_star_op_result_charc[pos], m_scratch->get_column_value(i).data(), len);
+      memcpy(&m_star_op_result_charc[pos], col_value.data(), len);
       pos += len;
       m_star_op_result_charc[ pos ] = ',';//TODO need for another abstraction (per file type)
       pos ++;
@@ -1390,9 +1531,9 @@ public:
     }
     else
     {
-      var_value = (char*)m_scratch->get_column_value(column_pos).data();  //no allocation. returning pointer of allocated space
+      m_scratch->get_column_value(column_pos,var_value);
       //in the case of successive column-delimiter {1,some_data,,3}=> third column is NULL 
-      if (*var_value.str()== 0)
+      if (var_value.is_string() && (var_value.str()== 0 || (var_value.str() && *var_value.str()==0)))
           var_value.setnull();
     }
 

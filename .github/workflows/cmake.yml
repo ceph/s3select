@@ -23,6 +23,19 @@ jobs:
     - name: fetch-gtest
       run: sudo apt-get install -y libgtest-dev
       
+    - name: install arrow
+      run: | 
+        sudo apt-get update
+        sudo apt-get install -y -V ca-certificates lsb-release wget
+        sudo wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+        sudo apt-get install -y -V ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+        sudo apt-get update
+        sudo apt-get install -y -V libarrow-dev
+          
+    - name: install parquet
+      run: sudo apt-get install -y -V libparquet-dev
+
+
     - name: install-gtest
       run: cd /usr/src/gtest && sudo cmake . && sudo make && sudo cp lib/*.a /usr/lib || sudo cp *.a /usr/lib
 

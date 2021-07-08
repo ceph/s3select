@@ -250,6 +250,93 @@ const char* awsCli_handler::header_name_str[3] = {":event-type", ":content-type"
 const char* awsCli_handler::header_value_str[4] = {"Records", "application/octet-stream", "event","cont"};
 int run_on_localFile(char*  input_query);
 
+bool is_parquet_file(const char * fn)
+{//diffrentiate between csv and parquet
+   const char * ext = "parquet";
+
+   if(strstr(fn+strlen(fn)-strlen(ext), ext ))
+   {
+    return true;
+   }
+
+    return false;
+}
+
+int run_query_on_parquet_file(const char* input_query, const char* input_file)
+{
+  int status;
+  s3select s3select_syntax;
+
+  status = s3select_syntax.parse_query(input_query);
+  if (status != 0)
+  {
+    std::cout << "failed to parse query " << s3select_syntax.get_error_description() << std::endl;
+    return -1;
+  }
+
+  FILE *fp;
+
+  fp=fopen(input_file,"r");
+
+  if(!fp){
+    std::cout << "can not open " << input_file << std::endl;
+    return -1;
+  }
+
+  std::function<int(void)> fp_get_size=[&]()
+  {
+    struct stat l_buf;
+    lstat(input_file,&l_buf);
+    return l_buf.st_size;
+  };
+
+  std::function<size_t(int64_t,int64_t,void*,optional_yield*)> fp_range_req=[&](int64_t start,int64_t length,void *buff,optional_yield*y)
+  {
+    fseek(fp,start,SEEK_SET);
+    fread(buff, length, 1, fp);
+    return length;
+  };
+
+  rgw_s3select_api rgw;
+  rgw.set_get_size_api(fp_get_size);
+  rgw.set_range_req_api(fp_range_req);
+  
+  std::function<int(std::string&)> fp_s3select_result_format = [](std::string& result){std::cout << result << std::endl;result.clear();return 0;};
+  std::function<int(std::string&)> fp_s3select_header_format = [](std::string& result){result="";return 0;};
+
+  parquet_object parquet_processor(input_file,&s3select_syntax,&rgw);
+
+  std::string result;
+
+  do
+  {
+    try
+    {
+      status = parquet_processor.run_s3select_on_object(result,fp_s3select_result_format,fp_s3select_header_format);
+    }
+    catch (base_s3select_exception &e)
+    {
+      std::cout << e.what() << std::endl;
+      //m_error_description = e.what();
+      //m_error_count++;
+      if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL) //abort query execution
+      {
+        return -1;
+      }
+    }
+
+    std::cout << result << std::endl;
+
+    if (status < 0)
+      break;
+
+  } while (0);
+
+  return 0;
+}
+
+int run_on_localFile(char*  input_query);
+
 int main(int argc,char **argv)
 {
 awsCli_handler awscli;
@@ -339,7 +426,22 @@ int run_on_localFile(char*  input_query)
     return -1;
   }
 
-  std::string object_name = s3select_syntax.get_from_clause(); //TODO stdin
+  std::string object_name = s3select_syntax.get_from_clause(); 
+
+  if (is_parquet_file(object_name.c_str()))
+  {
+    try {
+      return run_query_on_parquet_file(input_query, object_name.c_str());
+    }
+    catch (base_s3select_exception &e)
+    {
+      std::cout << e.what() << std::endl;
+      if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL) //abort query execution
+      {
+        return -1;
+      }
+    }
+  }
 
   FILE* fp;
 
