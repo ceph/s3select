@@ -1103,7 +1103,27 @@ struct _fn_diff_year_timestamp : public base_date_diff
   {
     param_validation(args);
 
-    int64_t yr = ptime2.date().year() - ptime1.date().year();
+    int year1 = ptime1.date().year();
+    int year2 = ptime2.date().year();
+    boost::posix_time::time_duration time1 = boost::posix_time::time_duration(
+                    ptime1.time_of_day().hours(), ptime1.time_of_day().minutes(),
+                    ptime1.time_of_day().seconds());
+    boost::posix_time::time_duration time2 = boost::posix_time::time_duration(
+                    ptime2.time_of_day().hours(), ptime2.time_of_day().minutes(),
+                    ptime2.time_of_day().seconds());
+
+    if (year2 > year1 && ((ptime2.date().day_of_year() < ptime1.date().day_of_year()) ||
+        (ptime2.date().day_of_year() == ptime1.date().day_of_year() && time2 < time1)))
+    {
+        year2 -= 1;
+    }
+    else if (year2 < year1 && ((ptime2.date().day_of_year() > ptime1.date().day_of_year()) ||
+        (ptime2.date().day_of_year() == ptime1.date().day_of_year() && time2 > time1)))
+    {
+        year2 += 1;
+    }
+
+    int64_t yr = year2 - year1;
     result->set_value( yr );
     return true;
   }
@@ -1115,9 +1135,47 @@ struct _fn_diff_month_timestamp : public base_date_diff
   {
     param_validation(args);
 
-    int64_t yr = ptime2.date().year() - ptime1.date().year();
-    int64_t mon = ptime2.date().month() - ptime1.date().month();
-    result->set_value((yr * 12) + mon );
+    int year1 = ptime1.date().year();
+    int year2 = ptime2.date().year();
+    int mon1 = ptime1.date().month();
+    int mon2 = ptime2.date().month();
+    boost::posix_time::time_duration time1 = boost::posix_time::time_duration(
+                    ptime1.time_of_day().hours(), ptime1.time_of_day().minutes(),
+                    ptime1.time_of_day().seconds());
+    boost::posix_time::time_duration time2 = boost::posix_time::time_duration(
+                    ptime2.time_of_day().hours(), ptime2.time_of_day().minutes(),
+                    ptime2.time_of_day().seconds());
+
+    if (year2 > year1)
+    {
+        if (ptime2.date().day() < ptime1.date().day() || (ptime2.date().day() == ptime1.date().day() && time2 < time1))
+        {
+            mon2 -= 1;
+        }
+
+	if (ptime2.date().month() < ptime1.date().month())
+        {
+            mon2 += 12;
+            year2 -= 1;
+        }
+    }
+    else if (year2 < year1)
+    {
+        if (ptime2.date().day() > ptime1.date().day() || (ptime2.date().day() == ptime1.date().day() && time2 > time1))
+        {
+            mon1 -= 1;
+        }
+
+        if (ptime2.date().month() > ptime1.date().month())
+        {
+            mon1 += 12;
+            year1 -= 1;
+        }
+    }
+
+    int64_t mon_diff =  (year2 - year1) * 12 + mon2 - mon1;
+
+    result->set_value(mon_diff);
     return true;
   }
 };
@@ -1128,8 +1186,11 @@ struct _fn_diff_day_timestamp : public base_date_diff
   {
     param_validation(args);
 
-    boost::gregorian::date_period dp = boost::gregorian::date_period( ptime1.date(), ptime2.date());
-    result->set_value( dp.length().days() );
+    boost::posix_time::time_duration td_res = ptime2 - ptime1;
+    int total_seconds = (((td_res.hours() * 60) + td_res.minutes()) * 60) + td_res.seconds();
+    int64_t days = total_seconds / (24 * 3600);
+
+    result->set_value(days);
     return true;
   }
 };
@@ -1189,7 +1250,68 @@ struct _fn_add_month_to_timestamp : public base_date_add
   {
     param_validation(args);
 
-    new_ptime += boost::gregorian::months( val_quantity.i64() );
+    int yr, mn, dy, quant;
+    quant = val_quantity.i64();
+    dy = new_ptime.date().day();
+
+    int temp = quant % 12;
+    mn = new_ptime.date().month() + temp;
+    temp = quant / 12;
+    yr = new_ptime.date().year() + temp;
+
+    if (mn > 12)
+    {
+      yr += 1;
+      temp = mn % 12;
+      if (temp == 0)
+      {
+        temp = 12;
+      }
+      mn = temp;
+    }
+    else if (mn < 1)
+    {
+      yr -= 1;
+      if (mn == 0)
+      {
+        mn = 12;
+      }
+      else
+      {
+        mn = 12 + mn;
+      }
+    }
+
+    if ((mn == 4 || mn == 6 || mn == 9 || mn == 11) && dy > 30)
+    {
+      dy = 30;
+    }
+    else if (mn == 2 && dy > 28)
+    {
+      if (!(yr % 4) == 0 || ((yr % 100) == 0 && !(yr % 400) == 0))
+      {
+        dy = 28;
+      }
+      else
+      {
+        dy = 29;
+      }
+    }
+
+    #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
+      new_ptime =  boost::posix_time::ptime(boost::gregorian::date(yr, mn, dy),
+                    boost::posix_time::hours(new_ptime.time_of_day().hours()) +
+                    boost::posix_time::minutes(new_ptime.time_of_day().minutes()) +
+                    boost::posix_time::seconds(new_ptime.time_of_day().seconds()) +
+                    boost::posix_time::nanoseconds(new_ptime.time_of_day().fractional_seconds()));
+    #else
+      new_ptime =  boost::posix_time::ptime(boost::gregorian::date(yr, mn, dy),
+                    boost::posix_time::hours(new_ptime.time_of_day().hours()) +
+                    boost::posix_time::minutes(new_ptime.time_of_day().minutes()) +
+                    boost::posix_time::seconds(new_ptime.time_of_day().seconds()) +
+                    boost::posix_time::microseconds(new_ptime.time_of_day().fractional_seconds()));
+    #endif
+
     new_tmstmp = std::make_tuple(new_ptime, td, flag);
     result->set_value( &new_tmstmp );
     return true;

@@ -2199,14 +2199,21 @@ class derive_x1 : public base_time_to_string
     std::string print_time(boost::posix_time::ptime& new_ptime, boost::posix_time::time_duration& td, uint32_t param)
     {
       int tz_hour = td.hours();
-      if (tz_hour == 0 && td.minutes() == 0)
+      int tz_minute = td.minutes();
+      if (tz_hour == 0 && tz_minute == 0)
       {
         return "Z";
+      }
+      else if (tz_minute == 0)
+      {
+        std::string tz_hr = std::to_string(std::abs(tz_hour));
+        return (td.is_negative() ? "-" : "+") + std::string(2 - tz_hr.length(), '0') + tz_hr;
       }
       else
       {
         std::string tz_hr = std::to_string(std::abs(tz_hour));
-        return (td.is_negative() ? "-" : "+") + std::string(2 - tz_hr.length(), '0') + tz_hr;
+	std::string tz_mn = std::to_string(std::abs(tz_minute));
+        return (td.is_negative() ? "-" : "+") + std::string(2 - tz_hr.length(), '0') + tz_hr + std::string(2 - tz_mn.length(), '0') + tz_mn;
       }
     }
 } x1_to_string;
@@ -2256,7 +2263,17 @@ class derive_x : public base_time_to_string
   public:
     std::string print_time(boost::posix_time::ptime& new_ptime, boost::posix_time::time_duration& td, uint32_t param)
     {
-      return std::to_string(td.hours());
+      int tz_minute = td.minutes();
+      std::string tz_hr = std::to_string(std::abs(td.hours()));
+      if (tz_minute == 0)
+      {
+        return (td.is_negative() ? "-" : "+") + std::string(2 - tz_hr.length(), '0') + tz_hr;
+      }
+      else
+      {
+        std::string tz_mn = std::to_string(std::abs(tz_minute));
+        return (td.is_negative() ? "-" : "+") + std::string(2 - tz_hr.length(), '0') + tz_hr + std::string(2 - tz_mn.length(), '0') + tz_mn;
+      }
     }
 } x_to_string;
 
@@ -2265,8 +2282,9 @@ class derive_xx : public base_time_to_string
   public:
     std::string print_time(boost::posix_time::ptime& new_ptime, boost::posix_time::time_duration& td, uint32_t param)
     {
+      std::string tz_hr = std::to_string(std::abs(td.hours()));
       std::string tz_mn = std::to_string(std::abs(td.minutes()));
-      return std::to_string(td.hours()) + std::string(2 - tz_mn.length(), '0') + tz_mn;
+      return (td.is_negative() ? "-" : "+") + std::string(2 - tz_hr.length(), '0') + tz_hr + std::string(2 - tz_mn.length(), '0') + tz_mn;
     }
 } xx_to_string;
 
