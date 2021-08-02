@@ -1806,10 +1806,22 @@ public:
 
 public:
 
+  void result_values_to_string(multi_values& projections_resuls, std::string& result)
+  {
+    for(auto res : projections_resuls.values)
+    {
+            result.append( res->to_string() );
+
+            //if(++i<projections_resuls.values.size())//TODO remove redundant column-delimiter at the end of row (this fix should be align with tests)
+              result.append(",");//TODO use csv-defintion
+    }
+  }
 
   int getMatchRow( std::string& result) //TODO virtual ? getResult
   {
     int number_of_tokens = 0;
+    multi_values projections_resuls;
+    
 
 
     if (m_aggr_flow == true)
@@ -1820,15 +1832,17 @@ public:
         number_of_tokens = getNextRow();
         if (number_of_tokens < 0) //end of stream
         {
+          projections_resuls.clear();
           if (m_is_to_aggregate)
             for (auto& i : m_projections)
             {
               i->set_last_call();
               i->set_skip_non_aggregate(false);//projection column is set to be runnable
-              result.append( i->eval().to_string() );
-              result.append(",");
+
+              projections_resuls.push_value( &(i->eval()) );
             }
 
+          result_values_to_string(projections_resuls,result);
           return number_of_tokens;
         }
 
@@ -1874,12 +1888,13 @@ public:
       }
       while (m_where_clause && !m_where_clause->eval().is_true());
 
+      projections_resuls.clear();
       for (auto& i : m_projections)
       {
-        result.append( i->eval().to_string() );
-        result.append(",");
+        projections_resuls.push_value( &(i->eval()) );
       }
-      result.append("\n");
+      result_values_to_string(projections_resuls,result);
+      result.append("\n");//TODO use csv-defintion
     }
 
     return number_of_tokens; //TODO wrong
