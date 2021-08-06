@@ -145,6 +145,38 @@ std::string run_s3select(std::string expression)
   return s3select_result;
 }
 
+void run_s3select_test_opserialization(std::string expression,std::string input, char *a, char *b)
+{//purpose: run query on multiple rows and return result(multiple projections).
+    s3select s3select_syntax;
+  
+    [[maybe_unused]] int status = s3select_syntax.parse_query(expression.c_str());
+
+    std::string s3select_result;
+    csv_object::csv_defintions csv;
+
+    csv.output_row_delimiter = *a;
+    csv.output_column_delimiter = *b;
+
+    s3selectEngine::csv_object s3_csv_object(&s3select_syntax, csv);
+
+    s3_csv_object.run_s3select_on_object(s3select_result, input.c_str(), input.size(), false, false, true);
+
+    std::string s3select_result1 = s3select_result;
+
+    csv.row_delimiter = *a;
+    csv.column_delimiter = *b;
+    csv.output_row_delimiter = *a;
+    csv.output_column_delimiter = *b;
+    csv.redundant_column = false;
+    std::string s3select_result_second_phase;
+
+    s3selectEngine::csv_object s3_csv_object_second(&s3select_syntax, csv);
+
+    s3_csv_object_second.run_s3select_on_object(s3select_result_second_phase, s3select_result.c_str(), s3select_result.size(), false, false, true);
+
+    ASSERT_EQ(s3select_result_second_phase, s3select_result1);
+}
+
 std::string run_s3select(std::string expression,std::string input)
 {//purpose: run query on multiple rows and return result(multiple projections).
   s3select s3select_syntax;
@@ -945,9 +977,9 @@ TEST(TestS3selectFunctions, binop_constant)
 }
 
 TEST(TestS3selectOperator, add)
-{
+{ 
     const std::string input_query = "select -5 + 0.5 + -0.25 from stdin;" ;
-	  auto s3select_res = run_s3select(input_query);
+    auto s3select_res = run_s3select(input_query);
     ASSERT_EQ(s3select_res, std::string("-4.75"));
 }
 
@@ -1071,11 +1103,12 @@ TEST(TestS3selectFunctions, floatavg)
   std::string input;
   size_t size = 128;
   generate_columns_csv(input, size);
+
   const std::string input_query_1 = "select avg(float(_1)) from stdin;";
 
   std::string s3select_result_1 = run_s3select(input_query_1,input);
 
-  ASSERT_EQ(s3select_result_1,"63.5,");
+  ASSERT_EQ(s3select_result_1,std::string("63.5,"));
 }
 
 TEST(TestS3selectFunctions, case_when_condition_multiplerows)
@@ -2602,4 +2635,20 @@ TEST(TestS3selectFunctions, nested_query_multirow_result)
   std::cout << "Running query: 4" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
+}
+
+TEST(TestS3selectFunctions, opserialization_expressions)
+{
+  std::string input;
+  size_t size = 10;
+  generate_rand_columns_csv(input, size);
+
+  char a[5] = {'@', '#', '$', '%', '&'};
+  char x = a[rand() % 5];
+  char y = a[rand() % 5];
+
+  const std::string input_query_1 = "select * from s3object ;";
+
+  run_s3select_test_opserialization(input_query_1, input, &x, &y);
+
 }

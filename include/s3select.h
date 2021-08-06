@@ -1674,12 +1674,19 @@ public:
   {
     char row_delimiter;
     char column_delimiter;
+    char output_row_delimiter;
+    char output_column_delimiter;
     char escape_char;
+    char output_escape_char;
+    char output_quot_char;
     char quot_char;
     bool use_header_info;
     bool ignore_header_info;//skip first line
+    bool quote_fields_always;
+    bool quote_fields_asneeded;
+    bool redundant_column;
 
-    csv_defintions():row_delimiter('\n'), column_delimiter(','), escape_char('\\'), quot_char('"'), use_header_info(false), ignore_header_info(false) {}
+    csv_defintions():row_delimiter('\n'), column_delimiter(','), output_row_delimiter('\n'), output_column_delimiter(','), escape_char('\\'), output_escape_char('\\'), output_quot_char('"'), quot_char('"'), use_header_info(false), ignore_header_info(false), quote_fields_always(false), quote_fields_asneeded(false), redundant_column(true) {}
 
   } m_csv_defintion;
 
@@ -1806,20 +1813,38 @@ public:
 
 public:
 
-  void result_values_to_string(multi_values& projections_resuls, std::string& result)
+  void result_values_to_string(multi_values& projections_resuls, std::string& final_result)
   {
+    size_t i = 0;
     for(auto res : projections_resuls.values)
     {
-            result.append( res->to_string() );
+      std::string result;
 
-            //if(++i<projections_resuls.values.size())//TODO remove redundant column-delimiter at the end of row (this fix should be align with tests)
-              result.append(",");//TODO use csv-defintion
+      if (m_csv_defintion.quote_fields_always) {
+        std::ostringstream quoted_result;
+        quoted_result << std::quoted(res->to_string(), m_csv_defintion.output_quot_char, m_csv_defintion.output_escape_char);
+        result = quoted_result.str();
+        final_result.append(result);
+      } else {
+        final_result.append(res->to_string());
+      }
+
+      std::string output_delimiter(1,m_csv_defintion.output_column_delimiter);
+            
+      if(!m_csv_defintion.redundant_column) {
+        if(++i < projections_resuls.values.size()) {
+          final_result.append(output_delimiter);
+        }
+      } else {
+        final_result.append(output_delimiter);
+      }     
     }
   }
 
   int getMatchRow( std::string& result) //TODO virtual ? getResult
   {
     int number_of_tokens = 0;
+    std::string output_delimiter(1,m_csv_defintion.output_row_delimiter);
     multi_values projections_resuls;
     
 
@@ -1894,7 +1919,7 @@ public:
         projections_resuls.push_value( &(i->eval()) );
       }
       result_values_to_string(projections_resuls,result);
-      result.append("\n");//TODO use csv-defintion
+      result.append(output_delimiter);
     }
 
     return number_of_tokens; //TODO wrong
