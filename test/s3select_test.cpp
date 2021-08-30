@@ -2525,73 +2525,81 @@ TEST(TestS3selectFunctions, test_escape_expressions)
   ASSERT_EQ(s3select_result_3, s3select_result_4);
 }
 
+void generate_csv_multirow(std::string& out) {
+  // schema is: int, float, string, string
+  std::stringstream ss;
+  ss << "1,42926,7334,5.5,Brandise,Letsou,Brandise.Letsou@yopmail.com,worker,2020-10-26T11:21:30.397Z" << std::endl;
+  ss << "2,21169,3648,9.0,Zaria,Weinreb,Zaria.Weinreb@yopmail.com,worker,2009-12-02T01:22:45.8327+09:45" << std::endl;
+  ss << "3,35581,9091,2.1,Bibby,Primalia,Bibby.Primalia@yopmail.com,doctor,2001-02-27T23:18:23.446633-12:00" << std::endl;
+  ss << "4,38388,7345,4.7,Damaris,Arley,Damaris.Arley@yopmail.com,firefighter,1995-08-24T01:40:00+12:30" << std::endl;
+  ss << "5,42802,6464,7.0,Georgina,Georas,Georgina.Georas@yopmail.com,worker,2013-01-30T05:27:59.2Z" << std::endl;
+  ss << "6,45582,5863,0.1,Kelly,Hamil,Kelly.Hamil@yopmail.com,police officer,1998-03-31T17:25-01:05" << std::endl;
+  ss << "7,8548,7665,3.6,Claresta,Flita,Claresta.Flita@yopmail.com,doctor,2007-10-10T22:00:30Z" << std::endl;
+  ss << "8,22633,528,5.3,Bibby,Virgin,Bibby.Virgin@yopmail.com,developer,2020-06-30T11:07:01.23323-00:30" << std::endl;
+  ss << "9,38439,5645,2.8,Mahalia,Aldric,Mahalia.Aldric@yopmail.com,doctor,2019-04-20T20:21:22.23+05:15" << std::endl;
+  ss << "10,6611,7287,1.0,Pamella,Sibyls,Pamella.Sibyls@yopmail.com,police officer,2000-09-13T14:41Z" << std::endl;
+  out = ss.str();
+}
+
 TEST(TestS3selectFunctions, nested_query_single_row_result)
 {
-  std::fstream query_file, result_file, input_csv;
-  query_file.open("./test/test_queries_single.txt", std::ios::in);
+  std::string input_csv, input_query, expected_res;
+  generate_csv_multirow(input_csv);
+
+  input_query = "select to_string(to_timestamp(\'2009-09-17T17:56:06.234567Z\'), substring(\' athmywopgss-nghjkl\', 3, 10)) from stdin;";
+  expected_res = "t5562009wopg06";
+  std::cout << "Running query: 1" << std::endl;
+  auto s3select_res = run_s3select(input_query);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select to_timestamp(upper(\'2009-09-17t17:56:06.234567z\')) from stdin;";
   #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
-    result_file.open("./test/test_key_singlerow_nanosec.txt", std::ios::in);
+    expected_res = "2009-09-17T17:56:06.234567000Z";
   #else
-    result_file.open("./test/test_key_singlerow_microsec.txt", std::ios::in);
+    expected_res = "2009-09-17T17:56:06.234567Z";
   #endif
-  ASSERT_EQ(query_file.is_open(), true);
-  ASSERT_EQ(result_file.is_open(), true);
+  std::cout << "Running query: 2" << std::endl;
+  s3select_res = run_s3select(input_query);
+  EXPECT_EQ(s3select_res, expected_res);
 
-  std::string input_query, expected_res;
-  int i = 1;
-  while(getline(query_file, input_query)  && getline(result_file, expected_res))
-  {
-    std::cout << "Running query: " << i << std::endl;
-    auto s3select_res = run_s3select(input_query);
-    EXPECT_EQ(s3select_res, expected_res);
-    i++;
-  }
+  input_query = "select count(0) from stdin where extract( year from to_timestamp(_9)) < 2010;";
+  expected_res = "6,";
+  std::cout << "Running query: 3" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
 
-  query_file.close();
-  result_file.close();
 }
 
 TEST(TestS3selectFunctions, nested_query_multirow_result)
 {
-  std::fstream query_file, result_file, input_csv;
-  query_file.open("./test/test_queries_multirow.txt", std::ios::in);
+  std::string input_csv, input_query, expected_res;
+  generate_csv_multirow(input_csv);
+
+  input_query = "select to_string(to_timestamp(_9), substring(\' athmywopgssMMMMdXXXXX-nghjkl\', 2, 25)) from stdin;";
+  expected_res = "AMt11212020wopg30October26Z-397000000g11,\nAMt1222009wopg45December2+09:45-832700000g1,\nPMt11182001wopg23February27-12:00-446633000g11,\nAMt1401995wopg00August24+12:30-0g1,\nAMt5272013wopg59January30Z-200000000g5,\nPMt5251998wopg00March31-01:05-0g5,\nPMt1002007wopg30October10Z-0g10,\nAMt1172020wopg01June30-00:30-233230000g11,\nPMt8212019wopg22April20+05:15-230000000g8,\nPMt2412000wopg00September13Z-0g2,\n";
+  std::cout << "Running query: 1" << std::endl;
+  auto s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select to_timestamp(upper(lower(_9))) from stdin;";
   #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
-    result_file.open("./test/test_key_multirow_nanosec.txt", std::ios::in);
+    expected_res = "2020-10-26T11:21:30.397000000Z,\n2009-12-02T01:22:45.832700000+09:45,\n2001-02-27T23:18:23.446633000-12:00,\n1995-08-24T01:40:00+12:30,\n2013-01-30T05:27:59.200000000Z,\n1998-03-31T17:25:00-01:05,\n2007-10-10T22:00:30Z,\n2020-06-30T11:07:01.233230000-00:30,\n2019-04-20T20:21:22.230000000+05:15,\n2000-09-13T14:41:00Z,\n";
   #else
-    result_file.open("./test/test_key_multirow_microsec.txt", std::ios::in);
+    expected_res = "2020-10-26T11:21:30.397000Z,\n2009-12-02T01:22:45.832700+09:45,\n2001-02-27T23:18:23.446633-12:00,\n1995-08-24T01:40:00+12:30,\n2013-01-30T05:27:59.200000Z,\n1998-03-31T17:25:00-01:05,\n2007-10-10T22:00:30Z,\n2020-06-30T11:07:01.233230-00:30,\n2019-04-20T20:21:22.230000+05:15,\n2000-09-13T14:41:00Z,\n";
   #endif
-  input_csv.open("./test/test_data.csv", std::ios::in);
-  ASSERT_EQ(query_file.is_open(), true);
-  ASSERT_EQ(result_file.is_open(), true);
-  ASSERT_EQ(input_csv.is_open(), true);
+  std::cout << "Running query: 2" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
 
-  std::string input, temp;
-  while (std::getline(input_csv, temp))
-  {
-    input += temp;
-    input.push_back('\n');
-  }
+  input_query = "select count(*) from s3object where extract( year from to_timestamp(_9)) > 2010;";
+  expected_res = "4,";
+  std::cout << "Running query: 3" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
 
-  std::string input_query, expected_res;
-  int i = 1;
-  while (getline(query_file, input_query)  && getline(result_file, temp))
-  {
-    expected_res = temp;
-
-    while (getline(result_file, temp))
-    {
-      if (temp == "-----***-----")
-        break;
-      expected_res.push_back('\n');
-      expected_res += temp;
-    }
-
-    std::cout << "Running query: " << i << std::endl;
-    auto s3select_res = run_s3select(input_query, input);
-    EXPECT_EQ(s3select_res, expected_res);
-    i++;
-  }
-
-  query_file.close();
-  result_file.close();
+  input_query = "select _9 from s3object where extract( year from to_timestamp(_9)) > 2010;";
+  expected_res = "2020-10-26T11:21:30.397Z,\n2013-01-30T05:27:59.2Z,\n2020-06-30T11:07:01.23323-00:30,\n2019-04-20T20:21:22.23+05:15,\n";
+  std::cout << "Running query: 4" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
 }
