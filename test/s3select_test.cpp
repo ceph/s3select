@@ -2648,3 +2648,48 @@ TEST(TestS3selectFunctions, nested_query_multirow_result)
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 }
+
+TEST(TestS3selectFunctions, ceph_vs_aws)
+{
+  std::fstream query_file, result_file, input_csv;
+  query_file.open("./test/queries_generator/queries.txt", std::ios::in);
+  input_csv.open("./test/test_data.csv", std::ios::in);
+  ASSERT_EQ(query_file.is_open(), true);
+  ASSERT_EQ(input_csv.is_open(), true);
+
+  std::string input, temp;
+  while (std::getline(input_csv, temp))
+  {
+    input += temp;
+    input.push_back('\n');
+  }
+
+  std::string input_query;
+  int i = 1;
+  while (getline(query_file, input_query))
+  {
+    result_file.open("./test/queries_generator/aws_results/output" + std::to_string(i) + ".csv", std::ios::in);
+    ASSERT_EQ(result_file.is_open(), true);
+
+    std::string expected_res;
+    int j  = 0;
+    while (getline(result_file, temp))
+    {
+      expected_res += temp + ",";
+      expected_res.push_back('\n');
+      j++;
+    }
+
+    if(j == 1)
+      expected_res.erase(std::remove(expected_res.begin(), expected_res.end(), '\n'), expected_res.end());
+
+    std::cout << "Running query: " << i << std::endl;
+    auto s3select_res = run_s3select(input_query, input);
+    EXPECT_EQ(s3select_res, expected_res);
+    i++;
+
+    result_file.close();
+  }
+
+  query_file.close();
+}
