@@ -2467,7 +2467,7 @@ void generate_csv_multirow(std::string& out) {
   ss << "3,35581,9091,2.1,Bibby,Primalia,Bibby.Primalia@yopmail.com,doctor,2001-02-27T23:18:23.446633-12:00" << std::endl;
   ss << "4,38388,7345,4.7,Damaris,Arley,Damaris.Arley@yopmail.com,firefighter,1995-08-24T01:40:00+12:30" << std::endl;
   ss << "5,42802,6464,7.0,Georgina,Georas,Georgina.Georas@yopmail.com,worker,2013-01-30T05:27:59.2Z" << std::endl;
-  ss << "6,45582,5863,0.1,Kelly,Hamil,Kelly.Hamil@yopmail.com,police officer,1998-03-31T17:25-01:05" << std::endl;
+  ss << "6,45582,52863,0.1,Kelly,Hamil,Kelly.Hamil@yopmail.com,police officer,1998-03-31T17:25-01:05" << std::endl;
   ss << "7,8548,7665,3.6,Claresta,Flita,Claresta.Flita@yopmail.com,doctor,2007-10-10T22:00:30Z" << std::endl;
   ss << "8,22633,528,5.3,Bibby,Virgin,Bibby.Virgin@yopmail.com,developer,2020-06-30T11:07:01.23323-00:30" << std::endl;
   ss << "9,38439,5645,2.8,Mahalia,Aldric,Mahalia.Aldric@yopmail.com,doctor,2019-04-20T20:21:22.23+05:15" << std::endl;
@@ -2534,6 +2534,24 @@ TEST(TestS3selectFunctions, nested_query_multirow_result)
   input_query = "select _9 from s3object where extract( year from to_timestamp(_9)) > 2010;";
   expected_res = "2020-10-26T11:21:30.397Z\n2013-01-30T05:27:59.2Z\n2020-06-30T11:07:01.23323-00:30\n2019-04-20T20:21:22.23+05:15\n";
   std::cout << "Running query: 4" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select _2 from s3object where _2 like \"%11%\";";
+  expected_res = "21169\n6611\n";
+  std::cout << "Running query: 5" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select _5 from s3object where _3 like \"__8\";";
+  expected_res = "Bibby\n";
+  std::cout << "Running query: 6" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select _2 from s3object where _2 like \"%11\";";
+  expected_res = "6611\n";
+  std::cout << "Running query: 7" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 }

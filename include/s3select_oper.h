@@ -15,6 +15,17 @@
 #include <boost/bind.hpp>
 #include "s3select_parquet_intrf.h" //NOTE: should include first (c++11 std::string_view)
 
+
+#if __has_include (<hs/hs.h>) && REGEX_HS
+  #include <hs/hs.h>
+#elif __has_include (<re2/re2.h>) && REGEX_RE2
+  #include <re2/re2.h>
+#else
+  #include <regex>
+  #undef REGEX_HS
+  #undef REGEX_RE2
+#endif
+
 namespace bsc = BOOST_SPIRIT_CLASSIC_NS;
 
 namespace s3selectEngine
@@ -2680,6 +2691,387 @@ class base_timestamp_to_string : public base_function
         temp++;
       }
       return res;
+    }
+
+};
+
+
+class base_like : public base_function
+{
+  protected:
+    value like_expr_val;
+    value escape_expr_val;
+    bool constant_state = false;
+    #if REGEX_HS
+      hs_database_t* compiled_regex;
+      hs_scratch_t *scratch = NULL;
+      bool res;
+    #elif REGEX_RE2
+      std::unique_ptr<RE2> compiled_regex;
+    #else
+      std::regex compiled_regex;
+    #endif
+
+  public:
+    void param_validation(base_statement* escape_expr, base_statement* like_expr)
+    {
+      escape_expr_val = escape_expr->eval();
+      if (escape_expr_val.type != value::value_En_t::STRING)
+      {
+        throw base_s3select_exception("esacpe expression must be string");
+      }
+
+      like_expr_val = like_expr->eval();
+      if (like_expr_val.type != value::value_En_t::STRING)
+      {
+        throw base_s3select_exception("like expression must be string");
+      }
+    }
+
+    std::vector<char> transform(const char* s, char escape)
+    {
+      enum  state_expr_t {START, ESCAPE, START_STAR_CHAR, START_METACHAR, START_ANYCHAR, METACHAR,
+              STAR_CHAR, ANYCHAR, END };
+      state_expr_t st{START};
+
+      const char *p = s;
+      size_t size = strlen(s);
+      size_t i = 0;
+      std::vector<char> v;
+
+      while(*p)
+      {
+        switch (st)
+        {
+          case START:
+            if (*p == escape)
+            {
+              st = ESCAPE;
+              v.push_back('^');
+            }
+            else if (*p == '%')
+            {
+              v.push_back('^');
+              v.push_back('.');
+              v.push_back('*');
+              st = START_STAR_CHAR;
+            }
+            else if (*p == '_')
+            {
+              v.push_back('^');
+              v.push_back('.');
+              st=START_METACHAR;
+            }
+            else
+            {
+              v.push_back('^');
+              v.push_back(*p);
+              st=START_ANYCHAR;
+            }
+            break;
+
+          case START_STAR_CHAR:
+            if (*p == escape)
+            {
+              st = ESCAPE;
+            }
+            else if (*p == '%')
+            {
+              st = START_STAR_CHAR;
+            }
+            else if (*p == '_')
+            {
+              v.push_back('.');
+              st = METACHAR;
+            }
+            else
+            {
+              v.push_back(*p);
+              st = ANYCHAR;
+            }
+            break;
+
+          case START_METACHAR:
+            if (*p == escape)
+            {
+              st = ESCAPE;
+            }
+            else if(*p == '_')
+            {
+              v.push_back('.');
+              st = METACHAR;
+            }
+            else if(*p == '%')
+            {
+              v.push_back('.');
+              v.push_back('*');
+              st = STAR_CHAR;
+            }
+            else
+            {
+              v.push_back(*p);
+              st = ANYCHAR;
+            }
+            break;
+
+          case START_ANYCHAR:
+            if (*p == escape)
+            {
+              st = ESCAPE;
+            }
+            else if (*p == '_' && i == size-1)
+            {
+              v.push_back('.');
+              v.push_back('$');
+              st = END;
+            }
+            else if (*p == '_')
+            {
+              v.push_back('.');
+              st = METACHAR;
+            }
+            else if (*p == '%' && i == size-1)
+            {
+              v.push_back('.');
+              v.push_back('*');
+              v.push_back('$');
+              st = END;
+            }
+            else if (*p == '%')
+            {
+              v.push_back('.');
+              v.push_back('*');
+              st = STAR_CHAR;
+            }
+            else if (i == size-1)
+            {
+              v.push_back(*p);
+              v.push_back('$');
+              st = END;
+            }
+            else
+            {
+              v.push_back(*p);
+              st = ANYCHAR;
+            }
+            break;
+
+          case METACHAR:
+            if (*p == escape)
+            {
+              st = ESCAPE;
+            }
+            else if (*p == '_' && i == size-1)
+            {
+              v.push_back('.');
+              v.push_back('$');
+              st = END;
+            }
+            else if (*p == '_')
+            {
+              v.push_back('.');
+              st = METACHAR;
+            }
+            else if (*p == '%' && i == size-1)
+            {
+              v.push_back('.');
+              v.push_back('*');
+              v.push_back('$');
+              st = END;
+            }
+            else if (*p == '%')
+            {
+              v.push_back('.');
+              v.push_back('*');
+              st = STAR_CHAR;
+            }
+            else if (i == size-1)
+            {
+              v.push_back(*p);
+              v.push_back('$');
+              st = END;
+            }
+            else
+            {
+              v.push_back(*p);
+              st = ANYCHAR;
+            }
+            break;
+
+          case ANYCHAR:
+            if (*p == escape)
+            {
+              st = ESCAPE;
+            }
+            else if (*p == '_' && i == size-1)
+            {
+              v.push_back('.');
+              v.push_back('$');
+              st = END;
+            }
+            else if (*p == '_')
+            {
+              v.push_back('.');
+              st = METACHAR;
+            }
+            else if (*p == '%' && i == size-1)
+            {
+              v.push_back('.');
+              v.push_back('*');
+              v.push_back('$');
+              st = END;
+            }
+            else if (*p == '%')
+            {
+              v.push_back('.');
+              v.push_back('*');
+              st = STAR_CHAR;
+            }
+            else if (i == size-1)
+            {
+              v.push_back(*p);
+              v.push_back('$');
+              st = END;
+            }
+            else
+            {
+              v.push_back(*p);
+              st = ANYCHAR;
+            }
+            break;
+
+          case STAR_CHAR:
+            if (*p == escape)
+            {
+              st = ESCAPE;
+            }
+            else if (*p == '%' && i == size-1)
+            {
+              v.push_back('$');
+              st = END;
+            }
+            else if (*p == '%')
+            {
+              st = STAR_CHAR;
+            }
+            else if (*p == '_' && i == size-1)
+            {
+              v.push_back('.');
+              v.push_back('$');
+              st = END;
+            }
+            else if (*p == '_')
+            {
+              v.push_back('.');
+              st = METACHAR;
+            }
+            else if (i == size-1)
+            {
+              v.push_back(*p);
+              v.push_back('$');
+              st = END;
+            }
+            else
+            {
+              v.push_back(*p);
+              st = ANYCHAR;
+            }
+            break;
+
+          case ESCAPE:
+            if (i == size-1)
+            {
+              v.push_back(*p);
+              v.push_back('$');
+              st = END;
+            }
+            else
+            {
+              v.push_back(*p);
+              st = ANYCHAR;
+            }
+            break;
+
+          case END:
+            return v;
+
+          default:
+            throw base_s3select_exception("missing state!");
+            break;
+        }
+        p++;
+        i++;
+      }
+      return v;
+    }
+
+    void compile(std::vector<char>& like_regex)
+    {
+      std::string like_as_regex_str(like_regex.begin(), like_regex.end());
+
+      #if REGEX_HS
+	std::string temp = "^" + like_as_regex_str + "\\z";  //for anchoring start and end
+        char* c_regex = &temp[0];
+        hs_compile_error_t *compile_err;
+        if (hs_compile(c_regex, HS_FLAG_DOTALL, HS_MODE_BLOCK, NULL, &compiled_regex,
+              &compile_err) != HS_SUCCESS)
+        {
+          throw base_s3select_exception("ERROR: Unable to compile pattern.");
+        }
+
+        if (hs_alloc_scratch(compiled_regex, &scratch) != HS_SUCCESS)
+        {
+            throw base_s3select_exception("ERROR: Unable to allocate scratch space.");
+        }
+      #elif REGEX_RE2
+        compiled_regex = std::make_unique<RE2>(like_as_regex_str);
+      #else
+        compiled_regex = std::regex(like_as_regex_str);
+      #endif
+    }
+
+    void match(value& main_expr_val, variable* result)
+    {
+      std::string content_str = main_expr_val.to_string();
+      #if REGEX_HS
+        const char* content = content_str.c_str();
+        res = false;
+
+        if (hs_scan(compiled_regex, content, strlen(content), 0, scratch, eventHandler, &res) !=
+                        HS_SUCCESS)
+        {
+          throw base_s3select_exception("ERROR: Unable to scan input buffer. Exiting.");
+        }
+
+        result->set_value(res);
+      #elif REGEX_RE2
+        re2::StringPiece res[1];
+
+        if (compiled_regex->Match(content_str, 0, content_str.size(), RE2::ANCHOR_BOTH, res, 1))
+        {
+          result->set_value(true);
+        }
+        else
+        {
+          result->set_value(false);
+        }
+      #else
+        if (std::regex_match(content_str, compiled_regex))
+        {
+          result->set_value(true);
+        }
+        else
+        {
+          result->set_value(false);
+        }
+      #endif
+    }
+
+    static int eventHandler(unsigned int id, unsigned long long from, unsigned long long to,
+                      unsigned int flags, void* ctx)
+    {
+      *((bool*)ctx) = true;
+      return 0;
     }
 
 };
