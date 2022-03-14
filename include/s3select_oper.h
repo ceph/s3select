@@ -779,60 +779,60 @@ public:
     throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
   }
 
-  bool operator==(const value& v) //basic compare operator , most itensive runtime operation
+  friend bool operator==(const value& lhs, const value& rhs) //basic compare operator , most itensive runtime operation
   {
     //TODO NA possible?
-    if (is_string() && v.is_string())
+    if (lhs.is_string() && rhs.is_string())
     {
-      return strcmp(__val.str, v.__val.str) == 0;
+      return strcmp(lhs.__val.str, rhs.__val.str) == 0;
     }
 
 
-    if (is_number() && v.is_number())
+    if (lhs.is_number() && rhs.is_number())
     {
 
-      if(type != v.type)  //conversion //TODO find better way
+      if(lhs.type != rhs.type)  //conversion //TODO find better way
       {
-        if (type == value_En_t::DECIMAL)
+        if (lhs.type == value_En_t::DECIMAL)
         {
-          return (double)__val.num == v.__val.dbl;
+          return (double)lhs.__val.num == rhs.__val.dbl;
         }
         else
         {
-          return __val.dbl == (double)v.__val.num;
+          return lhs.__val.dbl == (double)rhs.__val.num;
         }
       }
       else   //no conversion
       {
-        if(type == value_En_t::DECIMAL)
+        if(lhs.type == value_En_t::DECIMAL)
         {
-          return __val.num == v.__val.num;
+          return lhs.__val.num == rhs.__val.num;
         }
         else
         {
-          return __val.dbl == v.__val.dbl;
+          return lhs.__val.dbl == rhs.__val.dbl;
         }
 
       }
     }
 
-    if(is_timestamp() && v.is_timestamp())
+    if(lhs.is_timestamp() && rhs.is_timestamp())
     {
-      return *timestamp() == *(v.timestamp());
+      return *(lhs.timestamp()) == *(rhs.timestamp());
     }
 
     if(
-    (is_bool() && v.is_bool())
+    (lhs.is_bool() && rhs.is_bool())
     ||
-    (is_number() && v.is_bool())
+    (lhs.is_number() && rhs.is_bool())
     ||
-    (is_bool() && v.is_number())
+    (lhs.is_bool() && rhs.is_number())
     )
     {
-      return __val.num == v.__val.num;
+      return lhs.__val.num == rhs.__val.num;
     }
 
-    if (is_nan() || v.is_nan())
+    if (lhs.is_nan() || rhs.is_nan())
     {
       return false;
     }  
