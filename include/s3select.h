@@ -1,6 +1,7 @@
 #ifndef __S3SELECT__
 #define __S3SELECT__
 #define BOOST_SPIRIT_THREADSAFE
+#define CSV_IO_NO_THREAD
 
 #pragma once
 #define BOOST_BIND_GLOBAL_PLACEHOLDERS
@@ -1922,8 +1923,11 @@ struct s3select_csv_definitions //TODO
     bool quote_fields_always;
     bool quote_fields_asneeded;
     bool redundant_column;
+    bool comment_empty_lines;
+    std::vector<char> comment_chars;
+    std::vector<char> trim_chars;
 
-    s3select_csv_definitions():row_delimiter('\n'), column_delimiter(','), output_row_delimiter('\n'), output_column_delimiter(','), escape_char('\\'), output_escape_char('\\'), output_quot_char('"'), quot_char('"'), use_header_info(false), ignore_header_info(false), quote_fields_always(false), quote_fields_asneeded(false), redundant_column(false) {}
+    s3select_csv_definitions():row_delimiter('\n'), column_delimiter(','), output_row_delimiter('\n'), output_column_delimiter(','), escape_char('\\'), output_escape_char('\\'), output_quot_char('"'), quot_char('"'), use_header_info(false), ignore_header_info(false), quote_fields_always(false), quote_fields_asneeded(false), redundant_column(false), comment_empty_lines(false) {}
 
 };
  
@@ -2097,7 +2101,7 @@ public:
 
     return is_end_of_stream() ? -1 : 1;
     
-    }//getMatchRow
+  }//getMatchRow
 
   virtual ~base_s3object() = default;
 
@@ -2118,10 +2122,7 @@ public:
     m_extract_csv_header_info(false),
     m_previous_line(false),
     m_skip_first_line(false),
-    m_processed_bytes(0)
-  {
-    csv_parser.set(m_csv_defintion.row_delimiter, m_csv_defintion.column_delimiter, m_csv_defintion.quot_char, m_csv_defintion.escape_char);
-  }
+    m_processed_bytes(0) {}
 
   csv_object(s3select* s3_query, csv_defintions csv) :
     base_s3object(s3_query),
@@ -2132,7 +2133,6 @@ public:
     m_processed_bytes(0)
   {
     m_csv_defintion = csv;
-    csv_parser.set(m_csv_defintion.row_delimiter, m_csv_defintion.column_delimiter, m_csv_defintion.quot_char, m_csv_defintion.escape_char);
   }
 
   csv_object():
@@ -2141,10 +2141,7 @@ public:
     m_extract_csv_header_info(false),
     m_previous_line(false),
     m_skip_first_line(false),
-    m_processed_bytes(0)
-  {
-    csv_parser.set(m_csv_defintion.row_delimiter, m_csv_defintion.column_delimiter, m_csv_defintion.quot_char, m_csv_defintion.escape_char);
-  }
+    m_processed_bytes(0) {}
 
   void set_csv_query(s3select* s3_query,csv_defintions csv)
   {
@@ -2154,7 +2151,6 @@ public:
     }
 
     m_csv_defintion = csv;
-    csv_parser.set(m_csv_defintion.row_delimiter, m_csv_defintion.column_delimiter, m_csv_defintion.quot_char, m_csv_defintion.escape_char);
   }
 
 private:
@@ -2162,8 +2158,8 @@ private:
   std::string m_error_description;
   char* m_stream;
   char* m_end_stream;
-  std::vector<char*> m_row_tokens{128};
-  csvParser csv_parser;
+  std::vector<char*> m_row_tokens;
+  CSVParser* csv_parser;
   bool m_extract_csv_header_info;
   std::vector<std::string> m_csv_schema{128};
 
@@ -2178,20 +2174,13 @@ private:
   int getNextRow()
   {
     size_t num_of_tokens=0;
+    m_row_tokens.clear();
 
-    if(m_stream>=m_end_stream)
+    if (csv_parser->read_row(m_row_tokens))
     {
-      return -1;
+      num_of_tokens = m_row_tokens.size();
     }
-
-    if(csv_parser.parse(m_stream, m_end_stream, &m_row_tokens, &num_of_tokens)<0)
-    {
-      throw base_s3select_exception("failed to parse csv stream", base_s3select_exception::s3select_exp_en_t::FATAL);
-    }
-
-    m_stream = (char*)csv_parser.currentLoc();
-
-    if (m_skip_last_line && m_stream >= m_end_stream)
+    else
     {
       return -1;
     }
@@ -2231,11 +2220,7 @@ public:
 
     if (m_csv_defintion.ignore_header_info == true)
     {
-      while(*m_stream && (*m_stream != m_csv_defintion.row_delimiter ))
-      {
-        m_stream++;
-      }
-      m_stream++;
+      csv_parser->next_line();
     }
     else if(m_csv_defintion.use_header_info == true)
     {
@@ -2320,21 +2305,34 @@ private:
 
       m_previous_line = true;//it means to skip last line
 
+      stream_length -= m_last_line.length();
     }
 
     return run_s3select_on_object(result, csv_stream, stream_length, m_skip_first_line, m_previous_line, (m_processed_bytes >= obj_size));
-
   }
 
 public:
   int run_s3select_on_object(std::string& result, const char* csv_stream, size_t stream_length, bool skip_first_line, bool skip_last_line, bool do_aggregate)
   {
+    if (do_aggregate && m_previous_line)
+    {
+        stream_length += m_last_line.length();
+        m_last_line += csv_stream;
+        m_stream = &m_last_line[0];
+	m_previous_line = false;
+    }
+    else
+    {
+        m_stream = (char*)csv_stream;
+    }
 
-
-    m_stream = (char*)csv_stream;
-    m_end_stream = (char*)csv_stream + stream_length;
+    m_end_stream = (char*)m_stream + stream_length;
     m_is_to_aggregate = do_aggregate;
     m_skip_last_line = skip_last_line;
+
+    CSVParser _csv_parser("csv", m_stream, m_end_stream);
+    csv_parser = &_csv_parser;
+    csv_parser->set_csv_def(m_csv_defintion.row_delimiter, m_csv_defintion.column_delimiter, m_csv_defintion.quot_char, m_csv_defintion.escape_char, m_csv_defintion.comment_empty_lines, m_csv_defintion.comment_chars, m_csv_defintion.trim_chars);
 
     if(m_extract_csv_header_info == false)
     {
@@ -2343,11 +2341,7 @@ public:
 
     if(skip_first_line)
     {
-      while(*m_stream && (*m_stream != m_csv_defintion.row_delimiter ))
-      {
-        m_stream++;
-      }
-      m_stream++;//TODO nicer
+      csv_parser->next_line();
     }
 
     do
@@ -2373,8 +2367,7 @@ public:
         break;
       }
 
-    }
-    while (true);
+    } while (true);
 
     return 0;
   }

@@ -2632,6 +2632,86 @@ TEST(TestS3selectFunctions, opserialization_expressions)
   ASSERT_NE(s3select_result_4, s3select_result_1);
 }
 
+void generate_csv_quote_and_escape(std::string& out, char quote = '"', char escp_ch = '\\') {
+  std::stringstream ss;
+
+  ss << "1" << "," << "   1   " << "," << quote << "Apple" << "," << ":" << "," << "fruit" << quote << "," << "Apple" << "," << ":" << "," << "fruit" << std::endl;
+  ss << std::endl;
+  ss << "2" << "," << "	2" << "," << "Apple" << quote << "," << ":" << ","<< quote << "fruit" << "," << "Apple" << "," << ":" << "," << "fruit" << std::endl;
+  ss << "			     			" << std::endl;
+  ss << "#3" << "," << "#3	" << "," << "Apple" << quote << "," << quote << ":" << quote << "," <<  quote << "fruit" << "," << "Apple" << "," << ":" << "," << "fruit" << std::endl;
+  ss << "4" << "," << " 	4 " << "," << quote << quote << "Apple" << quote << "," << ":" << quote << quote << "," << quote << "fruit" << "," << "Apple" << "," << ":" << "," << "fruit" << std::endl;
+  ss << "5" << "," << "5	" << "," << "Apple" << escp_ch <<"," << ":" << escp_ch << "," << "fruit" << "," << "Apple" << "," << ":" << "," << "fruit" << std::endl;
+
+  out = ss.str();
+}
+
+TEST(TestS3selectFunctions, csv_quote_string_and_escape_char)
+{
+  std::string input, s3select_result_1, s3select_result_2, s3select_result_3;
+  csv_object::csv_defintions csv;
+  generate_csv_quote_and_escape(input);
+  s3select s3select_syntax1, s3select_syntax2, s3select_syntax3;
+
+  const std::string input_query_1 = "select _3 from s3object;";
+  int status = s3select_syntax1.parse_query(input_query_1.c_str());
+  ASSERT_EQ(status, 0);
+
+  s3selectEngine::csv_object s3_csv_object_first(&s3select_syntax1, csv);
+  s3_csv_object_first.run_s3select_on_object(s3select_result_1, input.c_str(), input.size(), false, false, true);
+
+  const std::string input_query_2 = "select _4,_5,_6 from s3object;";
+  status = s3select_syntax2.parse_query(input_query_2.c_str());
+  ASSERT_EQ(status, 0);
+
+  s3selectEngine::csv_object s3_csv_object_second(&s3select_syntax2, csv);
+  s3_csv_object_second.run_s3select_on_object(s3select_result_2, input.c_str(), input.size(), false, false, true);
+
+  EXPECT_EQ(s3select_result_1, s3select_result_2);
+
+  csv.escape_char = '\0';
+  csv.quot_char = '\0';
+
+  const std::string input_query_3 = "select * from s3object;";
+  status = s3select_syntax3.parse_query(input_query_3.c_str());
+  ASSERT_EQ(status, 0);
+
+  s3selectEngine::csv_object s3_csv_object_third(&s3select_syntax3, csv);
+  s3_csv_object_third.run_s3select_on_object(s3select_result_3, input.c_str(), input.size(), false, false, true);
+
+  EXPECT_EQ(s3select_result_3, input);
+}
+
+TEST(TestS3selectFunctions, csv_comment_line_and_trim_char)
+{
+  std::string input;
+  std::string s3select_result_1, s3select_result_2;
+  generate_csv_quote_and_escape(input);
+  s3select s3select_syntax;
+
+  csv_object::csv_defintions csv;
+  csv.comment_empty_lines = true;
+  csv.comment_chars.push_back('#');
+  csv.trim_chars.push_back(' ');
+  csv.trim_chars.push_back('\t');
+
+  const std::string input_query_1 = "select _1 from s3object;";
+  int status = s3select_syntax.parse_query(input_query_1.c_str());
+  ASSERT_EQ(status, 0);
+
+  s3selectEngine::csv_object s3_csv_object_first(&s3select_syntax, csv);
+  s3_csv_object_first.run_s3select_on_object(s3select_result_1, input.c_str(), input.size(), false, false, true);
+
+  const std::string input_query_2 = "select _2 from s3object;";
+  status = s3select_syntax.parse_query(input_query_2.c_str());
+  ASSERT_EQ(status, 0);
+
+  s3selectEngine::csv_object s3_csv_object_second(&s3select_syntax, csv);
+  s3_csv_object_second.run_s3select_on_object(s3select_result_2, input.c_str(), input.size(), false, false, true);
+
+  EXPECT_EQ(s3select_result_1, s3select_result_2);
+}
+
 TEST(TestS3selectFunctions, presto_syntax_alignments)
 {
 /*
