@@ -594,8 +594,9 @@ void generate_csv_trim(std::string& out, size_t size) {
 void generate_csv_like(std::string& out, size_t size) {
   // schema is: int, float, string, string
   std::stringstream ss;
+  auto r = [](){ int x=rand()%1000;if (x<500) return std::string("hai"); else return std::string("fooaeioubrs");};
   for (auto i = 0U; i < size; ++i) {
-    ss << "fooaeioubrs" << "," << std::endl;
+    ss << r() << "," << std::endl;
   }
   out = ss.str();
 }
@@ -700,6 +701,23 @@ TEST(TestS3selectFunctions, between)
   const std::string input_query_2 = "select count(0) from stdin where int(_1) >= int(_2) and int(_1) <= int(_3);";
 
   std::string s3select_result_2 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,s3select_result_2);
+}
+
+
+TEST(TestS3selectFunctions, not_between)
+{
+  std::string input;
+  size_t size = 128;
+  generate_rand_columns_csv(input, size);
+  const std::string input_query_1 = "select count(0) from stdin where int(_1) not  between int(_2) and int(_3);";
+
+  std::string s3select_result_1 = run_s3select(input_query_1,input);
+
+  const std::string input_query_2 = "select count(0) from stdin where int(_1) < int(_2) or int(_1) > int(_3);";
+
+  std::string s3select_result_2 = run_s3select(input_query_2,input);
 
   ASSERT_EQ(s3select_result_1,s3select_result_2);
 }
@@ -1375,6 +1393,14 @@ TEST(TestS3selectFunctions, test_date_time_expressions)
   std::string s3select_result_14 = run_s3select(input_query_14, input);
   ASSERT_NE(s3select_result_14, failure_sign);
   EXPECT_EQ(s3select_result_13, s3select_result_14);
+
+  std::string input_query_15 = "select to_string(to_timestamp(_1), 'y,M,H,m') from stdin where cast(to_string(to_timestamp(_1), 'd') as int) < 1 or cast(to_string(to_timestamp(_1), 'd') as int) > 10;";
+  std::string s3select_result_15 = run_s3select(input_query_15, input);
+  ASSERT_NE(s3select_result_15, failure_sign);
+  std::string input_query_16 = "select extract(year from to_timestamp(_1)), extract(month from to_timestamp(_1)), extract(hour from to_timestamp(_1)), extract(minute from to_timestamp(_1)) from stdin where  int(substring(_1, 9, 2)) not between 1 and 10;";
+  std::string s3select_result_16 = run_s3select(input_query_16, input);
+  ASSERT_NE(s3select_result_16, failure_sign);
+  EXPECT_EQ(s3select_result_15, s3select_result_16);
 }
 
 TEST(TestS3selectFunctions, test_like_expressions)
@@ -1774,13 +1800,13 @@ TEST(TestS3selectFunctions, tuefalse_like_expressions)
 
   const std::string input_query_5 = "select count(*) from stdin where (_1 like \"%r[r-s]\") = true;";
 
-  std::string s3select_result_5 = run_s3select(input_query_5,input);
+  std::string s3select_result_5 = run_s3select(input_query_5,input1);
 
   ASSERT_NE(s3select_result_5,failure_sign);
 
   const std::string input_query_6 = "select count(*) from stdin where (substring(_1,char_length(_1),1) between \"r\" and \"s\") = true and (substring(_1,char_length(_1)-1,1) = \"r\") = true;";
 
-  std::string s3select_result_6 = run_s3select(input_query_6,input);
+  std::string s3select_result_6 = run_s3select(input_query_6,input1);
 
   ASSERT_EQ(s3select_result_5, s3select_result_6);
 
@@ -1795,6 +1821,18 @@ TEST(TestS3selectFunctions, tuefalse_like_expressions)
   std::string s3select_result_8 = run_s3select(input_query_8,input);
 
   ASSERT_EQ(s3select_result_7, s3select_result_8);
+
+  const std::string input_query_9 = "select count(*) from stdin where (_1 like \"%r[r-s]\") = false;";
+
+  std::string s3select_result_9 = run_s3select(input_query_9,input1);
+
+  ASSERT_NE(s3select_result_9,failure_sign);
+
+  const std::string input_query_10 = "select count(*) from stdin where (substring(_1,char_length(_1),1) not between \"r\" and \"s\") = true or (substring(_1,char_length(_1)-1,1) = \"r\") = false;";
+
+  std::string s3select_result_10 = run_s3select(input_query_10,input1);
+
+  ASSERT_EQ(s3select_result_9, s3select_result_10);
 }
 
 TEST(TestS3selectFunctions, truefalse_coalesce_expressions)

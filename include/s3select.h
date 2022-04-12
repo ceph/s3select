@@ -16,7 +16,6 @@
 #include <boost/bind.hpp>
 #include <functional>
 
-
 #define _DEBUG_TERM {string  token(a,b);std::cout << __FUNCTION__ << token << std::endl;}
 
 namespace s3selectEngine
@@ -261,6 +260,12 @@ struct push_between_filter : public base_ast_builder
   void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_between_filter g_push_between_filter;
+
+struct push_not_between_filter : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_not_between_filter g_push_not_between_filter;
 
 struct push_in_predicate : public base_ast_builder
 {
@@ -626,13 +631,15 @@ public:
 
       cmp_operand = special_predicates | (factor) >> *(arith_cmp[BOOST_BIND_ACTION(push_compare_operator)] >> (factor)[BOOST_BIND_ACTION(push_arithmetic_predicate)]);
 
-      special_predicates = (is_null) | (is_not_null) | (between_predicate) | (in_predicate) | (like_predicate);
+      special_predicates = (is_null) | (is_not_null) | (between_predicate) | (not_between) | (in_predicate) | (like_predicate);
 
       is_null = ((factor) >> S3SELECT_KW("is") >> S3SELECT_KW("null"))[BOOST_BIND_ACTION(push_is_null_predicate)];
 
       is_not_null = ((factor) >> S3SELECT_KW("is") >> S3SELECT_KW("not") >> S3SELECT_KW("null"))[BOOST_BIND_ACTION(push_is_null_predicate)];
 
       between_predicate = (arithmetic_expression >> S3SELECT_KW("between") >> arithmetic_expression >> S3SELECT_KW("and") >> arithmetic_expression)[BOOST_BIND_ACTION(push_between_filter)];
+
+      not_between = (arithmetic_expression >> S3SELECT_KW("not") >> S3SELECT_KW("between") >> arithmetic_expression >> S3SELECT_KW("and") >> arithmetic_expression)[BOOST_BIND_ACTION(push_not_between_filter)];
 
       in_predicate = (arithmetic_expression >> S3SELECT_KW("in") >> '(' >> arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_first_arg)] >> *(',' >> arithmetic_expression[BOOST_BIND_ACTION(push_in_predicate_arguments)]) >> ')')[BOOST_BIND_ACTION(push_in_predicate)];
       
@@ -725,7 +732,7 @@ public:
     bsc::rule<ScannerT> cmp_operand, arith_cmp, condition_expression, arithmetic_predicate, logical_predicate, factor; 
     bsc::rule<ScannerT> trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside, trim_type, trim_remove_type, substr, substr_from, substr_from_for;
     bsc::rule<ScannerT> datediff, dateadd, extract, date_part, date_part_extract, time_to_string_constant, time_to_string_dynamic;
-    bsc::rule<ScannerT> special_predicates, between_predicate, in_predicate, like_predicate, like_predicate_escape, like_predicate_no_escape, is_null, is_not_null;
+    bsc::rule<ScannerT> special_predicates, between_predicate, not_between, in_predicate, like_predicate, like_predicate_escape, like_predicate_no_escape, is_null, is_not_null;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand;
     bsc::rule<ScannerT> fs_type, object_path;
     bsc::rule<ScannerT> projections, projection_expression, alias_name, column_pos,column_pos_name;
@@ -1202,6 +1209,28 @@ void push_between_filter::builder(s3select* self, const char* a, const char* b) 
   std::string between_function("#between#");
 
   __function* func = S3SELECT_NEW(self, __function, between_function.c_str(), self->getS3F());
+
+  base_statement* second_expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(second_expr);
+
+  base_statement* first_expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(first_expr);
+
+  base_statement* main_expr = self->getAction()->exprQ.back();
+  self->getAction()->exprQ.pop_back();
+  func->push_argument(main_expr);
+
+  self->getAction()->exprQ.push_back(func);
+}
+
+void push_not_between_filter::builder(s3select* self, const char* a, const char* b) const
+{
+
+  static constexpr const std::string_view not_between_function("#not_between#");
+
+  __function* func = S3SELECT_NEW(self, __function, not_between_function.data(), self->getS3F());
 
   base_statement* second_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();

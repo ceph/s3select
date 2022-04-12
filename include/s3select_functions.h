@@ -221,6 +221,7 @@ enum class s3select_func_En_t {ADD,
                                UPPER,
                                NULLIF,
                                BETWEEN,
+                               NOT_BETWEEN,
                                IS_NULL,
                                IS_NOT_NULL,
                                IN,
@@ -289,6 +290,7 @@ private:
     {"upper", s3select_func_En_t::UPPER},
     {"nullif", s3select_func_En_t::NULLIF},
     {"#between#", s3select_func_En_t::BETWEEN},
+    {"#not_between#", s3select_func_En_t::NOT_BETWEEN},
     {"#is_null#", s3select_func_En_t::IS_NULL},
     {"#is_not_null#", s3select_func_En_t::IS_NOT_NULL},
     {"#in_predicate#", s3select_func_En_t::IN},
@@ -1436,6 +1438,25 @@ struct _fn_between : public base_function
   }
 };
 
+struct _fn_not_between : public base_function
+{
+
+  value res;
+  _fn_between between_op;
+  
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    between_op(args,result);
+   
+    if (result->get_value().is_true() == 0) {
+      result->set_value(true);
+    } else {
+      result->set_value(false);
+    }
+    return true;
+  }
+};
+
 static char s3select_ver[10]="41.a";
 
 struct _fn_version : public base_function
@@ -2452,6 +2473,10 @@ base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt
 
   case s3select_func_En_t::BETWEEN:
     return S3SELECT_NEW(this,_fn_between);
+    break;
+
+  case s3select_func_En_t::NOT_BETWEEN:
+    return S3SELECT_NEW(this,_fn_not_between);
     break;
 
   case s3select_func_En_t::IS_NULL:
