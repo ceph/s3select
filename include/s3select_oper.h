@@ -463,6 +463,36 @@ public:
     __val.str = m_str_value.data();
   }
 
+  void set_value(value& val_o)
+  {
+    if(val_o.type == value_En_t::STRING)
+    {
+      m_str_value.assign(val_o.str());
+      __val.str = m_str_value.data();
+    }
+    else
+    {
+      this->__val = val_o.__val;
+    }
+
+    this->type = val_o.type;
+  }
+
+  value(const value& v)
+  {
+    if(v.type == value_En_t::STRING)
+    {
+      this->m_str_value.assign(v.__val.str);//(v.str());
+      this->__val.str = this->m_str_value.data();
+    }
+    else
+    {
+      this->__val = v.__val;
+    }
+
+    this->type = v.type;
+  }
+
   ~value()
   {//TODO should be a part of the cleanup routine(__function::push_for_cleanup)
     multiple_values.values.clear();
@@ -929,12 +959,20 @@ public:
     return compute<binop_plus>(*this, v);
   }
 
+  value& operator+(int i)
+  {
+    *this = *this + static_cast<value>(i);
+    return *this;
+  }
+
+#if 0
   value operator++(int)
   {
     *this = *this + static_cast<value>(1);
     return *this;
   }
-    
+#endif
+
   value& operator-(const value& v)
   {
     return compute<binop_minus>(*this, v);
@@ -1003,7 +1041,7 @@ public:
 
   scratch_area():m_upper_bound(-1),parquet_type(false),buff_loc(0)
   {
-    m_schema_values = new std::vector<value>(128,value(""));
+    m_schema_values = new std::vector<value>(128);
   }
 
   ~scratch_area()
@@ -1364,9 +1402,8 @@ private:
   std::string _name;
   int column_pos;
   value var_value;
-  std::string m_star_op_result;
   char m_star_op_result_charc[4096]; //TODO cause larger allocations for other objects containing variable (dynamic is one solution)
-  value star_operation_values[16];//TODO cause larger allocations for other objects containing variable (dynamic is one solution)
+  std::vector<value> star_operation_values;
 
   const int undefined_column_pos = -1;
   const int column_alias = -2;
@@ -1516,11 +1553,6 @@ public:
     size_t num_of_columns = m_scratch->get_num_of_columns();
     var_value.multiple_values.clear(); //TODO var_value.clear()??
 
-    if(sizeof(star_operation_values)/sizeof(value) < num_of_columns)
-    {
-        throw base_s3select_exception(std::string("not enough memory for star-operation"), base_s3select_exception::s3select_exp_en_t::FATAL);
-    }
-
     for(size_t i=0; i<num_of_columns; i++)
     {
       size_t len = m_scratch->get_column_value(i).size();
@@ -1532,8 +1564,9 @@ public:
       memcpy(&m_star_op_result_charc[pos], m_scratch->get_column_value(i).data(), len);//TODO using string_view will avoid copy
       m_star_op_result_charc[ pos + len ] = 0;
 
-      star_operation_values[i] = &m_star_op_result_charc[pos];//set string value
-      var_value.multiple_values.push_value( &star_operation_values[i] );
+      value v1(m_star_op_result_charc+pos);
+      star_operation_values.push_back(v1);
+      var_value.multiple_values.push_value( &star_operation_values.back() );
 
       pos += len;
       pos ++;
@@ -1590,7 +1623,7 @@ public:
 
       if (m_projection_alias->is_result_cached() == false)
       {
-        var_value = m_projection_alias->eval();
+        var_value.set_value(m_projection_alias->eval());
         m_projection_alias->set_result_cache(var_value);
       }
       else
@@ -1775,14 +1808,14 @@ public:
     {
       throw base_s3select_exception("missing operand for logical ", base_s3select_exception::s3select_exp_en_t::FATAL);
     }
-    value a = l->eval();
+    value& a = l->eval();
     if (_oplog == oplog_t::AND)
     {
       if (!a.is_null() && a.i64() == false) {
         bool res = false ^ negation_result;
         return var_value = res;
       } 
-      value b = r->eval();
+      value& b = r->eval();
       if(!b.is_null() && b.i64() == false) {
         bool res = false ^ negation_result;
         return var_value = res;
@@ -1802,7 +1835,7 @@ public:
         bool res = true ^ negation_result;
         return var_value = res;
       } 
-      value b = r->eval();
+      value& b = r->eval();
       if(b.is_true() == true) {
         bool res = true ^ negation_result;
         return var_value = res;
@@ -2037,7 +2070,6 @@ public:
 class base_date_extract : public base_function
 {
   protected:
-    value val_timestamp;
     boost::posix_time::ptime new_ptime;
     boost::posix_time::time_duration td;
     bool flag;
@@ -2054,7 +2086,7 @@ class base_date_extract : public base_function
       }
 
       base_statement* ts = *iter;
-      val_timestamp = ts->eval();
+      value& val_timestamp = ts->eval();
       if(val_timestamp.is_timestamp()== false)
       {
         throw base_s3select_exception("second parameter is not timestamp");
@@ -2083,7 +2115,7 @@ class base_date_diff : public base_function
       }
 
       base_statement* dt1_param = *iter;
-      value val_ts1 = dt1_param->eval();
+      value& val_ts1 = dt1_param->eval();
 
       if (val_ts1.is_timestamp() == false)
       {
@@ -2092,7 +2124,7 @@ class base_date_diff : public base_function
 
       iter++;
       base_statement* dt2_param = *iter;
-      value val_ts2 = dt2_param->eval();
+      value& val_ts2 = dt2_param->eval();
 
       if (val_ts2.is_timestamp() == false)
       {
@@ -2136,7 +2168,7 @@ class base_date_add : public base_function
       }
 
       base_statement* quan = *iter;
-      val_quantity = quan->eval();
+      val_quantity.set_value(quan->eval());
 
       if (val_quantity.is_number() == false)
       {
@@ -2145,7 +2177,7 @@ class base_date_add : public base_function
 
       iter++;
       base_statement* ts = *iter;
-      value val_ts = ts->eval();
+      value& val_ts = ts->eval();
 
       if(val_ts.is_timestamp() == false)
       {
@@ -2588,7 +2620,7 @@ class base_timestamp_to_string : public base_function
       }
 
       base_statement* dt1_param = *iter;
-      value val_timestamp = dt1_param->eval();
+      value& val_timestamp = dt1_param->eval();
 
       if (val_timestamp.is_timestamp() == false)
       {
@@ -2597,7 +2629,7 @@ class base_timestamp_to_string : public base_function
 
       iter++;
       base_statement* frmt = *iter;
-      value val_format = frmt->eval();
+      value& val_format = frmt->eval();
 
       if (val_format.is_string() == false)
       {

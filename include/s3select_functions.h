@@ -505,7 +505,6 @@ public:
 struct _fn_add : public base_function
 {
 
-  value var_result;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
@@ -514,7 +513,7 @@ struct _fn_add : public base_function
     iter++;
     base_statement* y = *iter;
 
-    var_result = x->eval() + y->eval();
+    value& var_result = x->eval() + y->eval();
 
     *result = var_result;
 
@@ -598,7 +597,7 @@ struct _fn_avg : public base_function
         try
         {
             sum = sum + x->eval();
-            count++;
+            count = count + 1;
         }
         catch (base_s3select_exception &e)
         {
@@ -633,9 +632,10 @@ struct _fn_min : public base_function
     auto iter = args->begin();
     base_statement* x =  *iter;
 
-    if(min > x->eval())
+    value& tmp = x->eval();
+    if(min > tmp)
     {
-      min=x->eval();
+      min=tmp;
     }
 
     return true;
@@ -663,9 +663,10 @@ struct _fn_max : public base_function
     auto iter = args->begin();
     base_statement* x =  *iter;
 
-    if(max < x->eval())
+    value& tmp = x->eval();
+    if(max < tmp)
     {
-      max=x->eval();
+      max=tmp;
     }
 
     return true;
@@ -684,7 +685,7 @@ struct _fn_to_int : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    value v = (*args->begin())->eval();
+    value& v = (*args->begin())->eval();
 
     switch (v.type) {
 
@@ -729,7 +730,7 @@ struct _fn_to_float : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    value v = (*args->begin())->eval();
+    value& v = (*args->begin())->eval();
 
     switch (v.type) {
 
@@ -835,7 +836,6 @@ struct _fn_to_timestamp : public base_function
   bsc::rule<> d_date_time = ((d_yyyymmdd_dig) >> (d_time_dig)) | (d_yyyymmdd_dig) | (d_yyyy_dig);
 
   timestamp_t tmstmp;
-  value v_str;
   int tz_hour, tz_min;
 
   bool datetime_validation()
@@ -922,7 +922,7 @@ struct _fn_to_timestamp : public base_function
 
     base_statement* str = *iter;
 
-    v_str = str->eval();
+    value& v_str = str->eval();
 
     if (v_str.type != value::value_En_t::STRING)
     {
@@ -1422,9 +1422,9 @@ struct _fn_between : public base_function
     iter++;    
     base_statement* main_expr = *iter;
  
-    value second_expr_val = second_expr->eval();
-    value first_expr_val = first_expr->eval();
-    value main_expr_val = main_expr->eval();
+    value& second_expr_val = second_expr->eval();
+    value& first_expr_val = first_expr->eval();
+    value& main_expr_val = main_expr->eval();
 
     if ((second_expr_val.type == first_expr_val.type && first_expr_val.type == main_expr_val.type) || (second_expr_val.is_number() && first_expr_val.is_number() && main_expr_val.is_number()))
     {
@@ -1479,7 +1479,7 @@ struct _fn_isnull : public base_function
   {
     auto iter = args->begin();
     base_statement* expr = *iter;
-    value expr_val = expr->eval();
+    value& expr_val = expr->eval();
     if ( expr_val.is_null()) {
       result->set_value(true);
     } else {
@@ -1517,12 +1517,12 @@ struct _fn_in : public base_function
   {
     int args_size = static_cast<int>(args->size()-1);
     base_statement *main_expr = (*args)[args_size];
-    value main_expr_val = main_expr->eval();
+    value& main_expr_val = main_expr->eval();
     args_size--;
     while (args_size>=0)
     {
       base_statement *expr = (*args)[args_size];
-      value expr_val = expr->eval();
+      value& expr_val = expr->eval();
       args_size--;
       if ((expr_val.type == main_expr_val.type) || (expr_val.is_number() && main_expr_val.is_number()))
       {
@@ -1540,7 +1540,6 @@ struct _fn_in : public base_function
 
 struct _fn_like : public base_function
 {
-  value res;
   std::regex compiled_regex;
   bool constant_state;
   value like_expr_val;
@@ -1565,8 +1564,8 @@ struct _fn_like : public base_function
 
     if(constant_state == true)
     {
-      escape_expr_val = esc->eval();
-      like_expr_val = like_expr->eval();
+      escape_expr_val.set_value(esc->eval());
+      like_expr_val.set_value(like_expr->eval());
 
       if (like_expr_val.type != value::value_En_t::STRING)  {
         throw base_s3select_exception("like expression must be string");
@@ -1786,8 +1785,8 @@ bool operator()(bs_stmt_vec_t* args, variable* result) override
     base_statement* main_expr = *iter;
 
     if (constant_state == false){
-      like_expr_val = like_expr->eval();
-      escape_expr_val = escape_expr->eval();
+      like_expr_val.set_value(like_expr->eval());
+      escape_expr_val.set_value(escape_expr->eval());
 
       if (like_expr_val.type != value::value_En_t::STRING)  {
         throw base_s3select_exception("like expression must be string");
@@ -1802,7 +1801,7 @@ bool operator()(bs_stmt_vec_t* args, variable* result) override
       compiled_regex = std::regex(like_as_regex_str);
     }
 
-    value main_expr_val = main_expr->eval();
+    value& main_expr_val = main_expr->eval();
     if (main_expr_val.type != value::value_En_t::STRING)  {
         throw base_s3select_exception("main expression must be string");
     }
@@ -1823,8 +1822,6 @@ struct _fn_substr : public base_function
   //it prevent from intensive use of malloc/free (fragmentation).
   //should validate result length.
   //TODO may replace by std::string (dynamic) , or to replace with global allocator , in query scope.
-  value v_str;
-  value v_from;
   value v_to;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
@@ -1847,14 +1844,14 @@ struct _fn_substr : public base_function
     {
       iter++;
       to = *iter;
-      v_to = to->eval();
+      v_to.set_value(to->eval());
       if (!v_to.is_number())
       {
         throw base_s3select_exception("substr third argument must be number");  //can skip row
       }
     }
 
-    v_str = str->eval();
+    value& v_str = str->eval();
 
     if(v_str.type != value::value_En_t::STRING)
     {
@@ -1863,7 +1860,7 @@ struct _fn_substr : public base_function
 
     int str_length = strlen(v_str.str());
 
-    v_from = from->eval();
+    value& v_from = from->eval();
     if(!v_from.is_number())
     {
       throw base_s3select_exception("substr second argument must be number");  //can skip current row
@@ -1944,13 +1941,12 @@ struct _fn_substr : public base_function
 
 struct _fn_charlength : public base_function {
 
-    value v_str;
  
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
         auto iter = args->begin();
         base_statement* str =  *iter;
-        v_str = str->eval();
+        value& v_str = str->eval();
         if(v_str.type != value::value_En_t::STRING) {
             throw base_s3select_exception("content is not string!");
         } else {
@@ -1964,13 +1960,12 @@ struct _fn_charlength : public base_function {
 struct _fn_lower : public base_function {
 
     std::string buff;
-    value v_str;
 
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
         auto iter = args->begin();
         base_statement* str = *iter;
-        v_str = str->eval();
+        value& v_str = str->eval();
         if(v_str.type != value::value_En_t::STRING) {
           throw base_s3select_exception("content is not string");
         } else {
@@ -1985,13 +1980,12 @@ struct _fn_lower : public base_function {
 struct _fn_upper : public base_function {
 
     std::string buff;
-    value v_str;
 
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
         auto iter = args->begin();
         base_statement* str = *iter;
-        v_str = str->eval();
+        value& v_str = str->eval();
         if(v_str.type != value::value_En_t::STRING) {
           throw base_s3select_exception("content is not string");
         } else {
@@ -2005,8 +1999,6 @@ struct _fn_upper : public base_function {
 
 struct _fn_nullif : public base_function {
 
-    value x;
-    value y;
 
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
@@ -2018,10 +2010,10 @@ struct _fn_nullif : public base_function {
           throw base_s3select_exception("nullif accept only 2 arguments");
         }
         base_statement *first = *iter;
-        x = first->eval();
+        value& x = first->eval();
         iter++;
         base_statement *second = *iter;
-        y = second->eval();
+        value& y = second->eval();
         if (x.is_null() && y.is_null())
         {
           result->set_null();
@@ -2049,7 +2041,6 @@ struct _fn_nullif : public base_function {
 
 struct _fn_when_then : public base_function {
 
-  value when_value;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
@@ -2060,7 +2051,7 @@ struct _fn_when_then : public base_function {
 
     base_statement* when_expr = *iter;
 
-    when_value = when_expr->eval();
+    value& when_value = when_expr->eval();
     
     if (when_value.is_true())//true
     {
@@ -2076,9 +2067,6 @@ struct _fn_when_then : public base_function {
 
 struct _fn_when_value_then : public base_function {
 
-  value when_value;
-  value case_value;
-  value then_value;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
@@ -2092,9 +2080,9 @@ struct _fn_when_value_then : public base_function {
 
     base_statement* case_expr = *iter;
 
-    when_value = when_expr->eval();
-    case_value = case_expr->eval();
-    then_value = then_expr->eval();
+    value& when_value = when_expr->eval();
+    value& case_value = case_expr->eval();
+    value& then_value = then_expr->eval();
     
     if (case_value == when_value)
     {
@@ -2109,7 +2097,6 @@ struct _fn_when_value_then : public base_function {
 
 struct _fn_case_when_else : public base_function {
 
-  value when_then_value;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
@@ -2119,7 +2106,7 @@ struct _fn_case_when_else : public base_function {
 
     for(int ivec=args_size;ivec>0;ivec--)
     {
-      when_then_value = (*args)[ivec]->eval();
+      value& when_then_value = (*args)[ivec]->eval();
       
       if(!when_then_value.is_null())
       {
@@ -2146,7 +2133,7 @@ struct _fn_coalesce : public base_function
     while (args_size >= 1)
     {
       base_statement* expr = *iter_begin;
-      value expr_val = expr->eval();
+      value& expr_val = expr->eval();
       iter_begin++;
       if ( !(expr_val.is_null())) {
           *result = expr_val;
@@ -2169,7 +2156,7 @@ struct _fn_string : public base_function
     auto iter = args->begin();
 
     base_statement* expr = *iter;
-    value expr_val = expr->eval();
+    value& expr_val = expr->eval();
     result->set_value((expr_val.to_string()));
     return true;
   }
@@ -2178,12 +2165,11 @@ struct _fn_string : public base_function
 struct _fn_to_bool : public base_function
 {
 
-  value func_arg;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     int64_t i=0;
-    func_arg = (*args->begin())->eval();
+    value& func_arg = (*args->begin())->eval();
 
     if (func_arg.type == value::value_En_t::FLOAT)
     {
@@ -2225,7 +2211,7 @@ struct _fn_trim : public base_function {
     	auto iter = args->begin();
     	int args_size = args->size();
     	base_statement* str = *iter;
-        v_input = str->eval();
+        v_input.set_value(str->eval());
         if(v_input.type != value::value_En_t::STRING) {
             throw base_s3select_exception("content is not string");
         }
@@ -2233,7 +2219,7 @@ struct _fn_trim : public base_function {
         if (args_size == 2) {
         	iter++;
             base_statement* next = *iter;
-            v_remove = next->eval();
+            v_remove.set_value(next->eval());
         }
         boost::trim_right_if(input_string,boost::is_any_of(v_remove.str()));
         boost::trim_left_if(input_string,boost::is_any_of(v_remove.str()));
@@ -2258,7 +2244,7 @@ struct _fn_leading : public base_function {
     	auto iter = args->begin();
     	int args_size = args->size();
     	base_statement* str = *iter;
-        v_input = str->eval();
+        v_input.set_value(str->eval());
         if(v_input.type != value::value_En_t::STRING) {
             throw base_s3select_exception("content is not string");
         }
@@ -2266,7 +2252,7 @@ struct _fn_leading : public base_function {
         if (args_size == 2) {
         	iter++;
             base_statement* next = *iter;
-            v_remove = next->eval();
+            v_remove.set_value(next->eval());
         }
         boost::trim_left_if(input_string,boost::is_any_of(v_remove.str()));
     	result->set_value(input_string.c_str());
@@ -2290,7 +2276,7 @@ struct _fn_trailing : public base_function {
     	auto iter = args->begin();
     	int args_size = args->size();
     	base_statement* str = *iter;
-        v_input = str->eval();
+        v_input.set_value(str->eval());
         if(v_input.type != value::value_En_t::STRING) {
             throw base_s3select_exception("content is not string");
         }
@@ -2298,7 +2284,7 @@ struct _fn_trailing : public base_function {
         if (args_size == 2) {
         	iter++;
             base_statement* next = *iter;
-            v_remove = next->eval();
+            v_remove.set_value(next->eval());
         }
         boost::trim_right_if(input_string,boost::is_any_of(v_remove.str()));
     	result->set_value(input_string.c_str());
