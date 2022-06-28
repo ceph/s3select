@@ -172,9 +172,9 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     std::string m_result;//debug purpose
     std::vector<std::string> key_path;
     std::function<int(void)> m_s3select_processing;
-    bool m_end_of_chunk;
 
-    JsonParserHandler() : init_buffer_stream(false),m_end_of_chunk(false)
+
+    JsonParserHandler() : prefix_match(false),init_buffer_stream(false)
     {} 
 
     std::string get_key_path()
@@ -347,15 +347,9 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
       m_s3select_processing = f;
     }
 
-    bool end_of_chunk()
-    {
-      return m_end_of_chunk;
-    }
-
     int process_json_buffer(char* json_buffer,size_t json_buffer_sz, bool end_of_stream=false)
     {//user keeps calling with buffers, the method is not aware of the object size.
 
-	    m_end_of_chunk = false;
 
       try{
 	    if(!init_buffer_stream)
@@ -392,7 +386,6 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 			    return -1;	  
 		    }
 	    }//while reader.IterativeParseComplete
-	    m_end_of_chunk = true;
 	}
         catch(std::exception &e){//TODO specific exception
                 std::cout << "failed to process JSON" << e.what() << std::endl;

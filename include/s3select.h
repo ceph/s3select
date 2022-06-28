@@ -1924,7 +1924,8 @@ public:
   virtual void row_update_data() {}
   virtual void columnar_fetch_where_clause_columns(){}
   virtual void columnar_fetch_projection(){}
-  virtual bool end_of_chunk(){return true;}//per aggregation flow
+  // for the case were the rows are not fetched, but "pushed" by the data-source parser (JSON)
+  virtual bool multiple_row_processing(){return true;}
 
   void result_values_to_string(multi_values& projections_resuls, std::string& result)
   {
@@ -2005,7 +2006,7 @@ public:
 	}
 
       }
-      while (end_of_chunk());
+      while (multiple_row_processing());
     }
     else
     {
@@ -2025,15 +2026,26 @@ public:
         }
 
       }
-      while (m_where_clause && !m_where_clause->eval().is_true());
+      while (multiple_row_processing() && m_where_clause && !m_where_clause->eval().is_true());
 
-      columnar_fetch_projection();
-      projections_resuls.clear();
-      for (auto& i : m_projections)
+      bool found = multiple_row_processing();
+
+      if(!multiple_row_processing())
       {
-        projections_resuls.push_value( &(i->eval()) );
+	found = !m_where_clause || m_where_clause->eval().is_true();	
       }
-      result_values_to_string(projections_resuls,result);
+  
+      if(found)
+      {
+	columnar_fetch_projection();
+	projections_resuls.clear();
+	for (auto& i : m_projections)
+	{
+	  projections_resuls.push_value( &(i->eval()) );
+	}
+	result_values_to_string(projections_resuls,result);
+      }
+
     }
 
     return is_end_of_stream() ? -1 : 1;
@@ -2540,9 +2552,9 @@ private:
       return m_end_of_stream == true;
   }
 
-  virtual bool end_of_chunk()
+  virtual bool multiple_row_processing()
   {
-    return JsonHandler.end_of_chunk();
+    return false;
   }
 
   int sql_execution_on_row_cb()
