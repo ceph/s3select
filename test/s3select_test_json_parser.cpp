@@ -1,3 +1,4 @@
+#include "s3select.h"
 #include "s3select_json_parser.h"
 #include <gtest/gtest.h>
 #include <cassert>
@@ -656,13 +657,34 @@ int sax_row_count(const char *in, std::vector<std::string>& from_clause)
 	return -1;
 }
 
+const std::string failure_sign("#failure#");
+
+std::string run_s3select(std::string expression, const char* input)
+{//purpose: run query on multiple rows and return result(multiple projections).
+  s3selectEngine::s3select s3select_syntax;
+
+  int status = s3select_syntax.parse_query(expression.c_str());
+
+  if(status)
+    return failure_sign;
+
+  std::string s3select_result;
+  s3selectEngine::json_object  s3_json_object(&s3select_syntax);
+
+  s3_json_object.run_s3select_on_stream(s3select_result, input, strlen(input), strlen(input));
+
+  std::cout<<s3select_result;
+
+  return s3select_result;
+}
+
 TEST(TestS3selectJsonParser, sax_vs_dom)
 {/* the dom parser result is compared against sax parser result
 	ASSERT_EQ( compare_results(TEST2) ,0); // Commenting as it is not implemented in the server side
 	ASSERT_EQ( compare_results(TEST3) ,0);
 	ASSERT_EQ( compare_results(TEST4) ,0);*/
 }
-
+/*
 TEST(TestS3selectJsonParser, exact_filter)
 {
 	std::vector<std::vector<std::string>> input = {{"row"}, {"color"}};
@@ -857,5 +879,15 @@ TEST(TestS3selectJsonParser, row_count)
 
 	std::vector<std::string> from_clause_31 = {"phoneNumbers"};
 	ASSERT_EQ( sax_row_count(TEST11, from_clause_31), 9);
+}*/
+
+TEST(TestS3selectJsonParser, row_count)
+{
+	const std::string input_query = "select count(0) from s3object[*].nested_obj.nested2.array_nested2;";
+
+	std::string s3select_result_1 = run_s3select(input_query, TEST3);
+
+	ASSERT_EQ( s3select_result_1, "4");
 }
+
 
