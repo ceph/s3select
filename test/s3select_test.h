@@ -284,6 +284,87 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file, s
 }
 #endif //_ARROW_EXIST
 
+std::string convert_to_json(const char* csv_stream, size_t stream_length)
+{
+    char* m_stream;
+    char* m_end_stream;
+    char row_delimiter('\n');
+    char column_delimiter(',');
+    bool previous{true};
+
+    m_stream = (char*)csv_stream;
+    m_end_stream = (char*)csv_stream + stream_length;
+    std::stringstream ss;
+    ss << std::endl;
+    ss << "{\"root\" : [";
+    ss << std::endl;
+    while (m_stream < m_end_stream) {
+      int counter{};
+      ss << "{";
+      while( *m_stream && (*m_stream != row_delimiter) )  {
+          if (*m_stream != column_delimiter && previous)  {
+            ss << "\"c" << ++counter << "\"" << ":";
+            ss << "\"";
+            ss << *m_stream;
+            previous = false;
+          } else if (*m_stream != column_delimiter) {
+              ss << *m_stream;
+          } else if (*m_stream == column_delimiter) {
+              if (previous)  {
+                ss << "\"c" << ++counter << "\"" << ":";
+                ss << "null";
+              } else {
+              ss << "\"";
+              }
+              ss << ",";
+              previous = true;
+          }
+        m_stream++;
+      }
+      if(previous)  {
+          ss.seekp(-1, std::ios_base::end);
+      } else {
+          ss << "\"";
+      }
+      previous = true;
+      ss << "}" << ',' << std::endl;
+      m_stream++;
+    }
+    ss.seekp(-2, std::ios_base::end);
+    ss << std::endl;
+    ss << "]" << "}";
+    return ss.str();
+}
+
+const char* convert_query(std::string& expression)
+{
+  std::string from_clause = "s3object";
+  boost::replace_all(expression, from_clause, "s3object[*].root");
+
+  std::string from_clause_1 = "stdin";
+  boost::replace_all(expression, from_clause_1, "s3object[*].root");
+
+  std::string col_1 = "_1";
+  boost::replace_all(expression, col_1, "_1.c1");
+
+  std::string col_2 = "_2";
+  boost::replace_all(expression, col_2, "_1.c2");
+
+  std::string col_3 = "_3";
+  boost::replace_all(expression, col_3, "_1.c3");
+
+  std::string col_4 = "_4";
+  boost::replace_all(expression, col_4, "_1.c4");
+
+  std::string col_5 = "_5";
+  boost::replace_all(expression, col_5, "_1.c5");
+
+  std::string col_9 = "_9";
+  boost::replace_all(expression, col_9, "_1.c9");
+
+  return expression.c_str();
+}
+
 
 std::string run_expression_in_C_prog(const char* expression)
 {
@@ -434,6 +515,11 @@ void parquet_csv_report_error(std::string parquet_result, std::string csv_result
 #endif
 }
 
+void json_csv_report_error(std::string json_result, std::string csv_result)
+{
+  ASSERT_EQ(json_result, csv_result);
+}
+
 std::string run_s3select(std::string expression)
 {//purpose: run query on single row and return result(single projections).
   s3select s3select_syntax;
@@ -525,11 +611,31 @@ std::string run_s3select_opserialization_quot(std::string expression,std::string
     return s3select_result;
 }
 
-std::string run_s3select(std::string expression,std::string input)
+// JSON tests API's
+int run_json_query(const char* json_query, std::string& json_input,std::string& result)
+{//purpose: run single-chunk json queries
+
+  s3select s3select_syntax;
+  int status = s3select_syntax.parse_query(json_query);
+  if (status != 0)
+  {
+    std::cout << "failed to parse query " << s3select_syntax.get_error_description() << std::endl;
+    return -1;
+  }
+
+  json_object json_query_processor(&s3select_syntax);
+  status = json_query_processor.run_s3select_on_stream(result, json_input.data(), json_input.size(), json_input.size());
+  status = json_query_processor.run_s3select_on_stream(result, 0, 0, json_input.size());
+
+  return status;
+}
+
+std::string run_s3select(std::string expression,std::string input, const char* json_query = "")
 {//purpose: run query on multiple rows and return result(multiple projections).
   s3select s3select_syntax;
   std::string parquet_input = input;
 
+  std::string js = convert_to_json(input.c_str(), input.size());
 
   int status = s3select_syntax.parse_query(expression.c_str());
 
@@ -537,6 +643,7 @@ std::string run_s3select(std::string expression,std::string input)
     return failure_sign;
 
   std::string s3select_result;
+  std::string json_result;
   s3selectEngine::csv_object  s3_csv_object(&s3select_syntax);
   s3_csv_object.m_csv_defintion.redundant_column = false;
 
@@ -575,26 +682,16 @@ std::string run_s3select(std::string expression,std::string input)
 
   parquet_csv_report_error(parquet_result,s3select_result);
 #endif //_ARROW_EXIST
+  
+  if(strlen(json_query) == 0) {
+    json_query = convert_query(expression);
+  }
+
+  run_json_query(json_query, js, json_result);
+  json_csv_report_error(json_result, s3select_result);
 
   return s3select_result;
 }
 
-// JSON tests API's
-int run_json_query(const char* json_query, std::string& json_input,std::string& result)
-{//purpose: run single-chunk json queries
 
-  s3select s3select_syntax;
-  int status = s3select_syntax.parse_query(json_query);
-  if (status != 0)
-  {
-    std::cout << "failed to parse query " << s3select_syntax.get_error_description() << std::endl;
-    return -1;
-  }
-
-  json_object json_query_processor(&s3select_syntax);
-  status = json_query_processor.run_s3select_on_stream(result, json_input.data(), json_input.size(), json_input.size());
-  status = json_query_processor.run_s3select_on_stream(result, 0, 0, json_input.size());
-
-  return status;
-}
 

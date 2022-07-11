@@ -8,50 +8,8 @@
 #include <iostream>
 #include "s3select_oper.h"
 #include <boost/algorithm/string/predicate.hpp>
+#include "s3select.h"
 
-// ===== base64 encode/decode
-
-typedef unsigned char uchar;
-static const std::string b = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";//=
-static std::string base64_encode(const std::string &in) {
-    std::string out;
-
-    int val=0, valb=-6;
-    for (uchar c : in) {
-        val = (val<<8) + c;
-        valb += 8;
-        while (valb>=0) {
-            out.push_back(b[(val>>valb)&0x3F]);
-            valb-=6;
-        }
-    }
-    if (valb>-6) out.push_back(b[((val<<8)>>(valb+8))&0x3F]);
-    while (out.size()%4) out.push_back('=');
-    return out;
-}
-
-
-static std::string base64_decode(const std::string &in) {
-
-    std::string out;
-
-    std::vector<int> T(256,-1);
-    for (int i=0; i<64; i++) T[b[i]] = i;
-
-    int val=0, valb=-8;
-    for (uchar c : in) {
-        if (T[c] == -1) break;
-        val = (val<<6) + T[c];
-        valb += 6;
-        if (valb>=0) {
-            out.push_back(char((val>>valb)&0xFF));
-            valb-=8;
-        }
-    }
-    return out;
-}
-
-//=============================================
 
 class dom_traverse_v2
 {
@@ -317,181 +275,519 @@ std::string json2 = R"({
 }
 )";
 
+std::string json3 = R"({
+  "hello": "world",
+    "t": "true" ,
+    "f": "false",
+    "n": "null",
+    "i": 123,
+    "pi": 3.1416,
 
-#define TEST2 \
-"ewoicm93IiA6IFsKCXsKCQkiY29sb3IiOiAicmVkIiwKCQkidmFsdWUiOiAiI2YwMCIKCX0sCgl7\
-CgkJImNvbG9yIjogImdyZWVuIiwKCQkidmFsdWUiOiAiIzBmMCIKCX0sCgl7CgkJImNvbG9yIjog\
-ImJsdWUiLAoJCSJ2YWx1ZSI6ICIjMDBmIgoJfSwKCXsKCQkiY29sb3IiOiAiY3lhbiIsCgkJInZh\
-bHVlIjogIiMwZmYiCgl9LAoJewoJCSJjb2xvciI6ICJtYWdlbnRhIiwKCQkidmFsdWUiOiAiI2Yw\
-ZiIKCX0sCgl7CgkJImNvbG9yIjogInllbGxvdyIsCgkJInZhbHVlIjogIiNmZjAiCgl9LAoJewoJ\
-CSJjb2xvciI6ICJibGFjayIsCgkJInZhbHVlIjogIiMwMDAiCgl9Cl0KfQo="
+    "nested_obj" : {
+      "hello2": "world",
+      "t2": true,
+      "nested2" : {
+        "c1" : "c1_value" ,
+        "array_nested2": [10, 20, 30, 40]
+      },
+      "nested3" :{
+        "hello3": "world",
+        "t2": true,
+        "nested4" : {
+          "c1" : "c1_value" ,
+          "array_nested3": [100, 200, 300, 400]
+        }
+      }
+    },
+    "array_1": [1, 2, 3, 4]
+}
+)";
 
-#define TEST3 \
-"ewogICJoZWxsbyI6ICJ3b3JsZCIsCiAgICAidCI6ICJ0cnVlIiAsCiAgICAiZiI6ICJmYWxzZSIs\
-CiAgICAibiI6ICJudWxsIiwKICAgICJpIjogMTIzLAogICAgInBpIjogMy4xNDE2LAoKICAgICJu\
-ZXN0ZWRfb2JqIiA6IHsKICAgICAgImhlbGxvMiI6ICJ3b3JsZCIsCiAgICAgICJ0MiI6IHRydWUs\
-CiAgICAgICJuZXN0ZWQyIiA6IHsKICAgICAgICAiYzEiIDogImMxX3ZhbHVlIiAsCiAgICAgICAg\
-ImFycmF5X25lc3RlZDIiOiBbMTAsIDIwLCAzMCwgNDBdCiAgICAgIH0sCiAgICAgICJuZXN0ZWQz\
-IiA6ewogICAgICAgICJoZWxsbzMiOiAid29ybGQiLAogICAgICAgICJ0MiI6IHRydWUsCiAgICAg\
-ICAgIm5lc3RlZDQiIDogewogICAgICAgICAgImMxIiA6ICJjMV92YWx1ZSIgLAogICAgICAgICAg\
-ImFycmF5X25lc3RlZDMiOiBbMTAwLCAyMDAsIDMwMCwgNDAwXQogICAgICAgIH0KICAgICAgfQog\
-ICAgfSwKICAgICJhcnJheV8xIjogWzEsIDIsIDMsIDRdCn0K"
+std::string json4 = R"({
 
-#define TEST4 \
-"ewoKICAgICJnbG9zc2FyeSI6IHsKICAgICAgICAidGl0bGUiOiAiZXhhbXBsZSBnbG9zc2FyeSIs\
-CgkJIkdsb3NzRGl2IjogewogICAgICAgICAgICAidGl0bGUiOiAiUyIsCgkJCSJHbG9zc0xpc3Qi\
-OiB7CiAgICAgICAgICAgICAgICAiR2xvc3NFbnRyeSI6IHsKICAgICAgICAgICAgICAgICAgICAi\
-SUQiOiAiU0dNTCIsCgkJCQkJIlNvcnRBcyI6ICJTR01MIiwKCQkJCQkiR2xvc3NUZXJtIjogIlN0\
-YW5kYXJkIEdlbmVyYWxpemVkIE1hcmt1cCBMYW5ndWFnZSIsCgkJCQkJIkFjcm9ueW0iOiAiU0dN\
-TCIsCgkJCQkJIkFiYnJldiI6ICJJU08gODg3OToxOTg2IiwKCQkJCQkiR2xvc3NEZWYiOiB7CiAg\
-ICAgICAgICAgICAgICAgICAgICAgICJwYXJhIjogIkEgbWV0YS1tYXJrdXAgbGFuZ3VhZ2UsIHVz\
-ZWQgdG8gY3JlYXRlIG1hcmt1cCBsYW5ndWFnZXMgc3VjaCBhcyBEb2NCb29rLiIsCgkJCQkJCSJH\
-bG9zc1NlZUFsc28iOiBbIkdNTCIsICJYTUwiXQogICAgICAgICAgICAgICAgICAgIH0sCgkJCQkJ\
-Ikdsb3NzU2VlIjogIm1hcmt1cCIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQogICAg\
-ICAgIH0KICAgIH0KfQoK"
+    "glossary": {
+        "title": "example glossary",
+		"GlossDiv": {
+            "title": "S",
+			"GlossList": {
+                "GlossEntry": {
+                    "ID": "SGML",
+					"SortAs": "SGML",
+					"GlossTerm": "Standard Generalized Markup Language",
+					"Acronym": "SGML",
+					"Abbrev": "ISO 8879:1986",
+					"GlossDef": {
+                        "para": "A meta-markup language, used to create markup languages such as DocBook.",
+						"GlossSeeAlso": ["GML", "XML"]
+                    },
+					"GlossSee": "markup"
+                }
+            }
+        }
+    }
+}
+)";
 
-#define TEST5 \
-"ewoKICAgICJnbG9zc2FyeSI6IHsKICAgICAgICAidGl0bGUiOiAiZXhhbXBsZSBnbG9zc2FyeSIsCiAgICAgICAgICAgICAgICAiR2xvc3NEaXYiOiB7CiAgICAgICAgICAgICJ0aXRsZSI6ICJTIi\
-wKICAgICAgICAgICAgICAgICAgICAgICAgIkdsb3NzTGlzdCI6IHsKICAgICAgICAgICAgICAgICJHbG9zc0VudHJ5IjogewogICAgICAgICAgICAgICAgICAgICJJRCI6ICJTR01MIiwKICAgICAgI\
-CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJTb3J0QXMiOiAiU0dNTCIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAiR2xvc3NUZXJtIjogIlN0YW5kYXJk\
-IEdlbmVyYWxpemVkIE1hcmt1cCBMYW5ndWFnZSIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAiQWNyb255bSI6ICJTR01MIiwKICAgICAgICAgICAgICAgICAgICAgIC\
-AgICAgICAgICAgICAgICAgICJBYmJyZXYiOiAiSVNPIDg4Nzk6MTk4NiIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAiR2xvc3NEZWYiOiB7CiAgICAgICAgICAgICAg\
-ICAgICAgICAgICJwYXJhIjogIkEgbWV0YS1tYXJrdXAgbGFuZ3VhZ2UsIHVzZWQgdG8gY3JlYXRlIG1hcmt1cCBsYW5ndWFnZXMgc3VjaCBhcyBEb2NCb29rLiIsCiAgICAgICAgICAgICAgICAgIC\
-AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJHbG9zc1NlZUFsc28iOiBbIkdNTCIsICJYTUwiXSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgInBv\
-c3RhcnJheSI6IHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJhIjoxMTEsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC\
-AgICAgICAgICAgICAgICAgICAgICAgICAiYiI6MjIyCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICB9LAogICAgICAg\
-ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIkdsb3NzU2VlIjogIm1hcmt1cCIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KfQo="
+std::string json6 = R"({
+"root" : [
+{
 
-#define TEST6 \
-"ewoicm9vdCIgOiBbCnsKCiAgICAiZ2xvc3NhcnkiOiB7CiAgICAgICAgInRpdGxlIjogImV4YW1w\
-bGUgZ2xvc3NhcnkiLAoJCSJHbG9zc0RpdiI6IHsKICAgICAgICAgICAgInRpdGxlIjogIlMiLAoJ\
-CQkiR2xvc3NMaXN0IjogewogICAgICAgICAgICAgICAgIkdsb3NzRW50cnkiOiB7CiAgICAgICAg\
-ICAgICAgICAgICAgIklEIjogIlNHTUwiLAoJCQkJCSJTb3J0QXMiOiAiU0dNTCIsCgkJCQkJIkds\
-b3NzVGVybSI6ICJTdGFuZGFyZCBHZW5lcmFsaXplZCBNYXJrdXAgTGFuZ3VhZ2UiLAoJCQkJCSJB\
-Y3JvbnltIjogIlNHTUwiLAoJCQkJCSJBYmJyZXYiOiAiSVNPIDg4Nzk6MTk4NiIsCgkJCQkJIkds\
-b3NzRGVmIjogewogICAgICAgICAgICAgICAgICAgICAgICAicGFyYSI6ICJBIG1ldGEtbWFya3Vw\
-IGxhbmd1YWdlLCB1c2VkIHRvIGNyZWF0ZSBtYXJrdXAgbGFuZ3VhZ2VzIHN1Y2ggYXMgRG9jQm9v\
-ay4iLAoJCQkJCQkiR2xvc3NTZWVBbHNvIjogWyJHTUwiLCAiWE1MIl0sCgkJCQkJCSJwb3N0YXJy\
-YXkiOiB7CgkJCQkJCQkgICJhIjoxMTEsCgkJCQkJCQkgICJiIjoyMjIKCQkJCQkJfQogICAgICAg\
-ICAgICAgICAgICAgIH0sCgkJCQkJIkdsb3NzU2VlIjogIm1hcmt1cCIKICAgICAgICAgICAgICAg\
-IH0sCiAgICAgICAgICAgICAgICAiR2xvc3NFbnRyeSI6IAoJCXsKICAgICAgICAgICAgICAgICAg\
-ICAiSUQiOiAiU0dNTCIsCgkJCQkJIlNvcnRBcyI6ICJTR01MIiwKCQkJCQkiR2xvc3NUZXJtIjog\
-IlN0YW5kYXJkIEdlbmVyYWxpemVkIE1hcmt1cCBMYW5ndWFnZSIsCgkJCQkJIkFjcm9ueW0iOiAi\
-U0dNTCIsCgkJCQkJIkFiYnJldiI6ICJJU08gODg3OToxOTg2IiwKCQkJCQkiR2xvc3NEZWYiOiB7\
-CiAgICAgICAgICAgICAgICAgICAgICAgICJwYXJhIjogIkEgbWV0YS1tYXJrdXAgbGFuZ3VhZ2Us\
-IHVzZWQgdG8gY3JlYXRlIG1hcmt1cCBsYW5ndWFnZXMgc3VjaCBhcyBEb2NCb29rLiIsCgkJCQkJ\
-CSJHbG9zc1NlZUFsc28iOiBbIkdNTCIsICJYTUwiXSwKCQkJCQkJInBvc3RhcnJheSI6IHsKCQkJ\
-CQkJCSAgImEiOjExMSwKCQkJCQkJCSAgImIiOjIyMgoJCQkJCQl9CiAgICAgICAgICAgICAgICAg\
-ICAgfSwKCQkJCQkiR2xvc3NTZWUiOiAibWFya3VwIgogICAgICAgICAgICAgICAgfQogICAgICAg\
-ICAgICB9CiAgICAgICAgfQogICAgfQp9CiwKewoKICAgICJnbG9zc2FyeSI6IHsKICAgICAgICAi\
-dGl0bGUiOiAiZXhhbXBsZSBnbG9zc2FyeSIsCgkJIkdsb3NzRGl2IjogewogICAgICAgICAgICAi\
-dGl0bGUiOiAiUyIsCgkJCSJHbG9zc0xpc3QiOiB7CiAgICAgICAgICAgICAgICAiR2xvc3NFbnRy\
-eSI6IHsKICAgICAgICAgICAgICAgICAgICAiSUQiOiAiU0dNTCIsCgkJCQkJIlNvcnRBcyI6ICJT\
-R01MIiwKCQkJCQkiR2xvc3NUZXJtIjogIlN0YW5kYXJkIEdlbmVyYWxpemVkIE1hcmt1cCBMYW5n\
-dWFnZSIsCgkJCQkJIkFjcm9ueW0iOiAiU0dNTCIsCgkJCQkJIkFiYnJldiI6ICJJU08gODg3OTox\
-OTg2IiwKCQkJCQkiR2xvc3NEZWYiOiB7CiAgICAgICAgICAgICAgICAgICAgICAgICJwYXJhIjog\
-IkEgbWV0YS1tYXJrdXAgbGFuZ3VhZ2UsIHVzZWQgdG8gY3JlYXRlIG1hcmt1cCBsYW5ndWFnZXMg\
-c3VjaCBhcyBEb2NCb29rLiIsCgkJCQkJCSJHbG9zc1NlZUFsc28iOiBbIkdNTCIsICJYTUwiXQog\
-ICAgICAgICAgICAgICAgICAgIH0sCgkJCQkJIkdsb3NzU2VlIjogIm1hcmt1cCIKICAgICAgICAg\
-ICAgICAgIH0KICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KfQpdCn0K"
+    "glossary": {
+        "title": "example glossary",
+		"GlossDiv": {
+            "title": "S",
+			"GlossList": {
+                "GlossEntry": {
+                    "ID": "SGML",
+					"SortAs": "SGML",
+					"GlossTerm": "Standard Generalized Markup Language",
+					"Acronym": "SGML",
+					"Abbrev": "ISO 8879:1986",
+					"GlossDef": {
+                        "para": "A meta-markup language, used to create markup languages such as DocBook.",
+						"GlossSeeAlso": ["GML", "XML"],
+						"postarray": {
+							  "a":111,
+							  "b":222
+						}
+                    },
+					"GlossSee": "markup"
+                },
+                "GlossEntry": 
+		{
+                    "ID": "SGML",
+					"SortAs": "SGML",
+					"GlossTerm": "Standard Generalized Markup Language",
+					"Acronym": "SGML",
+					"Abbrev": "ISO 8879:1986",
+					"GlossDef": {
+                        "para": "A meta-markup language, used to create markup languages such as DocBook.",
+						"GlossSeeAlso": ["GML", "XML"],
+						"postarray": {
+							  "a":111,
+							  "b":222
+						}
+                    },
+					"GlossSee": "markup"
+                }
+            }
+        }
+    }
+}
+,
+{
 
-#define TEST7 \
-"ewogICJsZXZlbDEiIDogewogICAgImxldmVsMiIgOiB7CiAgICAgICJsZXZlbDMiIDogewoJImxldmVsNCIgOiAidmFsdWU0IgogICAgICB9CiAgICB9CiAgfSwKICAgI\
-CJsZXZlbDFfMiIgOnsKICAgICAgImxldmVsMiIgOiB7CgkibGV2ZWwzIiA6IHsKCSAgImxldmVsNCIgOiAidmFsdWU0XzIiCgl9CiAgICAgIH0KICAgIH0KfSAK"
+    "glossary": {
+        "title": "example glossary",
+		"GlossDiv": {
+            "title": "S",
+			"GlossList": {
+                "GlossEntry": {
+                    "ID": "SGML",
+					"SortAs": "SGML",
+					"GlossTerm": "Standard Generalized Markup Language",
+					"Acronym": "SGML",
+					"Abbrev": "ISO 8879:1986",
+					"GlossDef": {
+                        "para": "A meta-markup language, used to create markup languages such as DocBook.",
+						"GlossSeeAlso": ["GML", "XML"]
+                    },
+					"GlossSee": "markup"
+                }
+            }
+        }
+    }
+}
+]
+}
+)";
 
-#define TEST8 \
-"ewogICAiZmlyc3ROYW1lIjogIkpvZSIsCiAgICJsYXN0TmFtZSI6ICJKYWNrc29uIiwKICAgImdlbmRlciI6ICJtYWxlIiwKICAgImFnZSI6ICJ0d2VudHkiLAogICAiYWRkcmV\
-zcyI6IHsKICAgICAgICJzdHJlZXRBZGRyZXNzIjogIjEwMSIsCiAgICAgICAiY2l0eSI6ICJTYW4gRGllZ28iLAogICAgICAgInN0YXRlIjogIkNBIgogICB9LAogICAicGhvbm\
-VOdW1iZXJzIjogWwogICAgICAgeyAidHlwZSI6ICJob21lIiwgIm51bWJlciI6ICI3MzQ5MjgyMzgyIiB9CiAgIF0KfQo="
+std::string json7 = R"({
+  "level1" : {
+    "level2" : {
+      "level3" : {
+	"level4" : "value4"
+      }
+    }
+  },
+    "level1_2" :{
+      "level2" : {
+	"level3" : {
+	  "level4" : "value4_2"
+	}
+      }
+    }
+}
+)";
 
-#define TEST9 \
-"WwogIHsKICAgICJfaWQiOiAiNjIwYjUyNzFiMzkyYjc0NTYyZTM4NzAwIiwKICAgICJpbmRleCI6IDAsCiAgICAiZ3VpZCI6ICI0YzgyNzk0Ni0yNDJlLTQzYTctODcxNy03MmJiMmFmM2ZkZTIiLAogI\
-CAgImlzQWN0aXZlIjogdHJ1ZSwKICAgICJiYWxhbmNlIjogIiQzLDA1Ny41MyIsCiAgICAicGljdHVyZSI6ICJodHRwOi8vcGxhY2Vob2xkLml0LzMyeDMyIiwKICAgICJhZ2UiOiAyMCwKICAgICJleW\
-VDb2xvciI6ICJibHVlIiwKICAgICJuYW1lIjogIk1vbnRnb21lcnkgR3JlZW5lIiwKICAgICJnZW5kZXIiOiAibWFsZSIsCiAgICAiY29tcGFueSI6ICJWRU5EQkxFTkQiLAogICAgImVtYWlsIjogIm1\
-vbnRnb21lcnlncmVlbmVAdmVuZGJsZW5kLmNvbSIsCiAgICAicGhvbmUiOiAiKzEgKDg5NCkgNTgyLTI1MzAiLAogICAgImFkZHJlc3MiOiAiNzAzIEJheXZpZXcgQXZlbnVlLCBDYXJyc3ZpbGxlLCBW\
-aXJnaW4gSXNsYW5kcywgMjYyMiIsCiAgICAiYWJvdXQiOiAiQXV0ZSB1bGxhbWNvIGV4Y2VwdGV1ciBsYWJvcnVtIG1pbmltIGFuaW0gcXVpcyBhdXRlIGFkLiBFc3NlIG5vbiBlc3NlIGlydXJlIGFkI\
-HNpbnQgZXQgdWxsYW1jbyB0ZW1wb3IgcXVpIGN1bHBhIGNvbnNlcXVhdCBleGVyY2l0YXRpb24gTG9yZW0gdWxsYW1jby4gUHJvaWRlbnQgYW5pbSBlbGl0IGV0IG51bGxhIGN1cGlkYXRhdCBlc3NlLi\
-BWZWxpdCBleGNlcHRldXIgYWxpcXVpcCBldCByZXByZWhlbmRlcml0IHF1aXMgY3VscGEgcHJvaWRlbnQgbGFib3J1bSBlc3NlIHVsbGFtY28gZWEgZWxpdCBub24uIE5vc3RydWQgaWQgbGFib3JpcyB\
-tYWduYSBpbmNpZGlkdW50IHV0IHRlbXBvciBjdXBpZGF0YXQgZWxpdCBleGNlcHRldXIgaW4gc2l0IGxhYm9ydW0uIElydXJlIHZlbmlhbSBlc3NlIGF1dGUgYWRpcGlzaWNpbmcgZWxpdCBlc3NlLiBU\
-ZW1wb3Igbm9uIHVsbGFtY28gZXhjZXB0ZXVyIGN1cGlkYXRhdCByZXByZWhlbmRlcml0IHJlcHJlaGVuZGVyaXQgaWQgY29tbW9kbyBkdWlzIHVsbGFtY28gc2ludCBpbmNpZGlkdW50IGluIHZlbGl0L\
-lxyXG4iLAogICAgInJlZ2lzdGVyZWQiOiAiMjAxNi0wOC0yM1QwODozMTowOCAtMDY6LTMwIiwKICAgICJsYXRpdHVkZSI6IC0xNS4zOTU4ODUsCiAgICAibG9uZ2l0dWRlIjogLTYuNzMwMDE3LAogIC\
-AgInRhZ3MiOiBbCiAgICAgICJlaXVzbW9kIiwKICAgICAgImFsaXF1YSIsCiAgICAgICJpcHN1bSIsCiAgICAgICJpcnVyZSIsCiAgICAgICJlbGl0IiwKICAgICAgInF1aXMiLAogICAgICAic2l0Igo\
-gICAgXSwKICAgICJmcmllbmRzIjogWwogICAgICB7CiAgICAgICAgImlkIjogMCwKICAgICAgICAibmFtZSI6ICJLYW5lIENoZW4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiaWQiOiAxLAogICAg\
-ICAgICJuYW1lIjogIkRpYW5uYSBMYXdyZW5jZSIKICAgICAgfSwKICAgICAgewogICAgICAgICJpZCI6IDIsCiAgICAgICAgIm5hbWUiOiAiTGVpbGEgSnVhcmV6IgogICAgICB9CiAgICBdLAogICAgI\
-mdyZWV0aW5nIjogIkhlbGxvLCBNb250Z29tZXJ5IEdyZWVuZSEgWW91IGhhdmUgNSB1bnJlYWQgbWVzc2FnZXMuIiwKICAgICJmYXZvcml0ZUZydWl0IjogImJhbmFuYSIKICB9LAogIHsKICAgICJfaW\
-QiOiAiNjIwYjUyNzE4N2IyOTUyOTAxMDU1MTY5IiwKICAgICJpbmRleCI6IDEsCiAgICAiZ3VpZCI6ICIzZjQ3Nzk4MC03MzAwLTRmODktYTJiMS01ZTQ2N2QxMjc4ZWUiLAogICAgImlzQWN0aXZlIjo\
-gZmFsc2UsCiAgICAiYmFsYW5jZSI6ICIkMiwxNTYuODgiLAogICAgInBpY3R1cmUiOiAiaHR0cDovL3BsYWNlaG9sZC5pdC8zMngzMiIsCiAgICAiYWdlIjogMzAsCiAgICAiZXllQ29sb3IiOiAiYnJv\
-d24iLAogICAgIm5hbWUiOiAiU3Rld2FydCBDYWluIiwKICAgICJnZW5kZXIiOiAibWFsZSIsCiAgICAiY29tcGFueSI6ICJYU1BPUlRTIiwKICAgICJlbWFpbCI6ICJzdGV3YXJ0Y2FpbkB4c3BvcnRzL\
-mNvbSIsCiAgICAicGhvbmUiOiAiKzEgKDgyNSkgNTk5LTI4NDUiLAogICAgImFkZHJlc3MiOiAiNzAzIEhpZ2hsYW5kIEF2ZW51ZSwgQmVsZmFpciwgSGF3YWlpLCAyMTciLAogICAgImFib3V0IjogIk\
-N1bHBhIG1vbGxpdCB1bGxhbWNvIGFkIGV4ZXJjaXRhdGlvbi4gU2ludCBtb2xsaXQgaW4gaW4gYWQgbWluaW0gbW9sbGl0IGN1bHBhIG5pc2kuIFJlcHJlaGVuZGVyaXQgYWxpcXVhIGRvIHNpdCBuaXN\
-pIGFtZXQgZXNzZSBhZCBjb25zZWN0ZXR1ciBudWxsYSBhdXRlIGlkIGFsaXF1YSBtYWduYS5cclxuIiwKICAgICJyZWdpc3RlcmVkIjogIjIwMTctMDMtMjBUMTA6Mjg6MjQgLTA2Oi0zMCIsCiAgICAi\
-bGF0aXR1ZGUiOiA1OC40NzU4OTIsCiAgICAibG9uZ2l0dWRlIjogMTQxLjM1NjkzNSwKICAgICJ0YWdzIjogWwogICAgICAicGFyaWF0dXIiLAogICAgICAiZHVpcyIsCiAgICAgICJsYWJvcmlzIiwKI\
-CAgICAgIm1vbGxpdCIsCiAgICAgICJpcnVyZSIsCiAgICAgICJlaXVzbW9kIiwKICAgICAgInNpbnQiCiAgICBdLAogICAgImZyaWVuZHMiOiBbCiAgICAgIHsKICAgICAgICAiaWQiOiAwLAogICAgIC\
-AgICJuYW1lIjogIk5lYWwgTG9wZXoiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiaWQiOiAxLAogICAgICAgICJuYW1lIjogIlRpZmZhbnkgQ29jaHJhbiIKICAgICAgfSwKICAgICAgewogICAgICA\
-gICJpZCI6IDIsCiAgICAgICAgIm5hbWUiOiAiU3RldmVucyBEYXZlbnBvcnQiCiAgICAgIH0KICAgIF0sCiAgICAiZ3JlZXRpbmciOiAiSGVsbG8sIFN0ZXdhcnQgQ2FpbiEgWW91IGhhdmUgMTAgdW5y\
-ZWFkIG1lc3NhZ2VzLiIsCiAgICAiZmF2b3JpdGVGcnVpdCI6ICJhcHBsZSIKICB9LAogIHsKICAgICJfaWQiOiAiNjIwYjUyNzFmZTk4MDViODE1ZmI4NzBiIiwKICAgICJpbmRleCI6IDIsCiAgICAiZ\
-3VpZCI6ICIxYTFjY2FiNi0xMDU5LTRmY2MtOTJmMy0yNDhkNzgwZTA4YmIiLAogICAgImlzQWN0aXZlIjogdHJ1ZSwKICAgICJiYWxhbmNlIjogIiQyLDgyNy4xNSIsCiAgICAicGljdHVyZSI6ICJodH\
-RwOi8vcGxhY2Vob2xkLml0LzMyeDMyIiwKICAgICJhZ2UiOiAyNSwKICAgICJleWVDb2xvciI6ICJicm93biIsCiAgICAibmFtZSI6ICJEYXZpZHNvbiBQcmluY2UiLAogICAgImdlbmRlciI6ICJtYWx\
-lIiwKICAgICJjb21wYW55IjogIk1JVFJPQyIsCiAgICAiZW1haWwiOiAiZGF2aWRzb25wcmluY2VAbWl0cm9jLmNvbSIsCiAgICAicGhvbmUiOiAiKzEgKDgzNCkgNTAxLTIxNjciLAogICAgImFkZHJl\
-c3MiOiAiMjUxIFBvcnRsYW5kIEF2ZW51ZSwgRm9zdG9yaWEsIE1pbm5lc290YSwgOTE3OSIsCiAgICAiYWJvdXQiOiAiVWxsYW1jbyBtb2xsaXQgYW5pbSBkb2xvcmUgbGFib3JpcyBjdXBpZGF0YXQuI\
-EFsaXF1aXAgbm9uIGRvbG9yIGRvbG9yZSB2ZWxpdCBhbGlxdWlwIGNvbnNlY3RldHVyLiBOb24gY3VscGEgbm9uIGF1dGUgZXNzZSB2b2x1cHRhdGUgZWxpdCBlc3NlIGNvbnNlY3RldHVyIHNpdCBhZC\
-Bjb25zZXF1YXQuIERlc2VydW50IGlwc3VtIG5pc2kgYWxpcXVhIGFtZXQgbm9uIGxhYm9yaXMgY2lsbHVtIHJlcHJlaGVuZGVyaXQgTG9yZW0gbGFib3J1bSBjb21tb2RvIHVsbGFtY28gbGFib3J1bS5\
-cclxuIiwKICAgICJyZWdpc3RlcmVkIjogIjIwMjAtMDctMDFUMTA6MDg6MTMgLTA2Oi0zMCIsCiAgICAibGF0aXR1ZGUiOiA0OC40ODMzMjIsCiAgICAibG9uZ2l0dWRlIjogMTUzLjcyMzU3NCwKICAg\
-ICJ0YWdzIjogWwogICAgICAiaXJ1cmUiLAogICAgICAib2NjYWVjYXQiLAogICAgICAiZG9sb3JlIiwKICAgICAgInRlbXBvciIsCiAgICAgICJtb2xsaXQiLAogICAgICAiZXN0IiwKICAgICAgImxhY\
-m9yaXMiCiAgICBdLAogICAgImZyaWVuZHMiOiBbCiAgICAgIHsKICAgICAgICAiaWQiOiAwLAogICAgICAgICJuYW1lIjogIkx1Y3kgQ29ucmFkIgogICAgICB9LAogICAgICB7CiAgICAgICAgImlkIj\
-ogMSwKICAgICAgICAibmFtZSI6ICJDdXJ0aXMgVHlsZXIiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiaWQiOiAyLAogICAgICAgICJuYW1lIjogIlRhcmEgVGFsbGV5IgogICAgICB9CiAgICBdLAo\
-gICAgImdyZWV0aW5nIjogIkhlbGxvLCBEYXZpZHNvbiBQcmluY2UhIFlvdSBoYXZlIDMgdW5yZWFkIG1lc3NhZ2VzLiIsCiAgICAiZmF2b3JpdGVGcnVpdCI6ICJzdHJhd2JlcnJ5IgogIH0sCiAgewog\
-ICAgIl9pZCI6ICI2MjBiNTI3MTc5MDBiMzRhZWI4OTkwNTEiLAogICAgImluZGV4IjogMywKICAgICJndWlkIjogIjhkMTFjMjljLWNmYWItNDEwNS1hYmY0LWM3YjQ1NzZlYjg5YiIsCiAgICAiaXNBY\
-3RpdmUiOiBmYWxzZSwKICAgICJiYWxhbmNlIjogIiQxLDg2MS4wMiIsCiAgICAicGljdHVyZSI6ICJodHRwOi8vcGxhY2Vob2xkLml0LzMyeDMyIiwKICAgICJhZ2UiOiAyOCwKICAgICJleWVDb2xvci\
-I6ICJncmVlbiIsCiAgICAibmFtZSI6ICJQZXJyeSBDbGFya2UiLAogICAgImdlbmRlciI6ICJtYWxlIiwKICAgICJjb21wYW55IjogIlpJTExBRFlORSIsCiAgICAiZW1haWwiOiAicGVycnljbGFya2V\
-AemlsbGFkeW5lLmNvbSIsCiAgICAicGhvbmUiOiAiKzEgKDg4NykgNDM5LTM3NDMiLAogICAgImFkZHJlc3MiOiAiNTk3IFRoYW1lcyBTdHJlZXQsIEJsZW5kZSwgR2VvcmdpYSwgODIxMiIsCiAgICAi\
-YWJvdXQiOiAiSW5jaWRpZHVudCB0ZW1wb3IgbWluaW0gYWxpcXVhIGRvbG9yZSBvZmZpY2lhIGNvbnNlY3RldHVyIGluIGluIGN1bHBhIGNpbGx1bSBhbGlxdWEuIE5vbiBudWxsYSBxdWlzIGV4IHRlb\
-XBvci4gTW9sbGl0IGR1aXMgY3VwaWRhdGF0IGlydXJlIGluY2lkaWR1bnQgYW1ldCBMb3JlbSBhZGlwaXNpY2luZy4gTG9yZW0gaXBzdW0gZG9sb3JlIGNpbGx1bSB1dCBkb2xvciBzaXQgcXVpcyBlaX\
-VzbW9kIGNvbnNlcXVhdCBpZC4gTGFib3JpcyBlc3NlIGxhYm9yaXMgaWQgZXggbmlzaSBtaW5pbSB2ZWxpdCBjaWxsdW0gYWRpcGlzaWNpbmcuIER1aXMgbWluaW0gc2ludCB2b2x1cHRhdGUgbm9uIGx\
-hYm9yaXMgZG9sb3IgZWEgaW5jaWRpZHVudCBtaW5pbSBpbmNpZGlkdW50IGVuaW0uXHJcbiIsCiAgICAicmVnaXN0ZXJlZCI6ICIyMDIwLTA0LTE0VDAxOjI0OjAzIC0wNjotMzAiLAogICAgImxhdGl0\
-dWRlIjogMTQuMTYwMjE4LAogICAgImxvbmdpdHVkZSI6IDE2Ny45MTE5NzgsCiAgICAidGFncyI6IFsKICAgICAgInN1bnQiLAogICAgICAidXQiLAogICAgICAiZXUiLAogICAgICAic2l0IiwKICAgI\
-CAgImV4Y2VwdGV1ciIsCiAgICAgICJwcm9pZGVudCIsCiAgICAgICJ2b2x1cHRhdGUiCiAgICBdLAogICAgImZyaWVuZHMiOiBbCiAgICAgIHsKICAgICAgICAiaWQiOiAwLAogICAgICAgICJuYW1lIj\
-ogIkF1ZHJhIFdhbGxhY2UiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiaWQiOiAxLAogICAgICAgICJuYW1lIjogIk1jZ293YW4gQmVudGxleSIKICAgICAgfSwKICAgICAgewogICAgICAgICJpZCI\
-6IDIsCiAgICAgICAgIm5hbWUiOiAiQXJsZW5lIEdhbGxvd2F5IgogICAgICB9CiAgICBdLAogICAgImdyZWV0aW5nIjogIkhlbGxvLCBQZXJyeSBDbGFya2UhIFlvdSBoYXZlIDEwIHVucmVhZCBtZXNz\
-YWdlcy4iLAogICAgImZhdm9yaXRlRnJ1aXQiOiAiYXBwbGUiCiAgfSwKICB7CiAgICAiX2lkIjogIjYyMGI1MjcxMjYyMTZkM2Q2NDE2Mjc1ZSIsCiAgICAiaW5kZXgiOiA0LAogICAgImd1aWQiOiAiM\
-jdmYTMzZDUtOGRjMy00NDExLWEwZTEtOGQ5YmYwNjRkYjUyIiwKICAgICJpc0FjdGl2ZSI6IGZhbHNlLAogICAgImJhbGFuY2UiOiAiJDIsNzM5Ljk1IiwKICAgICJwaWN0dXJlIjogImh0dHA6Ly9wbG\
-FjZWhvbGQuaXQvMzJ4MzIiLAogICAgImFnZSI6IDIyLAogICAgImV5ZUNvbG9yIjogImdyZWVuIiwKICAgICJuYW1lIjogIktlcnIgQnJhbmNoIiwKICAgICJnZW5kZXIiOiAibWFsZSIsCiAgICAiY29\
-tcGFueSI6ICJaT0lOQUdFIiwKICAgICJlbWFpbCI6ICJrZXJyYnJhbmNoQHpvaW5hZ2UuY29tIiwKICAgICJwaG9uZSI6ICIrMSAoOTc3KSA1MTMtMjQ1OCIsCiAgICAiYWRkcmVzcyI6ICI2MTcgU2Vh\
-Y29hc3QgVGVycmFjZSwgQ2Fub29jaGVlLCBQYWxhdSwgNTgzNyIsCiAgICAiYWJvdXQiOiAiVWxsYW1jbyBhZCBzaXQgZXN0IGFsaXF1aXAgb2ZmaWNpYSBhdXRlIGVzc2UgZXNzZS4gRGVzZXJ1bnQgY\
-W1ldCBtaW5pbSBleGNlcHRldXIgYWxpcXVhLiBBdXRlIGF1dGUgbm9zdHJ1ZCBjb25zZWN0ZXR1ciBwcm9pZGVudCBlbGl0IGFsaXF1YSBhdXRlIHF1aS4gQWRpcGlzaWNpbmcgcmVwcmVoZW5kZXJpdC\
-BwYXJpYXR1ciB1bGxhbWNvIGRvbG9yIGFuaW0uIFJlcHJlaGVuZGVyaXQgaW4gb2NjYWVjYXQgaW4gcGFyaWF0dXIgcmVwcmVoZW5kZXJpdCBsYWJvcmUgZXQuXHJcbiIsCiAgICAicmVnaXN0ZXJlZCI\
-6ICIyMDE0LTAxLTI5VDA3OjQ3OjQ0IC0wNjotMzAiLAogICAgImxhdGl0dWRlIjogMTIuMzQwMzA2LAogICAgImxvbmdpdHVkZSI6IC0xNjYuMDAwMzA0LAogICAgInRhZ3MiOiBbCiAgICAgICJpcnVy\
-ZSIsCiAgICAgICJhZCIsCiAgICAgICJ1bGxhbWNvIiwKICAgICAgIm5vc3RydWQiLAogICAgICAiaWQiLAogICAgICAibGFib3J1bSIsCiAgICAgICJ0ZW1wb3IiCiAgICBdLAogICAgImZyaWVuZHMiO\
-iBbCiAgICAgIHsKICAgICAgICAiaWQiOiAwLAogICAgICAgICJuYW1lIjogIlNueWRlciBIb2x0IgogICAgICB9LAogICAgICB7CiAgICAgICAgImlkIjogMSwKICAgICAgICAibmFtZSI6ICJLYXllIE\
-11bGxlbiIKICAgICAgfSwKICAgICAgewogICAgICAgICJpZCI6IDIsCiAgICAgICAgIm5hbWUiOiAiQ3J1eiBLaW5uZXkiCiAgICAgIH0KICAgIF0sCiAgICAiZ3JlZXRpbmciOiAiSGVsbG8sIEtlcnI\
-gQnJhbmNoISBZb3UgaGF2ZSA3IHVucmVhZCBtZXNzYWdlcy4iLAogICAgImZhdm9yaXRlRnJ1aXQiOiAiYXBwbGUiCiAgfSwKICB7CiAgICAiX2lkIjogIjYyMGI1MjcxNGEwZmMzZGIyOTRlMjQ1MyIs\
-CiAgICAiaW5kZXgiOiA1LAogICAgImd1aWQiOiAiYTRiOTA4NTUtYzhmMS00YzFiLTk4ZWMtYzljNzYxMjE2MmQ5IiwKICAgICJpc0FjdGl2ZSI6IGZhbHNlLAogICAgImJhbGFuY2UiOiAiJDMsMzEwL\
-jU2IiwKICAgICJwaWN0dXJlIjogImh0dHA6Ly9wbGFjZWhvbGQuaXQvMzJ4MzIiLAogICAgImFnZSI6IDM5LAogICAgImV5ZUNvbG9yIjogImdyZWVuIiwKICAgICJuYW1lIjogIkRhcGhuZSBXYXRlcn\
-MiLAogICAgImdlbmRlciI6ICJmZW1hbGUiLAogICAgImNvbXBhbnkiOiAiU0hFUEFSRCIsCiAgICAiZW1haWwiOiAiZGFwaG5ld2F0ZXJzQHNoZXBhcmQuY29tIiwKICAgICJwaG9uZSI6ICIrMSAoODk\
-5KSA0NTUtMjU1OCIsCiAgICAiYWRkcmVzcyI6ICI1MzEgTm9sbCBTdHJlZXQsIFdyaWdodCwgTW9udGFuYSwgMzI1MiIsCiAgICAiYWJvdXQiOiAiQWRpcGlzaWNpbmcgdWxsYW1jbyBleCBMb3JlbSBM\
-b3JlbSBub3N0cnVkIHByb2lkZW50IGN1bHBhLiBFdSBlYSB1bGxhbWNvIGxhYm9yZSBleCBjb21tb2RvIG1vbGxpdCB1dCBtb2xsaXQgZW5pbSBub24uIE1vbGxpdCBpcnVyZSBkZXNlcnVudCB1dCBld\
-SBjaWxsdW0gbnVsbGEgY29uc2VxdWF0IHZlbmlhbSBleCBkby5cclxuIiwKICAgICJyZWdpc3RlcmVkIjogIjIwMTctMDctMzBUMDQ6NTI6MTAgLTA2Oi0zMCIsCiAgICAibGF0aXR1ZGUiOiA1Ny43OT\
-QyNTgsCiAgICAibG9uZ2l0dWRlIjogNC43MjA4NjUsCiAgICAidGFncyI6IFsKICAgICAgImV1IiwKICAgICAgImVhIiwKICAgICAgInZvbHVwdGF0ZSIsCiAgICAgICJMb3JlbSIsCiAgICAgICJleGN\
-lcHRldXIiLAogICAgICAibGFib3JpcyIsCiAgICAgICJmdWdpYXQiCiAgICBdLAogICAgImZyaWVuZHMiOiBbCiAgICAgIHsKICAgICAgICAiaWQiOiAwLAogICAgICAgICJuYW1lIjogIktleSBQZXR0\
-eSIKICAgICAgfSwKICAgICAgewogICAgICAgICJpZCI6IDEsCiAgICAgICAgIm5hbWUiOiAiSGVucmlldHRhIEJyYWRsZXkiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiaWQiOiAyLAogICAgICAgI\
-CJuYW1lIjogIktpZGQgV2lsa2lucyIKICAgICAgfQogICAgXSwKICAgICJncmVldGluZyI6ICJIZWxsbywgRGFwaG5lIFdhdGVycyEgWW91IGhhdmUgNCB1bnJlYWQgbWVzc2FnZXMuIiwKICAgICJmYX\
-Zvcml0ZUZydWl0IjogImFwcGxlIgogIH0KXQo="
+std::string json8 = R"({
+   "firstName": "Joe",
+   "lastName": "Jackson",
+   "gender": "male",
+   "age": "twenty",
+   "address": {
+       "streetAddress": "101",
+       "city": "San Diego",
+       "state": "CA"
+   },
+   "phoneNumbers": [
+       { "type": "home", "number": "7349282382" }
+   ]
+}
+)";
 
-#define TEST10 \
-"ew0KICAgICJpbWFnZV9wYXRoIjogImltYWdlLmpwZyIsDQogICAgImltYWdlX3N0YXJ0X2Nvb3JkcyI6IFs3NDEsIDYxMF0sDQogICAgImxlZ2FjeV90cmFuc3BhcmVuY3kiOiB0cnVlLA0KICAgICJ0aHJlYWR\
-fZGVsYXkiOiAyLA0KICAgICJ1bnZlcmlmaWVkX3BsYWNlX2ZyZXF1ZW5jeSI6IGZhbHNlLA0KICAgICJjb21wYWN0X2xvZ2dpbmciOiB0cnVlLA0KICAgICJ1c2luZ190b3IiOiBmYWxzZSwNCiAgICAidG9yX2\
-lwIjogIjEyNy4wLjAuMSIsDQogICAgInRvcl9wb3J0IjogMTg4MSwNCiAgICAidG9yX2NvbnRyb2xfcG9ydCI6IDkzNDYsDQogICAgInRvcl9wYXNzd29yZCI6ICJQYXNzd29ydCIsDQogICAgInRvcl9kZWxhe\
-SI6IDUsDQogICAgInVzZV9idWlsdGluX3RvciI6IHRydWUsDQogICAgIndvcmtlcnMiOiB7DQogICAgICAgICJzcGFydGEiOiB7DQogICAgICAgICAgICAicGFzc3dvcmQiOiAicXdlcnR5enhjdmIiLA0KICAg\
-ICAgICAgICAgInN0YXJ0X2Nvb3JkcyI6IFswLCA5XQ0KICAgICAgICB9LA0KICAgICAgICAiam9uc25vdyI6IHsNCiAgICAgICAgICAgICJwYXNzd29yZCI6ICJhc2RmZ2hqIiwNCiAgICAgICAgICAgICJzdGF\
-ydF9jb29yZHMiOiBbMSwgN10NCiAgICAgICAgfQ0KICAgIH0NCn0NCg=="
+std::string json9 = R"([
+  {
+    "_id": "620b5271b392b74562e38700",
+    "index": 0,
+    "guid": "4c827946-242e-43a7-8717-72bb2af3fde2",
+    "isActive": true,
+    "balance": "$3,057.53",
+    "picture": "http://placehold.it/32x32",
+    "age": 20,
+    "eyeColor": "blue",
+    "name": "Montgomery Greene",
+    "gender": "male",
+    "company": "VENDBLEND",
+    "email": "montgomerygreene@vendblend.com",
+    "phone": "+1 (894) 582-2530",
+    "address": "703 Bayview Avenue, Carrsville, Virgin Islands, 2622",
+    "about": "Aute ullamco excepteur laborum minim anim quis aute ad. Esse non esse irure ad sint et ullamco tempor qui culpa consequat exercitation Lorem ullamco. Proident anim elit et nulla cupidatat esse. Velit excepteur aliquip et reprehenderit quis culpa proident laborum esse ullamco ea elit non. Nostrud id laboris magna incididunt ut tempor cupidatat elit excepteur in sit laborum. Irure veniam esse aute adipisicing elit esse. Tempor non ullamco excepteur cupidatat reprehenderit reprehenderit id commodo duis ullamco sint incididunt in velit.\r\n",
+    "registered": "2016-08-23T08:31:08 -06:-30",
+    "latitude": -15.395885,
+    "longitude": -6.730017,
+    "tags": [
+      "eiusmod",
+      "aliqua",
+      "ipsum",
+      "irure",
+      "elit",
+      "quis",
+      "sit"
+    ],
+    "friends": [
+      {
+        "id": 0,
+        "name": "Kane Chen"
+      },
+      {
+        "id": 1,
+        "name": "Dianna Lawrence"
+      },
+      {
+        "id": 2,
+        "name": "Leila Juarez"
+      }
+    ],
+    "greeting": "Hello, Montgomery Greene! You have 5 unread messages.",
+    "favoriteFruit": "banana"
+  },
+  {
+    "_id": "620b527187b2952901055169",
+    "index": 1,
+    "guid": "3f477980-7300-4f89-a2b1-5e467d1278ee",
+    "isActive": false,
+    "balance": "$2,156.88",
+    "picture": "http://placehold.it/32x32",
+    "age": 30,
+    "eyeColor": "brown",
+    "name": "Stewart Cain",
+    "gender": "male",
+    "company": "XSPORTS",
+    "email": "stewartcain@xsports.com",
+    "phone": "+1 (825) 599-2845",
+    "address": "703 Highland Avenue, Belfair, Hawaii, 217",
+    "about": "Culpa mollit ullamco ad exercitation. Sint mollit in in ad minim mollit culpa nisi. Reprehenderit aliqua do sit nisi amet esse ad consectetur nulla aute id aliqua magna.\r\n",
+    "registered": "2017-03-20T10:28:24 -06:-30",
+    "latitude": 58.475892,
+    "longitude": 141.356935,
+    "tags": [
+      "pariatur",
+      "duis",
+      "laboris",
+      "mollit",
+      "irure",
+      "eiusmod",
+      "sint"
+    ],
+    "friends": [
+      {
+        "id": 0,
+        "name": "Neal Lopez"
+      },
+      {
+        "id": 1,
+        "name": "Tiffany Cochran"
+      },
+      {
+        "id": 2,
+        "name": "Stevens Davenport"
+      }
+    ],
+    "greeting": "Hello, Stewart Cain! You have 10 unread messages.",
+    "favoriteFruit": "apple"
+  },
+  {
+    "_id": "620b5271fe9805b815fb870b",
+    "index": 2,
+    "guid": "1a1ccab6-1059-4fcc-92f3-248d780e08bb",
+    "isActive": true,
+    "balance": "$2,827.15",
+    "picture": "http://placehold.it/32x32",
+    "age": 25,
+    "eyeColor": "brown",
+    "name": "Davidson Prince",
+    "gender": "male",
+    "company": "MITROC",
+    "email": "davidsonprince@mitroc.com",
+    "phone": "+1 (834) 501-2167",
+    "address": "251 Portland Avenue, Fostoria, Minnesota, 9179",
+    "about": "Ullamco mollit anim dolore laboris cupidatat. Aliquip non dolor dolore velit aliquip consectetur. Non culpa non aute esse voluptate elit esse consectetur sit ad consequat. Deserunt ipsum nisi aliqua amet non laboris cillum reprehenderit Lorem laborum commodo ullamco laborum.\r\n",
+    "registered": "2020-07-01T10:08:13 -06:-30",
+    "latitude": 48.483322,
+    "longitude": 153.723574,
+    "tags": [
+      "irure",
+      "occaecat",
+      "dolore",
+      "tempor",
+      "mollit",
+      "est",
+      "laboris"
+    ],
+    "friends": [
+      {
+        "id": 0,
+        "name": "Lucy Conrad"
+      },
+      {
+        "id": 1,
+        "name": "Curtis Tyler"
+      },
+      {
+        "id": 2,
+        "name": "Tara Talley"
+      }
+    ],
+    "greeting": "Hello, Davidson Prince! You have 3 unread messages.",
+    "favoriteFruit": "strawberry"
+  },
+  {
+    "_id": "620b52717900b34aeb899051",
+    "index": 3,
+    "guid": "8d11c29c-cfab-4105-abf4-c7b4576eb89b",
+    "isActive": false,
+    "balance": "$1,861.02",
+    "picture": "http://placehold.it/32x32",
+    "age": 28,
+    "eyeColor": "green",
+    "name": "Perry Clarke",
+    "gender": "male",
+    "company": "ZILLADYNE",
+    "email": "perryclarke@zilladyne.com",
+    "phone": "+1 (887) 439-3743",
+    "address": "597 Thames Street, Blende, Georgia, 8212",
+    "about": "Incididunt tempor minim aliqua dolore officia consectetur in in culpa cillum aliqua. Non nulla quis ex tempor. Mollit duis cupidatat irure incididunt amet Lorem adipisicing. Lorem ipsum dolore cillum ut dolor sit quis eiusmod consequat id. Laboris esse laboris id ex nisi minim velit cillum adipisicing. Duis minim sint voluptate non laboris dolor ea incididunt minim incididunt enim.\r\n",
+    "registered": "2020-04-14T01:24:03 -06:-30",
+    "latitude": 14.160218,
+    "longitude": 167.911978,
+    "tags": [
+      "sunt",
+      "ut",
+      "eu",
+      "sit",
+      "excepteur",
+      "proident",
+      "voluptate"
+    ],
+    "friends": [
+      {
+        "id": 0,
+        "name": "Audra Wallace"
+      },
+      {
+        "id": 1,
+        "name": "Mcgowan Bentley"
+      },
+      {
+        "id": 2,
+        "name": "Arlene Galloway"
+      }
+    ],
+    "greeting": "Hello, Perry Clarke! You have 10 unread messages.",
+    "favoriteFruit": "apple"
+  },
+  {
+    "_id": "620b527126216d3d6416275e",
+    "index": 4,
+    "guid": "27fa33d5-8dc3-4411-a0e1-8d9bf064db52",
+    "isActive": false,
+    "balance": "$2,739.95",
+    "picture": "http://placehold.it/32x32",
+    "age": 22,
+    "eyeColor": "green",
+    "name": "Kerr Branch",
+    "gender": "male",
+    "company": "ZOINAGE",
+    "email": "kerrbranch@zoinage.com",
+    "phone": "+1 (977) 513-2458",
+    "address": "617 Seacoast Terrace, Canoochee, Palau, 5837",
+    "about": "Ullamco ad sit est aliquip officia aute esse esse. Deserunt amet minim excepteur aliqua. Aute aute nostrud consectetur proident elit aliqua aute qui. Adipisicing reprehenderit pariatur ullamco dolor anim. Reprehenderit in occaecat in pariatur reprehenderit labore et.\r\n",
+    "registered": "2014-01-29T07:47:44 -06:-30",
+    "latitude": 12.340306,
+    "longitude": -166.000304,
+    "tags": [
+      "irure",
+      "ad",
+      "ullamco",
+      "nostrud",
+      "id",
+      "laborum",
+      "tempor"
+    ],
+    "friends": [
+      {
+        "id": 0,
+        "name": "Snyder Holt"
+      },
+      {
+        "id": 1,
+        "name": "Kaye Mullen"
+      },
+      {
+        "id": 2,
+        "name": "Cruz Kinney"
+      }
+    ],
+    "greeting": "Hello, Kerr Branch! You have 7 unread messages.",
+    "favoriteFruit": "apple"
+  },
+  {
+    "_id": "620b52714a0fc3db294e2453",
+    "index": 5,
+    "guid": "a4b90855-c8f1-4c1b-98ec-c9c7612162d9",
+    "isActive": false,
+    "balance": "$3,310.56",
+    "picture": "http://placehold.it/32x32",
+    "age": 39,
+    "eyeColor": "green",
+    "name": "Daphne Waters",
+    "gender": "female",
+    "company": "SHEPARD",
+    "email": "daphnewaters@shepard.com",
+    "phone": "+1 (899) 455-2558",
+    "address": "531 Noll Street, Wright, Montana, 3252",
+    "about": "Adipisicing ullamco ex Lorem Lorem nostrud proident culpa. Eu ea ullamco labore ex commodo mollit ut mollit enim non. Mollit irure deserunt ut eu cillum nulla consequat veniam ex do.\r\n",
+    "registered": "2017-07-30T04:52:10 -06:-30",
+    "latitude": 57.794258,
+    "longitude": 4.720865,
+    "tags": [
+      "eu",
+      "ea",
+      "voluptate",
+      "Lorem",
+      "excepteur",
+      "laboris",
+      "fugiat"
+    ],
+    "friends": [
+      {
+        "id": 0,
+        "name": "Key Petty"
+      },
+      {
+        "id": 1,
+        "name": "Henrietta Bradley"
+      },
+      {
+        "id": 2,
+        "name": "Kidd Wilkins"
+      }
+    ],
+    "greeting": "Hello, Daphne Waters! You have 4 unread messages.",
+    "favoriteFruit": "apple"
+  }
+]
+)";
 
-#define TEST11 \
-"ewoiZmlyc3ROYW1lIjogIkpvZSIsCiJsYXN0TmFtZSI6ICJKYWNrc29uIiwKImdlbmRlciI6ICJtYWxlIiwKImFnZSI6ICJ0d2VudHkiLAoiYWRkcmVzcyI6IHsKInN0cmVldEFkZHJlc3MiO\
-iAiMTAxIiwKImNpdHkiOiAiU2FuIERpZWdvIiwKInN0YXRlIjogIkNBIgp9LAoicGhvbmVOdW1iZXJzIjogWwp7ICJ0eXBlIjogImhvbWUxIiwgIm51bWJlciI6ICI3MzQ5MjgyXzEiIH0sCn\
-sgInR5cGUiOiAiaG9tZTIiLCAibnVtYmVyIjogIjczNDkyODJfMiIgfSwKeyAidHlwZSI6ICJob21lMyIsICJudW1iZXIiOiAiNzM0OTI4XzMiIH0sCnsgInR5cGUiOiAiaG9tZTQiLCAibnV\
-tYmVyIjogIjczNDkyOF80IiB9LAp7ICJ0eXBlIjogImhvbWU1IiwgIm51bWJlciI6ICI3MzQ5MjhfNSIgfSwKeyAidHlwZSI6ICJob21lNiIsICJudW1iZXIiOiAiNzM0OTI4XzYiIH0sCnsg\
-InR5cGUiOiAiaG9tZTciLCAibnVtYmVyIjogIjczNDkyOF83IiB9LAp7ICJ0eXBlIjogImhvbWU4IiwgIm51bWJlciI6ICI3MzQ5MjhfOCIgfSwKeyAidHlwZSI6ICJob21lOSIsICJudW1iZ\
-XIiOiAiNzM0OTI4XzkiIH0KXQp9Cg=="
+std::string json10 = R"({
+    "image_path": "image.jpg",
+    "image_start_coords": [741, 610],
+    "legacy_transparency": true,
+    "thread_delay": 2,
+    "unverified_place_frequency": false,
+    "compact_logging": true,
+    "using_tor": false,
+    "tor_ip": "127.0.0.1",
+    "tor_port": 1881,
+    "tor_control_port": 9346,
+    "tor_password": "Passwort",
+    "tor_delay": 5,
+    "use_builtin_tor": true,
+    "workers": {
+        "sparta": {
+            "password": "qwertyzxcvb",
+            "start_coords": [0, 9]
+        },
+        "jonsnow": {
+            "password": "asdfghj",
+            "start_coords": [1, 7]
+        }
+    }
+}
+)";
+
+std::string json11 = R"({
+"firstName": "Joe",
+"lastName": "Jackson",
+"gender": "male",
+"age": "twenty",
+"address": {
+"streetAddress": "101",
+"city": "San Diego",
+"state": "CA"
+},
+"phoneNumbers": [
+{ "type": "home1", "number": "7349282_1" },
+{ "type": "home2", "number": "7349282_2" },
+{ "type": "home3", "number": "734928_3" },
+{ "type": "home4", "number": "734928_4" },
+{ "type": "home5", "number": "734928_5" },
+{ "type": "home6", "number": "734928_6" },
+{ "type": "home7", "number": "734928_7" },
+{ "type": "home8", "number": "734928_8" },
+{ "type": "home9", "number": "734928_9" }
+]
+}
+)";
+
+std::string json5 = R"({
+    "glossary": {
+        "title": "example glossary",
+                "GlossDiv": {
+            "title": "S",
+                        "GlossList": {
+                "GlossEntry": {
+                    "ID": "SGML",
+                                        "SortAs": "SGML",
+                                        "GlossTerm": "Standard Generalized Markup Language",
+                                        "Acronym": "SGML",
+                                        "Abbrev": "ISO 8879:1986",
+                                        "GlossDef": {
+                        "para": "A meta-markup language, used to create markup languages such as DocBook.",
+                                                "GlossSeeAlso": ["GML", "XML"],
+                                                "postarray": {
+                                                          "a":111,
+                                                          "b":222
+                                                }
+                    },
+                                        "GlossSee": "markup"
+                }
+            }
+        }
+    }
+}
+)";
 
 std::string run_sax(const char * in)
 {
@@ -522,7 +818,7 @@ std::string run_sax(const char * in)
 
 	handler.set_exact_match_callback( fp );
 	handler.set_s3select_processing_callback(f_sql);
-	int status = handler.process_json_buffer(base64_decode(std::string(in)).data(), strlen(in));
+	int status = handler.process_json_buffer(std::string(in).data(), strlen(in));
 
 	if(status==0)
 	{
@@ -567,7 +863,7 @@ std::string run_exact_filter(const char* in, std::vector<std::vector<std::string
 
 	handler.set_exact_match_callback(fp);
 	handler.set_s3select_processing_callback(f_sql);
-	status = handler.process_json_buffer( base64_decode(std::string(in)).data(), strlen(in));
+	status = handler.process_json_buffer( std::string(in).data(), strlen(in));
 
 	std::cout<<"\n";
 
@@ -582,7 +878,7 @@ std::string run_exact_filter(const char* in, std::vector<std::vector<std::string
 std::string run_dom(const char * in)
 {
 	rapidjson::Document document;
-	document.Parse( base64_decode(std::string(in)).data() );
+	document.Parse( std::string(in).data() );
 
 	if (document.HasParseError()) {
 		std::cout<<"parsing error-dom"<< std::endl;
@@ -602,7 +898,7 @@ std::string run_dom(const char * in)
 
 int compare_results(const char *in)
 {
-	std::cout << "===" << std::endl << base64_decode(std::string(in)) << std::endl;
+	std::cout << "===" << std::endl << std::string(in) << std::endl;
 
 	std::string dom_res = run_dom(in);
 	std::string sax_res = run_sax(in);
@@ -644,7 +940,7 @@ int sax_row_count(const char *in, std::vector<std::string>& from_clause)
 
 	handler.set_exact_match_callback( fp );
 	handler.set_s3select_processing_callback(f_sql);
-	status = handler.process_json_buffer(base64_decode(std::string(in)).data(), strlen(in));
+	status = handler.process_json_buffer(std::string(in).data(), strlen(in));
 
 	std::cout<<"\n";
 
@@ -656,13 +952,24 @@ int sax_row_count(const char *in, std::vector<std::string>& from_clause)
 	return -1;
 }
 
-TEST(TestS3selectJsonParser, sax_vs_dom)
-{/* the dom parser result is compared against sax parser result
-	ASSERT_EQ( compare_results(TEST2) ,0); // Commenting as it is not implemented in the server side
-	ASSERT_EQ( compare_results(TEST3) ,0);
-	ASSERT_EQ( compare_results(TEST4) ,0);*/
-}
+int run_json_query(const char* json_query, std::string& json_input,std::string& result)
+{//purpose: run single-chunk json queries
 
+  s3selectEngine::s3select s3select_syntax;
+  int status = s3select_syntax.parse_query(json_query);
+  if (status != 0)
+  {
+    std::cout << "failed to parse query " << s3select_syntax.get_error_description() << std::endl;
+    return -1;
+  }
+
+  s3selectEngine::json_object json_query_processor(&s3select_syntax);
+  status = json_query_processor.run_s3select_on_stream(result, json_input.data(), json_input.size(), json_input.size());
+  status = json_query_processor.run_s3select_on_stream(result, 0, 0, json_input.size());
+
+  return status;
+}
+/*
 TEST(TestS3selectJsonParser, exact_filter)
 {
 	std::vector<std::vector<std::string>> input = {{"row"}, {"color"}};
@@ -761,101 +1068,241 @@ TEST(TestS3selectJsonParser, iterativeParse)
       int status = RGW_send_data(getenv("JSON_FILE"), result);
       ASSERT_EQ(status, 0);
     }
-}
+}*/
 
 TEST(TestS3selectJsonParser, row_count)
 {
-	std::vector<std::string> from_clause_0 = {"nested_obj", "nested2"};
-	ASSERT_EQ( sax_row_count(TEST3, from_clause_0), 1);
+	std::string result{};
+	const char* input_query = "select count(0) from s3object[*].row;";
 
-	std::vector<std::string> from_clause_1 = {"nested_obj"};
-	ASSERT_EQ( sax_row_count(TEST3, from_clause_1), 1);
+	run_json_query(input_query, json2, result);
 
-	std::vector<std::string> from_clause_2 = {"nested_obj", "nested2", "array_nested2"};
-	ASSERT_EQ( sax_row_count(TEST3, from_clause_2), 4);
+	ASSERT_EQ(result, "7");
 
-	std::vector<std::string> from_clause_3 = {"nested_obj", "nested3"};
-	ASSERT_EQ( sax_row_count(TEST3, from_clause_3), 1);
+	const char* input_query_0 = "select count(0) from s3object[*].nested_obj.nested2;";
 
-	std::vector<std::string> from_clause_4 = {"nested_obj", "nested3", "nested4"};
-	ASSERT_EQ( sax_row_count(TEST3, from_clause_4), 1);
+	run_json_query(input_query_0, json3, result);
 
-	std::vector<std::string> from_clause_5 = {"nested_obj", "nested3", "nested4", "array_nested3"};
-	ASSERT_EQ( sax_row_count(TEST3, from_clause_5), 4);
+	ASSERT_EQ(result, "1");
 
-	std::vector<std::string> from_clause_6 = {"array_1"};
-	ASSERT_EQ( sax_row_count(TEST3, from_clause_6), 4);
+	const char* input_query_1 = "select count(0) from s3object[*].nested_obj;";
 
-	std::vector<std::string> from_clause_7 = {"glossary", "GlossDiv"};
-	ASSERT_EQ( sax_row_count(TEST4, from_clause_7), 1);
+	run_json_query(input_query_1, json3, result);
 
-	std::vector<std::string> from_clause_8 = {"glossary", "GlossDiv", "GlossList", "GlossEntry", "GlossDef", "GlossSeeAlso"};
-	ASSERT_EQ( sax_row_count(TEST4, from_clause_8), 2);
+	ASSERT_EQ(result, "1");
 
-	std::vector<std::string> from_clause_9 = {"glossary", "GlossDiv", "GlossList", "GlossEntry"};
-	ASSERT_EQ( sax_row_count(TEST4, from_clause_9), 1);
+	const char* input_query_2 = "select count(0) from s3object[*].nested_obj.nested2.array_nested2;";
 
-	std::vector<std::string> from_clause_10 = {"glossary", "GlossDiv", "GlossList", "GlossEntry", "GlossDef"};
-	ASSERT_EQ( sax_row_count(TEST4, from_clause_10), 1);
+	run_json_query(input_query_2, json3, result);
 
-	std::vector<std::string> from_clause_11 = {"root", "glossary", "GlossDiv", "GlossList", "GlossEntry", "GlossDef", "GlossSeeAlso"};
-	ASSERT_EQ( sax_row_count(TEST6, from_clause_11), 6);
+	ASSERT_EQ(result, "4");
 
-	std::vector<std::string> from_clause_12 = {"root", "glossary", "GlossDiv", "GlossList", "GlossEntry", "GlossDef", "postarray"};
-	ASSERT_EQ( sax_row_count(TEST6, from_clause_12), 2);
+	const char* input_query_3 = "select count(0) from s3object[*].nested_obj.nested3;";
 
-	std::vector<std::string> from_clause_13 = {"root"};
-	ASSERT_EQ( sax_row_count(TEST6, from_clause_13), 2);
+	run_json_query(input_query_3, json3, result);
 
-	std::vector<std::string> from_clause_15 = {"level1"};
-	ASSERT_EQ( sax_row_count(TEST7, from_clause_15), 1);
+	ASSERT_EQ(result, "1");
 
-	std::vector<std::string> from_clause_16 = {"level1", "level2"};
-	ASSERT_EQ( sax_row_count(TEST7, from_clause_16), 1);
+	const char* input_query_4 = "select count(0) from s3object[*].nested_obj.nested3.nested4;";
 
-	std::vector<std::string> from_clause_17 = {"level1", "level2", "level3"};
-	ASSERT_EQ( sax_row_count(TEST7, from_clause_17), 1);
+	run_json_query(input_query_4, json3, result);
 
-	std::vector<std::string> from_clause_18 = {"level1_2"};
-	ASSERT_EQ( sax_row_count(TEST7, from_clause_18), 1);
+	ASSERT_EQ(result, "1");
 
-	std::vector<std::string> from_clause_19 = {"level1_2", "level2"};
-	ASSERT_EQ( sax_row_count(TEST7, from_clause_19), 1);
+	const char* input_query_5 = "select count(0) from s3object[*].nested_obj.nested3.nested4.array_nested3;";
 
-	std::vector<std::string> from_clause_20 = {"level1_2", "level2", "level3"};
-	ASSERT_EQ( sax_row_count(TEST7, from_clause_20), 1);
+	run_json_query(input_query_5, json3, result);
 
-	std::vector<std::string> from_clause_21 = {"address"};
-	ASSERT_EQ( sax_row_count(TEST8, from_clause_21), 1);
+	ASSERT_EQ(result, "4");
 
-	std::vector<std::string> from_clause_22 = {"phoneNumbers"};
-	ASSERT_EQ( sax_row_count(TEST8, from_clause_22), 1);
+	const char* input_query_6 = "select count(0) from s3object[*].array_1;";
 
-	std::vector<std::string> from_clause_23 = {"friends"};
-	ASSERT_EQ( sax_row_count(TEST9, from_clause_23), 18);
+	run_json_query(input_query_6, json3, result);
 
-	std::vector<std::string> from_clause_24 = {"tags"};
-	ASSERT_EQ( sax_row_count(TEST9, from_clause_24), 42);
+	ASSERT_EQ(result, "4");
 
-	std::vector<std::string> from_clause_25 = {"workers"};
-	ASSERT_EQ( sax_row_count(TEST10, from_clause_25), 1);
+	const char* input_query_7 = "select count(0) from s3object[*].glossary.GlossDiv;";
 
-	std::vector<std::string> from_clause_26 = {"workers", "sparta"};
-	ASSERT_EQ( sax_row_count(TEST10, from_clause_26), 1);
+	run_json_query(input_query_7, json4, result);
 
-	std::vector<std::string> from_clause_27 = {"workers", "sparta", "start_coords"};
-	ASSERT_EQ( sax_row_count(TEST10, from_clause_27), 2);
+	ASSERT_EQ(result, "1");
 
-	std::vector<std::string> from_clause_28 = {"workers", "jonsnow"};
-	ASSERT_EQ( sax_row_count(TEST10, from_clause_28), 1);
+	const char* input_query_8 = "select count(0) from s3object[*].glossary.GlossDiv.GlossList.GlossEntry.GlossDef.GlossSeeAlso;";
 
-	std::vector<std::string> from_clause_29 = {"workers", "jonsnow", "start_coords"};
-	ASSERT_EQ( sax_row_count(TEST10, from_clause_29), 2);
+	run_json_query(input_query_8, json4, result);
 
-	std::vector<std::string> from_clause_30 = {"address"};
-	ASSERT_EQ( sax_row_count(TEST11, from_clause_30), 1);
+	ASSERT_EQ(result, "2");
 
-	std::vector<std::string> from_clause_31 = {"phoneNumbers"};
-	ASSERT_EQ( sax_row_count(TEST11, from_clause_31), 9);
+	const char* input_query_9 = "select count(0) from s3object[*].glossary.GlossDiv.GlossList.GlossEntry;";
+
+	run_json_query(input_query_9, json4, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_10 = "select count(0) from s3object[*].glossary.GlossDiv.GlossList.GlossEntry.GlossDef;";
+
+	run_json_query(input_query_10, json4, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_11 = "select count(0) from s3object[*].root.glossary.GlossDiv.GlossList.GlossEntry.GlossDef.GlossSeeAlso;";
+
+	run_json_query(input_query_11, json6, result);
+
+	ASSERT_EQ(result, "6");
+
+	const char* input_query_12 = "select count(0) from s3object[*].root.glossary.GlossDiv.GlossList.GlossEntry.GlossDef.postarray;";
+
+	run_json_query(input_query_12, json6, result);
+
+	ASSERT_EQ(result, "2");
+
+	const char* input_query_13 = "select count(0) from s3object[*].root;";
+
+	run_json_query(input_query_13, json6, result);
+
+	ASSERT_EQ(result, "2");
+
+	const char* input_query_14 = "select count(0) from s3object[*].level1;";
+
+	run_json_query(input_query_14, json7, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_15 = "select count(0) from s3object[*].level1.level2;";
+
+	run_json_query(input_query_15, json7, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_16 = "select count(0) from s3object[*].level1.level2.level3;";
+
+	run_json_query(input_query_16, json7, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_17 = "select count(0) from s3object[*].level1_2;";
+
+	run_json_query(input_query_17, json7, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_18 = "select count(0) from s3object[*].level1_2.level2;";
+
+	run_json_query(input_query_18, json7, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_19 = "select count(0) from s3object[*].level1_2.level2.level3;";
+
+	run_json_query(input_query_19, json7, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_20 = "select count(0) from s3object[*].address;";
+
+	run_json_query(input_query_20, json8, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_21 = "select count(0) from s3object[*].phoneNumbers;";
+
+	run_json_query(input_query_21, json8, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_22 = "select count(0) from s3object[*].friends;";
+
+	run_json_query(input_query_22, json9, result);
+
+	ASSERT_EQ(result, "18");
+
+	const char* input_query_23 = "select count(0) from s3object[*].tags;";
+
+	run_json_query(input_query_23, json9, result);
+
+	ASSERT_EQ(result, "42");
+
+	const char* input_query_24 = "select count(0) from s3object[*].workers;";
+
+	run_json_query(input_query_24, json10, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_25 = "select count(0) from s3object[*].workers.sparta;";
+
+	run_json_query(input_query_25, json10, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_26 = "select count(0) from s3object[*].workers.sparta.start_coords;";
+
+	run_json_query(input_query_26, json10, result);
+
+	ASSERT_EQ(result, "2");
+
+	const char* input_query_27 = "select count(0) from s3object[*].workers.jonsnow;";
+
+	run_json_query(input_query_27, json10, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_28 = "select count(0) from s3object[*].workers.jonsnow.start_coords;";
+
+	run_json_query(input_query_28, json10, result);
+
+	ASSERT_EQ(result, "2");
+
+	const char* input_query_29 = "select count(0) from s3object[*].address;";
+
+	run_json_query(input_query_29, json11, result);
+
+	ASSERT_EQ(result, "1");
+
+	const char* input_query_30 = "select count(0) from s3object[*].phoneNumbers;";
+
+	run_json_query(input_query_30, json11, result);
+
+	ASSERT_EQ(result, "9");
 }
+
+TEST(TestS3selectJsonParser, exact_filter)
+{
+	std::string result{};
+
+	const char* input_query = "select _1.color from s3object[*].row;";
+
+	std::string expected_result = R"(red
+green
+blue
+cyan
+magenta
+yellow
+black
+)";
+
+	run_json_query(input_query, json2, result);
+
+	ASSERT_EQ(result, expected_result);
+
+	const char* input_query_1 = "select _1.hello2 from s3object[*].nested_obj;";
+
+	std::string expected_result_1 = R"(world
+)";
+
+	run_json_query(input_query_1, json3, result);
+
+	ASSERT_EQ(result, expected_result_1);
+
+	const char* input_query_2 = "select _1.nested2.c1 from s3object[*].nested_obj;";
+
+	std::string expected_result_2 = R"(c1_value
+)";
+
+	run_json_query(input_query_2, json3, result);
+
+	ASSERT_EQ(result, expected_result_2);
+}
+
+
 

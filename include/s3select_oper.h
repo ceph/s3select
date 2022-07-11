@@ -361,7 +361,7 @@ struct binop_div
   double operator()(double a, double b)
   {
     if (b == 0) {
-      if( isnan(a)) {
+      if( std::isnan(a)) {
         return a;
       } else {
         throw base_s3select_exception("division by zero is not allowed");
