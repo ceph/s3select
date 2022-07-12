@@ -1,3 +1,6 @@
 [submodule "rapidjson"]
 	path = rapidjson
 	url = https://github.com/Tencent/rapidjson.git
+[submodule "include/csvparser"]
+	path = include/csvparser
+	url = https://github.com/ben-strasser/fast-cpp-csv-parser.git
