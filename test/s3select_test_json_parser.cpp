@@ -1306,5 +1306,589 @@ black
 	ASSERT_EQ(result, expected_result_2);
 }
 
+JsonParserHandler* create_handler(std::function<int(void)> f_sql,
+		    std::function<int(s3selectEngine::value&,int)> fp)
+{
+    JsonParserHandler* p_handler;
+    p_handler =  new (JsonParserHandler);
+    std::vector<std::string> pattern;//TODO set from-clause
+    p_handler->set_prefix_match(pattern);
 
+    std::vector <std::vector<std::string>> exact_match_filters;
+    p_handler->set_exact_match_filters(exact_match_filters); //TODO empty
+
+    p_handler->set_exact_match_callback(fp);
+    p_handler->set_s3select_processing_callback(f_sql);
+
+    return p_handler;
+}
+
+void set_test_0(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,5);
+
+std::vector<std::string> s3={"addr"}; //state-3 : search for key="addr"
+array_access.push_variable_state(s3,-1); // final state : phoneNumbers[5].addr
+
+handler.set_json_array_access(&array_access);
+
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+
+}
+
+void set_test_1(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+//std::string result{};
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,0);
+
+std::vector<std::string> s3={"type"}; //state-3 : search for key="addr"
+array_access.push_variable_state(s3,-1); // final state : phoneNumbers[0].addr
+
+handler.set_json_array_access(&array_access);
+
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+
+}
+
+void set_test_2(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,11);
+handler.set_json_array_access(&array_access);
+
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+
+}
+
+void set_test_3(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"firstName"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+handler.set_json_array_access(&array_access);
+
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+
+}
+
+void set_test_4(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,12);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,0);
+
+handler.set_json_array_access(&array_access);
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+
+}
+
+void set_test_5(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,12);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,2);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,1); //key=phoneNumbers[12][2][1]
+
+handler.set_json_array_access(&array_access);
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+
+}
+
+void set_test_6(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,12);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,3);
+
+
+handler.set_json_array_access(&array_access);
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+
+}
+
+void set_test_7(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,12);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,4);
+
+s1={"key_in_array"};
+array_access.push_variable_state(s1,-1);
+
+handler.set_json_array_access(&array_access);
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+}
+
+void set_test_8(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,13);
+
+s1={"classname"}; 
+array_access.push_variable_state(s1,-1);
+
+handler.set_json_array_access(&array_access);
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+}
+
+void set_test_9(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1={"phoneNumbers"}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,-1);
+
+s1={}; //state-1 : search for key=phoneNumbers
+array_access.push_variable_state(s1,14);
+
+s1={"associatedDrug"}; 
+array_access.push_variable_state(s1,-1);
+
+s1={}; 
+array_access.push_variable_state(s1,0);
+
+s1={"strength"}; 
+array_access.push_variable_state(s1,-1);
+
+  // phoneNumbers[14].associatedDrug[0].strength 
+  
+handler.set_json_array_access(&array_access);
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+}
+
+void set_test_10(JsonParserHandler& handler,
+	      std::string& INPUT_TEST_ARRAY,
+	      std::function<int(void)> f_sql,
+	      std::function<int(s3selectEngine::value&,int)> fp
+	      )
+{
+int status;
+std::vector<std::string> pattern;//TODO set from-clause
+handler.set_prefix_match(pattern);
+
+std::vector <std::vector<std::string>> exact_match_filters;
+handler.set_exact_match_filters(exact_match_filters); //TODO empty
+
+handler.set_exact_match_callback(fp);
+handler.set_s3select_processing_callback(f_sql);
+
+json_variable_access array_access;
+
+std::vector<std::string> s1;
+s1={"problems"}; 
+array_access.push_variable_state(s1,-1);
+s1={};
+array_access.push_variable_state(s1,0);
+ 
+s1={"Diabetes"}; 
+array_access.push_variable_state(s1,-1);
+s1={};
+array_access.push_variable_state(s1,0);
+ 
+s1={"medications"}; 
+array_access.push_variable_state(s1,-1);
+s1={};
+array_access.push_variable_state(s1,0);
+ 
+s1={"medicationsClasses"}; 
+array_access.push_variable_state(s1,-1);
+s1={};
+array_access.push_variable_state(s1,0);
+ 
+s1={"className"}; 
+array_access.push_variable_state(s1,-1);
+s1={};
+array_access.push_variable_state(s1,0);
+ 
+s1={"associatedDrug"}; 
+array_access.push_variable_state(s1,-1);
+s1={};
+array_access.push_variable_state(s1,1);
+
+s1={"name"}; 
+array_access.push_variable_state(s1,-1);
+
+//problems[0].Diabetes[0].medications[0].medicationsClasses[0].className[0].associatedDrug[0].name = asprin
+
+handler.set_json_array_access(&array_access);
+status = handler.process_json_buffer(INPUT_TEST_ARRAY.data(), INPUT_TEST_ARRAY.size());
+handler.process_json_buffer(0, 0, true);
+}
+
+TEST(TestS3selectJsonParser, array_access)
+{
+  //create JSON input
+  //create array_access object with specefic setting (e.g a.b[ 1 ].c)
+
+  std::string INPUT_TEST_ARRAY = R"({
+"firstName": "Joe",
+"lastName": "Jackson",
+"gender": "male",
+"age": "twenty",
+"address": {
+"streetAddress": "101",
+"city": "San Diego",
+"state": "CA"
+},
+
+"firstName": "Joe_2",
+"lastName": "Jackson_2",
+"gender": "male",
+"age": 21,
+"address": {
+"streetAddress": "101",
+"city": "San Diego",
+"state": "CA"
+},
+
+"phoneNumbers": [
+{ "type": "home0", "number": "734928_0", "addr": 0 },
+{ "type": "home1", "number": "734928_1", "addr": 11 },
+{ "type": "home2", "number": "734928_2", "addr": 22 },
+{ "type": "home3", "number": "734928_3", "addr": 33 },
+{ "type": "home4", "number": "734928_4", "addr": 44 },
+{ "type": "home5", "number": "734928_5", "addr": 55 },
+{ "type": "home6", "number": "734928_6", "addr": 66 },
+{ "type": "home7", "number": "734928_7", "addr": 77 },
+{ "type": "home8", "number": "734928_8", "addr": 88 },
+{ "type": "home9", "number": "734928_9", "addr": 99 },
+{ "type": "home10", "number": "734928_10", "addr": 100 },
+"element-11",
+  [ 11 , 22 , 
+    [ 44, 55] ,"post 3D" , 
+    { 
+      "first_key_in_object_in_array" : "value_for_irst_key_in_object_in_array", 
+      "key_in_array" : "value_per_key_in_array" 
+    } 
+  ],
+  {"classname" : "stam"},
+  { "associatedDrug":[{
+                        "name":"asprin",
+                        "dose":"",
+                        "strength":"500 mg"
+                    }],
+                    "associatedDrug#2":[{
+                        "name":"somethingElse",
+                        "dose":"",
+                        "strength":"500 mg"
+                    }]
+  },
+  ],
+
+"key_after_array": "XXX"
+}
+)";
+
+  std::string INPUT_TEST_ARRAY_NEDICATIONS = R"(
+{
+"problems": [{
+    "Diabetes":[{
+        "medications":[{
+            "medicationsClasses":[{
+                "className":[{
+                    "associatedDrug":[{
+                        "name":"asprin",
+                        "dose":"",
+                        "strength":"500 mg"
+                    },
+		    { "name":"acamol" } 
+		    ],
+                    "associatedDrug#2":[{
+                        "name":"somethingElse",
+                        "dose":"",
+                        "strength":"500 mg"
+                    }]
+                }],
+                "className2":[{
+                    "associatedDrug":[{
+                        "name":"asprin",
+                        "dose":"",
+                        "strength":"500 mg"
+                    }],
+                    "associatedDrug#2":[{
+                        "name":"somethingElse",
+                        "dose":"",
+                        "strength":"500 mg"
+                    }]
+                }]
+            }]
+        }],
+        "labs":[{
+            "missing_field": "missing_value"
+        }]
+    }],
+    "Asthma":[{}]
+}]}
+)";
+
+
+  JsonParserHandler* p_handler;
+  std::string result{};
+std::function<int(void)> f_sql = [](void){return 0;};
+
+std::function<int(s3selectEngine::value&,int)> fp = [&result](s3selectEngine::value& key_value,int json_idx) {
+  result = key_value.to_string();
+  return 0;
+};
+
+p_handler = create_handler(f_sql,fp);
+set_test_0(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"55");
+
+p_handler = create_handler(f_sql,fp);
+set_test_1(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"home0");
+
+p_handler = create_handler(f_sql,fp);
+set_test_2(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"element-11");
+
+p_handler = create_handler(f_sql,fp);
+set_test_3(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"Joe_2");
+
+p_handler = create_handler(f_sql,fp);
+set_test_4(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"11");
+
+p_handler = create_handler(f_sql,fp);
+set_test_5(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"55");
+
+p_handler = create_handler(f_sql,fp);
+set_test_6(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"post 3D");
+
+p_handler = create_handler(f_sql,fp);
+set_test_7(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"value_per_key_in_array");
+
+p_handler = create_handler(f_sql,fp);
+set_test_8(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"stam");
+
+p_handler = create_handler(f_sql,fp);
+set_test_9(*p_handler,INPUT_TEST_ARRAY,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"500 mg");
+
+p_handler = create_handler(f_sql,fp);
+set_test_10(*p_handler,INPUT_TEST_ARRAY_NEDICATIONS,f_sql,fp);
+std::cout << "RESULT: " << result << std::endl;
+ASSERT_EQ(result,"acamol");
+
+}
 
