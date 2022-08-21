@@ -73,7 +73,7 @@ struct actionQ
   std::vector<base_statement*> projections_columns; 
   base_statement* first_when_then_expr;
 
-  std::vector<std::vector<std::string>> json_variables;//contains all key-path according to sql statement
+  std::vector<std::pair<json_variable_access*,size_t>> json_statement_variables_match_expression;//contains all statement variables and their search-expression for locating the correct values in input document
 
   actionQ(): inMainArg(0),from_clause("##"),limit_op(false),column_prefix("##"),table_alias("##"),projection_or_predicate_state(true),first_when_then_expr(nullptr){}
 
@@ -92,7 +92,7 @@ struct actionQ
 
     if(t == x_map.end())
     {
-      auto v = new std::vector<const char*>;//TODO delete 
+      auto v = new std::vector<const char*>;
       x_map.insert(std::pair<const void*,std::vector<const char*> *>(th,v));
       v->push_back(a);
     }
@@ -605,9 +605,9 @@ public:
     return &m_actionQ.alias_map;
   }
 
-  std::vector<std::vector<std::string>>& get_json_variables_key_path()
+  std::vector<std::pair<json_variable_access*,size_t>>& get_json_variables_access()
   {
-    return m_actionQ.json_variables;
+    return m_actionQ.json_statement_variables_match_expression;
   }
 
   bool is_aggregate_query() const
@@ -1034,29 +1034,13 @@ void push_json_variable::builder(s3select* self, const char* a, const char* b) c
   //in case it is exist, it uses its index (position in vector)
   //in case it's not exist its pushes the variable into vector.
   //the json-index is used upon updating the scratch area or searching for a specific json-variable value.
-  size_t json_index=0;
-  if(self->getAction()->json_variables.size())
-  {
-    std::vector<std::vector<std::string>>::iterator it;
-    it = std::find(self->getAction()->json_variables.begin(),
-		    self->getAction()->json_variables.end(),
-		    variable_key_path);
 
-    if(it != self->getAction()->json_variables.end())
-    {
-      json_index = it - self->getAction()->json_variables.begin();
-    }
-    else
-    {
-      json_index = self->getAction()->json_variables.size();
-      self->getAction()->json_variables.push_back(variable_key_path);
-    }
-  }
-  else
-  {
-      self->getAction()->json_variables.push_back(variable_key_path);
-  }
+  size_t json_index=self->getAction()->json_statement_variables_match_expression.size();
 
+  json_variable_access* ja = new (json_variable_access);//TODO S3SELECT_NEW
+  ja->push_variable_state(variable_key_path,-1);
+  self->getAction()->json_statement_variables_match_expression.push_back(std::pair<json_variable_access*,size_t>(ja,json_index));
+  
   v = S3SELECT_NEW(self, variable, token, variable::var_t::JSON_VARIABLE, json_index);
 
   self->getAction()->exprQ.push_back(v);
@@ -2700,8 +2684,10 @@ public:
       f_push_key_value_into_scratch_area_per_star_operation = [this](s3selectEngine::scratch_area::json_key_value_t& key_value)
                 {return push_key_value_into_scratch_area_per_star_operation(key_value);};
 
-    //setting the container for all exact-filters, to be extracted by the json reader    
-    JsonHandler.set_exact_match_filters(query->get_json_variables_key_path());
+    //setting the container for all json-variables, to be extracted by the json reader    
+    JsonHandler.set_statement_json_variables(query->get_json_variables_access());
+
+
     //calling to getMatchRow. processing a single row per each call.
     JsonHandler.set_s3select_processing_callback(f_sql);
     //upon excat match between input-json-key-path and sql-statement-variable-path the callback pushes to scratch area 

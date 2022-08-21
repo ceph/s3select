@@ -129,7 +129,7 @@ class ChunksStreamer : public rapidjson::MemoryStream {
 
     void saveRemainingBytes()
     {//this routine called per each new chunk
-      //savine the remaining bytes, before its overriden by the next-chunk.
+      //save the remaining bytes, before its overriden by the next-chunk.
       size_t copy_left_sz = getBytesLeft(); //should be very small
       internal_buffer.assign(src_,copy_left_sz);
       
@@ -159,14 +159,13 @@ class json_variable_access {
 private:
 
 // to set the following. 
-bool* prefix_match;
 std::vector<std::string>* from_clause;
 std::vector<std::string>* key_path;
 int* m_current_depth;
 std::function <int(s3selectEngine::value&,int)>* m_exact_match_cb;
 //  a state number : (_1).a.b.c[ 17 ].d.e (a.b)=1 (c[)=2  (17)=3 (.d.e)=4
-int current_state;
-int nested_array_level;
+int current_state;//contain the current state of the state machine for searching-expression (each JSON variable in SQL statement has a searching expression)
+int nested_array_level;//in the case of array within array it contain the nesting level
 
 struct variable_state_md {
     std::vector<std::string> required_path;//set by the syntax-parser. in the case of array its empty
@@ -181,17 +180,15 @@ std::vector<struct variable_state_md> variable_states;//vector is populated upon
 
 public:
 
-json_variable_access():prefix_match(nullptr),from_clause(nullptr),key_path(nullptr),m_current_depth(nullptr),m_exact_match_cb(nullptr),current_state(-1),nested_array_level(0)
+json_variable_access():from_clause(nullptr),key_path(nullptr),m_current_depth(nullptr),m_exact_match_cb(nullptr),current_state(-1),nested_array_level(0)
 {}
 
 void init(
-	  bool* reader_prefix_match,
 	  std::vector<std::string>* reader_from_clause,
 	  std::vector<std::string>* reader_key_path,
 	  int* reader_current_depth,
 	  std::function <int(s3selectEngine::value&,int)>* excat_match_cb)
 {//this routine should be called before scanning the JSON input
-  prefix_match = reader_prefix_match;
   from_clause = reader_from_clause;
   key_path = reader_key_path;
   m_exact_match_cb = excat_match_cb;
@@ -210,6 +207,8 @@ void debug_info()
   std::cout << " current_state=" << current_state << " key_path=" << f(*key_path) << std::endl; 
 }
 #define DBG {std::cout << "event=" << __FUNCTION__ << std::endl; debug_info();}
+#undef DBG
+#define DBG
 
 void compile_state_machine()
 {
@@ -256,8 +255,12 @@ bool is_reader_located_on_required_depth()
 
 bool is_on_final_state()
 {
-  return ((size_t)current_state == (variable_states.size()) && 
-	  *m_current_depth == variable_states[ current_state -1 ].required_depth_size);
+  return ((size_t)current_state == (variable_states.size()));  
+	  //&& *m_current_depth == variable_states[ current_state -1 ].required_depth_size); 
+	  
+	  // NOTE: by ignoring the current-depth, the matcher gives precedence to key-path match, while not ignoring accessing using array
+	  // meaning, upon requeting a.b[12] , the [12] is not ignored, the a<-->b distance should be calculated as key distance, i.e. not counting array/object with *no keys*.
+	  // user may request 'select _1.phonearray.num'; the reader will traverse `num` exist in `phonearray`
 }
 
 bool is_reader_reached_required_array_entry()
@@ -303,15 +306,13 @@ void decrease_current_state()
 
 void key()
 {
-  // move to current-state+1 state 
-  // test key-path / array-index of current-state , in case it match move to the next state
   DBG
 
   if(reader_position_state().required_path.size())//state has a key
   {// key should match
     std::vector<std::string>* filter = &reader_position_state().required_path;
-    auto required_key_depth_size = reader_position_state().required_key_depth_size;	// _1.a.b.c[ 10 ].e.f { _1 = from_clause, a.b.c=3 ,e.f=2 }  
-    if(std::equal((*key_path).begin()+(*from_clause).size() + required_key_depth_size, //key-path-start-point + from-clause-path + key-depth
+    auto required_key_depth_size = reader_position_state().required_key_depth_size;
+    if(std::equal((*key_path).begin()+(*from_clause).size() + required_key_depth_size, //key-path-start-point + from-clause-depth-size + key-depth
 		  (*key_path).end(), 
 		  (*filter).begin(),
 		  (*filter).end(), iequal_predicate))
@@ -323,7 +324,7 @@ void key()
 
 void increase_array_index()
 {
-  if(is_reader_located_on_required_depth() && is_array_state())//TODO && is_array_state().  is it necessary?
+  if(is_reader_located_on_required_depth() && is_array_state())//TODO && is_array_state().  is it necessary? what about nesting level
   {
       DBG
       reader_position_state().actual_array_entry_no++;
@@ -353,17 +354,13 @@ void dec_key()
   }
 }
 
-void new_value(s3selectEngine::value& v)//TODO json-idx ?, the json-idx is actualy element-entry in query_matrix
+void new_value(s3selectEngine::value& v,size_t json_index)
 {
-  //TODO query_matrix should contain also the json-idx 
-
   DBG
 
   if(is_on_final_state())
   {
-    std::cout << ">>>>>>>>>>>>>>>>>>final state: v = " << v.to_string() << std::endl;
-
-    (*m_exact_match_cb)(v, 100); //TODO json-index should set by syntax-parser
+    (*m_exact_match_cb)(v, json_index);
     increase_array_index();
     decrease_current_state();//TODO why decrease? the state-machine reached its final destination, and it should be only one result
   } 
@@ -388,7 +385,7 @@ void end_array()
   nested_array_level --;
 
   // option 1. move out of one array, and enter a new one; option-2. enter an object
-  increase_array_index();//increase only upon correct array
+  increase_array_index();//increase only upon correct array //TODO move it into dec_key()?
   dec_key();
 }
 
@@ -397,14 +394,13 @@ void start_array()
   DBG
 
   nested_array_level++;
-
   if(is_reader_located_on_required_depth())
-  {//it reached end of required array
+  {//reader entered an array required by JSON variable 
     reader_position_state().actual_array_entry_no = 0;
     reader_position_state().last_array_start  = nested_array_level;
     
     if(is_reader_located_on_array_entry_according_to_current_state())
-    {//we reached the required array entry
+    {//we reached the required array entry -> next state
       increase_current_state();
     }
   }
@@ -412,19 +408,85 @@ void start_array()
 
 }; //json_variable_access
 
+class json_variables_operations {
+
+	public:
+    
+	std::vector<std::pair<json_variable_access*,size_t>> json_statement_variables{};
+
+	void init(std::vector<std::pair<json_variable_access*,size_t>>& jsv, //TODO init upon construction?
+		  std::vector <std::string>* from_clause,
+		  std::vector<std::string>* key_path,
+		  int* current_depth,
+		  std::function <int(s3selectEngine::value&,int)>* exact_match_cb)
+	{
+	  json_statement_variables = jsv;
+
+	  for(auto& var : json_statement_variables)
+	  {
+	    var.first->init(from_clause,
+		      key_path,
+		      current_depth,
+		      exact_match_cb);
+	  }
+	}
+
+	void start_array()
+	{
+	    for(auto& j : json_statement_variables)
+	    {
+	      j.first->start_array();
+	    }
+	}
+	void end_array()
+	{
+	    for(auto& j : json_statement_variables)
+	    {
+	      j.first->end_array();
+	    }
+	}
+	void dec_key()
+	{
+	    for(auto& j : json_statement_variables)
+	    {
+	      j.first->dec_key();
+	    }
+	}
+	void end_object()
+	{
+	    for(auto& j : json_statement_variables)
+	    {
+	      j.first->end_object();
+	    }
+	}
+	void key()
+	{
+	    for(auto& j : json_statement_variables)
+	    {
+	      j.first->key();
+	    }
+	}
+	void new_value(s3selectEngine::value& v)
+	{
+	    for(auto& j : json_statement_variables)
+	    {
+	      j.first->new_value(v,j.second);
+	    }
+	}
+};//json_variables_operations
+
 class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>, JsonParserHandler> {
 
   public:
 
     typedef enum {OBJECT_STATE,ARRAY_STATE} en_json_elm_state_t;
-
     typedef std::pair<std::vector<std::string>, s3selectEngine::value> json_key_value_t;
 
     row_state state = row_state::NA;
     std::function <int(s3selectEngine::value&,int)> m_exact_match_cb;
     std::function <int(s3selectEngine::scratch_area::json_key_value_t&)> m_star_operation_cb;
 
-    std::vector <std::vector<std::string>> query_matrix{};
+    json_variables_operations variable_match_operations;
     int row_count{};
     std::vector <std::string> from_clause{};
     bool prefix_match{};
@@ -433,15 +495,13 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     bool init_buffer_stream;
     rapidjson::Reader reader;
     std::vector<en_json_elm_state_t> json_element_state;
-    std::string m_result;//debug purpose
     std::vector<std::string> key_path;
     std::function<int(void)> m_s3select_processing;
     int m_start_row_depth;   
     int m_current_depth;
     bool m_star_operation;
-    json_variable_access* json_array_access; //TODO vector of all variables
 
-    JsonParserHandler() : prefix_match(false),init_buffer_stream(false),m_start_row_depth(-1),m_current_depth(0),m_star_operation(false),json_array_access(nullptr)
+    JsonParserHandler() : prefix_match(false),init_buffer_stream(false),m_start_row_depth(-1),m_current_depth(0),m_star_operation(false)
     {
     } 
 
@@ -466,10 +526,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
         }
       }
      
-      if(json_array_access)
-      {
-		json_array_access->dec_key();
-      }
+      variable_match_operations.dec_key();
 
       //TODO m_current_depth-- should done here 
       if(m_start_row_depth > m_current_depth)
@@ -485,29 +542,15 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     }
 
     void push_new_key_value(s3selectEngine::value& v)
-    { int json_idx =0; 
-
-      //std::cout << get_key_path() << std::endl;
-
+    { 
       if (m_star_operation && prefix_match)
       {
 	json_key_value_t key_value(key_path,v);
 	m_star_operation_cb(key_value);
       }
+	if (prefix_match)
+      		variable_match_operations.new_value(v);
 
-      if(json_array_access)
-      {
-	json_array_access->new_value(v);
-      }
-
-      if (prefix_match) {
-        for (auto filter : query_matrix) {
-	   if(std::equal(key_path.begin()+from_clause.size(), key_path.end(), filter.begin(), filter.end(), iequal_predicate)){
-            m_exact_match_cb(v, json_idx);
-          }
-	  json_idx ++;//TODO can use filter - begin()
-        }
-      }
       dec_key_path();
     }
 
@@ -560,10 +603,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
         prefix_match = true;
       }
 
-      if(json_array_access)
-      {
-	json_array_access->key();
-      }
+      variable_match_operations.key();
 
       return true;
     }
@@ -592,11 +632,8 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
       json_element_state.pop_back();
       m_current_depth --;
 
-      if(json_array_access)
-      {
-	json_array_access->end_object();
-      }
-
+      variable_match_operations.end_object();
+      
       dec_key_path();
       if (state == row_state::OBJECT_START_ROW && (m_start_row_depth > m_current_depth)) {
 	m_s3select_processing();
@@ -613,11 +650,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 	  m_start_row_depth = m_current_depth;
         }
  
-       
-      if(json_array_access)
-      {
-	json_array_access->start_array();
-      }
+      variable_match_operations.start_array();
 
       return true;
     }
@@ -631,10 +664,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 	state = row_state::NA;
       }
      
-      if(json_array_access)
-      {
-	json_array_access->end_array();
-      }
+      variable_match_operations.end_array();
 
       return true;
     }
@@ -649,9 +679,14 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
       }
     }
 
-    void set_exact_match_filters(std::vector <std::vector<std::string>>& exact_match_filters)
-    {//purpose: set the filters according to SQL statement(projection columns, predicates columns)
-      query_matrix = exact_match_filters;
+    void set_statement_json_variables(std::vector<std::pair<json_variable_access*,size_t>>& statement_variables)
+    {//purpose: set the json variables extracted from the SQL statement(projection columns, predicates columns)
+		    variable_match_operations.init(
+			  statement_variables,
+			  &from_clause,
+			  &key_path,
+			  &m_current_depth,
+			  &m_exact_match_cb);
     }
 
     void set_exact_match_callback(std::function<int(s3selectEngine::value&, int)> f)
@@ -674,11 +709,6 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
       m_star_operation = true;
     }
 
-    void set_json_array_access(json_variable_access* ja)
-    {
-      json_array_access = ja;
-    }
-
     int process_json_buffer(char* json_buffer,size_t json_buffer_sz, bool end_of_stream=false)
     {//user keeps calling with buffers, the method is not aware of the object size.
 
@@ -690,15 +720,6 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 		    reader.IterativeParseInit();
 		    init_buffer_stream = true;
 
-		    if (json_array_access) 
-		    {
-		      json_array_access->init(
-			  &prefix_match,
-			  &from_clause,
-			  &key_path,
-			  &m_current_depth,
-			  &m_exact_match_cb);
-		    }
 	    }
 
 	    //the non-processed bytes plus the next chunk are copy into main processing buffer 

@@ -2927,7 +2927,12 @@ TEST(TestS3selectFunctions, json_queries)
 { "type": "home10", "number": "734928_10","addr": 100 }
 ],
 
-"key_after_array": "XXX"
+"key_after_array": "XXX",
+
+"description" : {
+  "main_desc" : "value_1",
+  "second_desc" : "value_2"
+}
 
 }
 )";
@@ -2960,9 +2965,9 @@ TEST(TestS3selectFunctions, json_queries)
   ASSERT_EQ(result,expected_result);
 
   //select specific keys in array, operation on fetched value, from-clause is empty.
-  expected_result=R"(Joe_2,XXX,25
+  expected_result=R"(Joe_2,XXX,25,value_1,value_2
 )";
-  input_query = "select _1.firstname,_1.key_after_array,_1.age+4 from s3object[*];";
+  input_query = "select _1.firstname,_1.key_after_array,_1.age+4,_1.description.main_desc,_1.description.second_desc from s3object[*];";
   run_json_query(input_query, json_input,result);
   ASSERT_EQ(result,expected_result);
 
@@ -3035,6 +3040,8 @@ phoneNumbers.type. : home10
 phoneNumbers.number. : 734928_10
 phoneNumbers.addr. : 100
 key_after_array. : XXX
+description.main_desc. : value_1
+description.second_desc. : value_2
 #=== 0 ===#
 )";
 
