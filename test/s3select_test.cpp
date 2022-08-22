@@ -2665,11 +2665,13 @@ TEST(TestS3selectFunctions, presto_syntax_alignments)
 
   auto s3select_res = run_s3select(input_query, input);
 
-  //const std::string input_presto_query = "Select t._1,t._2 fRom s3OBJECT t whEre _1 = _2";
+  const std::string input_presto_query = "Select t._1,t._2 fRom s3OBJECT t whEre _1 = _2";
 
-  //auto s3select_presto_res = run_s3select(input_presto_query, input_for_presto);
+  const char* json_query = "select _1.c1, _1.c2 from s3object[*].root where _1.c1 = _1.c2;";
 
-  //ASSERT_EQ(s3select_res, s3select_presto_res);
+  auto s3select_presto_res = run_s3select(input_presto_query, input_for_presto, json_query);
+
+  ASSERT_EQ(s3select_res, s3select_presto_res);
 
 }
 
