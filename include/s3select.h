@@ -2699,7 +2699,7 @@ public:
       JsonHandler.process_json_buffer(0, 0, true);//TODO end-of-stream = end-of-row
       m_end_of_stream = true;
       sql_execution_on_row_cb();
-      result += s3select_result;
+      result = s3select_result;
       return 0;
     }
 

@@ -1068,7 +1068,7 @@ TEST(TestS3selectFunctions, nested_call_aggregate_with_non_aggregate )
 
   generate_fix_columns_csv(input, size);
 
-  const std::string input_query = "select sum(cast(_1 as int)),max(cast(_3 as int)),substring('abcdefghijklm',(2-1)*3+sum(cast(_1 as int))/sum(cast(_1 as int))+1,(count() + count(0))/count(0)) from stdin;";
+  const std::string input_query = "select sum(cast(_1 as int)),max(cast(_3 as int)),substring('abcdefghijklm',(2-1)*3+sum(cast(_1 as int))/sum(cast(_1 as int))+1,(count(0) + count(0))/count(0)) from stdin;";
 
   std::string s3select_result = run_s3select(input_query,input);
 
