@@ -2503,20 +2503,97 @@ TEST(TestS3selectFunctions, test_escape_expressions)
   ASSERT_EQ(s3select_result_3, s3select_result_4);
 }
 
-void generate_csv_multirow(std::string& out) {
+void generate_csv_multirow(std::string& out, int loop = 1) {
   // schema is: int, float, string, string
   std::stringstream ss;
-  ss << "1,42926,7334,5.5,Brandise,Letsou,Brandise.Letsou@yopmail.com,worker,2020-10-26T11:21:30.397Z" << std::endl;
-  ss << "2,21169,3648,9.0,Zaria,Weinreb,Zaria.Weinreb@yopmail.com,worker,2009-12-02T01:22:45.8327+09:45" << std::endl;
-  ss << "3,35581,9091,2.1,Bibby,Primalia,Bibby.Primalia@yopmail.com,doctor,2001-02-27T23:18:23.446633-12:00" << std::endl;
-  ss << "4,38388,7345,4.7,Damaris,Arley,Damaris.Arley@yopmail.com,firefighter,1995-08-24T01:40:00+12:30" << std::endl;
-  ss << "5,42802,6464,7.0,Georgina,Georas,Georgina.Georas@yopmail.com,worker,2013-01-30T05:27:59.2Z" << std::endl;
-  ss << "6,45582,52863,0.1,Kelly,Hamil,Kelly.Hamil@yopmail.com,police officer,1998-03-31T17:25-01:05" << std::endl;
-  ss << "7,8548,7665,3.6,Claresta,Flita,Claresta.Flita@yopmail.com,doctor,2007-10-10T22:00:30Z" << std::endl;
-  ss << "8,22633,528,5.3,Bibby,Virgin,Bibby.Virgin@yopmail.com,developer,2020-06-30T11:07:01.23323-00:30" << std::endl;
-  ss << "9,38439,5645,2.8,Mahalia,Aldric,Mahalia.Aldric@yopmail.com,doctor,2019-04-20T20:21:22.23+05:15" << std::endl;
-  ss << "10,6611,7287,1.0,Pamella,Sibyls,Pamella.Sibyls@yopmail.com,police officer,2000-09-13T14:41Z" << std::endl;
+  for(int i = 0; i < loop; i++)
+  {
+    ss << "1,42926,7334,5.5,Brandise,Letsou,Brandise.Letsou@yopmail.com,worker,2020-10-26T11:21:30.397Z" << std::endl;
+    ss << "2,21169,3648,9.0,Zaria,Weinreb,Zaria.Weinreb@yopmail.com,worker,2009-12-02T01:22:45.8327+09:45" << std::endl;
+    ss << "3,35581,9091,2.1,Bibby,Primalia,Bibby.Primalia@yopmail.com,doctor,2001-02-27T23:18:23.446633-12:00" << std::endl;
+    ss << "4,38388,7345,4.7,Damaris,Arley,Damaris.Arley@yopmail.com,firefighter,1995-08-24T01:40:00+12:30" << std::endl;
+    ss << "5,42802,6464,7.0,Georgina,Georas,Georgina.Georas@yopmail.com,worker,2013-01-30T05:27:59.2Z" << std::endl;
+    ss << "6,45582,52863,0.1,Kelly,Hamil,Kelly.Hamil@yopmail.com,police officer,1998-03-31T17:25-01:05" << std::endl;
+    ss << "7,8548,7665,3.6,Claresta,Flita,Claresta.Flita@yopmail.com,doctor,2007-10-10T22:00:30Z" << std::endl;
+    ss << "8,22633,528,5.3,Bibby,Virgin,Bibby.Virgin@yopmail.com,developer,2020-06-30T11:07:01.23323-00:30" << std::endl;
+    ss << "9,38439,5645,2.8,Mahalia,Aldric,Mahalia.Aldric@yopmail.com,doctor,2019-04-20T20:21:22.23+05:15" << std::endl;
+    ss << "10,6611,7287,1.0,Pamella,Sibyls,Pamella.Sibyls@yopmail.com,police officer,2000-09-13T14:41Z" << std::endl;
+  }
   out = ss.str();
+}
+
+TEST(TestS3selectFunctions, limit)
+{
+  std::string input_csv, input_query, expected_res;
+  generate_csv_multirow(input_csv, 2);
+
+  input_query = "select _1 from stdin limit 0;";
+  expected_res = "";
+  std::cout << "Running query: 1 (when limit is zero)" << std::endl;
+  auto s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select _1 from stdin limit 8;";
+  expected_res = "1\n2\n3\n4\n5\n6\n7\n8\n";
+  std::cout << "Running query: 2 (non-aggregate query, limit clause only)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select _1 from stdin where _2 > _3 limit 8;";
+  expected_res = "7\n";
+  std::cout << "Running query: 3 (non-aggregate_query, where + limit clause)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select _1 from stdin where _2 > _3 limit 7;";
+  expected_res = "7\n";
+  std::cout << "Running query: 4 (non-aggregate_query, where + limit clause)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select _1 from stdin where _2 > _3 limit 6;";
+  expected_res = "";
+  std::cout << "Running query: 5 (non-aggregate_query, where + limit clause)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select count(0) from stdin limit 9;";
+  expected_res = "9";
+  std::cout << "Running query: 6 (aggregate query, limit clause only)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select count(0) from stdin where _2 > _3 limit 8;";
+  expected_res = "1";
+  std::cout << "Running query: 7 (aggregate_query, where + limit clause)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select count(0) from stdin where _2 > _3 limit 7;";
+  expected_res = "1";
+  std::cout << "Running query: 8 (aggregate_query, where + limit clause)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select count(0) from stdin where _2 > _3 limit 6;";
+  expected_res = "0";
+  std::cout << "Running query: 9 (aggregate_query, where + limit clause)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  generate_csv_multirow(input_csv, 10000);
+
+  input_query = "select count(0) from stdin limit 90000;";
+  expected_res = "90000";
+  std::cout << "Running query: 10 (aggregate_query, limit clause only, with Large input)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query = "select count(0) from stdin where _2 > _3 limit 90000;";
+  expected_res = "9000";
+  std::cout << "Running query: 11 (aggregate_query, where + limit clause, with Large input)" << std::endl;
+  s3select_res = run_s3select(input_query, input_csv);
+  EXPECT_EQ(s3select_res, expected_res);
 }
 
 TEST(TestS3selectFunctions, nested_query_single_row_result)
