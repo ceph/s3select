@@ -9,6 +9,8 @@
 #include <algorithm>
 
 using namespace std::string_literals;
+#define unlikely(x)     __builtin_expect((x),0)
+//#define unlikely(x)  (x)
 
 #define BOOST_BIND_ACTION_PARAM( push_name ,param ) boost::bind( &push_name::operator(), g_ ## push_name , _1 ,_2, param)
 namespace s3selectEngine
@@ -372,6 +374,8 @@ private:
 
 public:
 
+  __function():m_func_impl(nullptr),m_s3select_functions(nullptr){}
+
   base_function* impl()
   {
     return m_func_impl;
@@ -382,6 +386,8 @@ public:
     m_scratch = sa;
     m_aliases = pa;
     m_json_statement = json_statement;
+    if(m_func_impl)
+      m_func_impl->set_scratch_area(sa);
     for (base_statement* ba : arguments)
     {
       ba->traverse_and_apply(sa, pa, json_statement);
@@ -403,6 +409,17 @@ public:
     for (auto& ba : arguments)
     {
       ba->set_skip_non_aggregate(m_skip_non_aggregate_op);
+    }
+  }
+
+  virtual void set_phase_state(multiple_executions_en phase) override
+  {
+    execution_phase = phase;
+    if(m_func_impl)
+    	m_func_impl->set_execution_phase(execution_phase);
+    for (auto& ba : arguments)
+    {
+      ba->set_phase_state(phase);
     }
   }
 
@@ -536,10 +553,20 @@ struct _fn_sum : public base_function
   {
     auto iter = args->begin();
     base_statement* x = *iter;
+    value res;
+
+    if(unlikely(is_second_phase()))
+    {
+      m_scratch_area->pop_saved_result(res);
+    }
+    else
+    {
+      res = x->eval();
+    }
 
     try
     {
-      sum = sum + x->eval();
+      sum = sum + res;
     }
     catch (base_s3select_exception& e)
     {
@@ -554,7 +581,12 @@ struct _fn_sum : public base_function
 
   void get_aggregate_result(variable* result) override
   {
-    *result = sum ;
+    *result = sum;
+
+    if(is_first_phase())
+    { 
+      m_scratch_area->push_aggregation_result(&sum);
+    }
   }
 };
 
@@ -562,6 +594,7 @@ struct _fn_count : public base_function
 {
 
   int64_t count;
+  value saved_result;
 
   _fn_count():count(0)
   {
@@ -570,27 +603,38 @@ struct _fn_count : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
-    if (args->size())
-    {// in case argument exist, should count only non-null.
-      auto iter = args->begin();
-      base_statement* x = *iter;
-
-      if(!x->eval().is_null())
-      {
-	count += 1;
-      }
+    if(unlikely(is_second_phase()))
+    {
+      m_scratch_area->pop_saved_result(saved_result);
+      count = count + saved_result.i64();
     }
     else
-    {//in case of non-arguments // count()
-	count += 1;
-    }
+    {
+    	if (args->size())
+    	{// in case argument exist, should count only non-null.
+      		auto iter = args->begin();
+      		base_statement* x = *iter;
 
+      		if(!x->eval().is_null())
+      		{
+			count += 1;
+      		}
+    	}
+    	else
+    	{//in case of non-arguments // count()
+		count += 1;
+    	}
+    }
     return true;
   }
 
   void get_aggregate_result(variable* result) override
   {
     result->set_value(count);
+    if(is_first_phase())
+    { 
+      m_scratch_area->push_aggregation_result(&result->get_value());
+    }
   }
 
 };
@@ -600,6 +644,8 @@ struct _fn_avg : public base_function
 
     value sum;
     value count{0.0};
+    value sum_save;
+    value count_save{0.0};
 
     _fn_avg() : sum(0) { aggregate = true; }
 
@@ -607,6 +653,15 @@ struct _fn_avg : public base_function
     {
         auto iter = args->begin();
         base_statement *x = *iter;
+
+	if(unlikely(is_second_phase()))
+	{
+	  m_scratch_area->pop_saved_result(sum_save);
+	  m_scratch_area->pop_saved_result(count_save);
+          sum = sum + sum_save;
+          count = count + count_save;
+	  return true;
+	}
 
         try
         {
@@ -623,11 +678,19 @@ struct _fn_avg : public base_function
 
     void get_aggregate_result(variable *result) override
     {
+	if(is_first_phase())
+	{ 
+	  m_scratch_area->push_aggregation_result(&sum);
+	  m_scratch_area->push_aggregation_result(&count);
+	}
+
         if(count == static_cast<value>(0)) {
             throw base_s3select_exception("count cannot be zero!");
         } else {
-            *result = sum/count ;
+	    value tmp = sum;
+            *result = tmp/count ; //TODO division operation change left-op (sum in this case)
         }
+
     }
 };
 
@@ -645,10 +708,20 @@ struct _fn_min : public base_function
   {
     auto iter = args->begin();
     base_statement* x =  *iter;
+    value res;
 
-    if(min > x->eval())
+    if(unlikely(is_second_phase()))
     {
-      min=x->eval();
+      m_scratch_area->pop_saved_result(res);
+    }
+    else
+    {
+      res = x->eval();
+    } 
+
+    if(min > res)
+    {
+      min=res;
     }
 
     return true;
@@ -657,6 +730,10 @@ struct _fn_min : public base_function
   void get_aggregate_result(variable* result) override
   {
     *result = min;
+    if(is_first_phase())
+    { 
+      m_scratch_area->push_aggregation_result(&min);
+    }
   }
 
 };
@@ -675,10 +752,20 @@ struct _fn_max : public base_function
   {
     auto iter = args->begin();
     base_statement* x =  *iter;
+    value res;
 
-    if(max < x->eval())
+    if(unlikely(is_second_phase()))
     {
-      max=x->eval();
+      m_scratch_area->pop_saved_result(res);
+    }
+    else
+    {
+      res = x->eval();
+    } 
+
+    if(max < res)
+    {
+      max=res;
     }
 
     return true;
@@ -687,6 +774,10 @@ struct _fn_max : public base_function
   void get_aggregate_result(variable* result) override
   {
     *result = max;
+    if(is_first_phase())
+    { 
+      m_scratch_area->push_aggregation_result(&max);
+    }
   }
 
 };

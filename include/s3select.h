@@ -18,6 +18,9 @@
 #include <boost/bind.hpp>
 #include <functional>
 
+#include <boost/lockfree/queue.hpp>//TODO where producer should be implemented 
+#define unlikely(x)     __builtin_expect((x),0)
+
 #define _DEBUG_TERM {string  token(a,b);std::cout << __FUNCTION__ << token << std::endl;}
 
 namespace s3selectEngine
@@ -453,7 +456,7 @@ public:
 
   int semantic()
   {
-    for (const auto &e : get_projections_list())
+    for (auto e : get_projections_list())
     {
       e->resolve_node();
       //upon validate there is no aggregation-function nested calls, it validates legit aggregation call. 
@@ -529,6 +532,17 @@ public:
     }
 
     return 0;
+  }
+
+  void set_execution_phase(base_statement::multiple_executions_en phase)
+  {//TODO only after parse_query
+    for (const auto &e : get_projections_list())
+    {
+      e->set_phase_state(phase);
+    }
+
+    if(get_filter())
+      get_filter()->set_phase_state(phase);
   }
 
   std::string get_error_description()
@@ -1931,7 +1945,149 @@ struct s3select_csv_definitions //TODO
     s3select_csv_definitions():row_delimiter('\n'), column_delimiter(','), output_row_delimiter('\n'), output_column_delimiter(','), escape_char('\\'), output_escape_char('\\'), output_quot_char('"'), quot_char('"'), use_header_info(false), ignore_header_info(false), quote_fields_always(false), quote_fields_asneeded(false), redundant_column(false), comment_empty_lines(false) {}
 
 };
- 
+
+/////// result handling
+class result_storage {
+
+  private:
+
+
+  public:
+  
+    char x[1000];
+    result_storage(int &x){}
+    result_storage(){}
+};
+
+class shared_queue{
+
+  private:
+    boost::lockfree::queue<result_storage> s3select_result_queue{128};
+
+    bool done;
+
+  public:
+  
+    shared_queue():done(false){}
+
+    void producers_complete()
+    {
+      done = true;
+    }
+
+    int push(std::string& result)
+    {
+      result_storage rs;//TODO append should copy to result_storage to skip the string-copy
+      strncpy(rs.x,result.data(),sizeof(rs.x));
+
+      while(!s3select_result_queue.push(rs));
+
+      return 0;
+    }
+
+    int pop()
+    {
+      result_storage value;
+      std::string result;
+
+      while (!done) {
+        while (s3select_result_queue.pop(value))
+	{
+	  result.assign(value.x);
+	  std::cout << ">>" << result << std::endl;//TODO std::function per different type of clients
+	}
+      }
+
+      while (s3select_result_queue.pop(value))
+      {
+	result.assign(value.x);
+	std::cout << ">>" << result << std::endl;
+      }
+      
+      return 0;
+    }
+
+};
+
+class s3select_result {
+//handle different forms of results (arrow-format, producer/consumer(MT), simple string) ... more
+
+std::string result;
+shared_queue* m_shared_queue;
+
+public:
+
+    s3select_result():m_shared_queue(nullptr){}
+
+    void set_shared_queue(shared_queue* sq)
+    {
+	m_shared_queue = sq;
+    }
+    
+    void clear()
+    {
+      result.clear();
+    }
+
+    const char* c_str() const
+    {
+      return result.c_str();
+    }
+
+    size_t size()
+    {
+      return result.size();
+    }
+
+    std::string& append(char* in,size_t n)
+    {
+      return result.append(in,n);
+    }
+    
+    std::string& append(const char* in)
+    {
+      return result.append(in);
+    }
+   
+    std::string& append(const std::string& in)
+    {
+      return result.append(in);
+    }
+    
+    friend std::ostream& operator<< (std::ostream& os, s3select_result& str)
+    {
+      return  os << str.str();
+    }
+
+    std::string& operator= (const std::string& str)
+    {
+      result.assign(str);
+      return result;
+    }
+
+    std::string& str()
+    {
+      return result;
+    }
+
+    int push_producer()
+    {//copy into fix size.
+      
+      if(m_shared_queue)
+      {
+	  m_shared_queue->push(result);
+	  result.clear();
+      }
+
+      return 0;
+    }
+
+    int pop_consumer()
+    {
+      return 0;
+    }
+
+}; 
 
 /////// handling different object types
 class base_s3object
@@ -1979,7 +2135,7 @@ public:
   // for the case were the rows are not fetched, but "pushed" by the data-source parser (JSON)
   virtual bool multiple_row_processing(){return true;}
 
-  void result_values_to_string(multi_values& projections_resuls, std::string& result)
+  void result_values_to_string(multi_values& projections_resuls, s3select_result& result)
   {
     size_t i = 0;
     std::string output_delimiter(1,m_csv_defintion.output_column_delimiter);
@@ -1990,7 +2146,7 @@ public:
             if (m_csv_defintion.quote_fields_always) {
               std::ostringstream quoted_result;
               quoted_result << std::quoted(res->to_string(),m_csv_defintion.output_quot_char, m_csv_defintion.escape_char);
-              result.append(quoted_result.str());
+              result.append(quoted_result.str().data());
             }//TODO to add asneeded
 	    else
 	    {
@@ -2008,9 +2164,11 @@ public:
     }
     if(!m_aggr_flow)
 	result.append(output_row_delimiter);
+
+    result.push_producer();//only upon shared-queue exists
   }
 
-  int getMatchRow( std::string& result)
+  int getMatchRow( s3select_result& result)
   {
     multi_values projections_resuls;
     
@@ -2048,7 +2206,8 @@ public:
         }
 
 	row_update_data();
-        if (!m_where_clause || m_where_clause->eval().is_true())
+	//the second phase is relevant only for aggregation flows
+        if (!m_where_clause || unlikely(m_where_clause->is_second_phase()) || m_where_clause->eval().is_true())
 	{
 	  columnar_fetch_projection();
           for (auto i : m_projections)
@@ -2241,7 +2400,7 @@ public:
   }
 
 
-  int run_s3select_on_stream(std::string& result, const char* csv_stream, size_t stream_length, size_t obj_size)
+  int run_s3select_on_stream(s3select_result& result, const char* csv_stream, size_t stream_length, size_t obj_size)
   {
     int status=0;
     try{
@@ -2266,7 +2425,7 @@ public:
   }
 
 private:
-  int run_s3select_on_stream_internal(std::string& result, const char* csv_stream, size_t stream_length, size_t obj_size)
+  int run_s3select_on_stream_internal(s3select_result& result, const char* csv_stream, size_t stream_length, size_t obj_size)
   {
     //purpose: the cv data is "streaming", it may "cut" rows in the middle, in that case the "broken-line" is stores
     //for later, upon next chunk of data is streaming, the stored-line is merge with current broken-line, and processed.
@@ -2313,7 +2472,7 @@ private:
   }
 
 public:
-  int run_s3select_on_object(std::string& result, const char* csv_stream, size_t stream_length, bool skip_first_line, bool skip_last_line, bool do_aggregate)
+  int run_s3select_on_object(s3select_result& result, const char* csv_stream, size_t stream_length, bool skip_first_line, bool skip_last_line, bool do_aggregate)
   {
     if (do_aggregate && m_previous_line)
     {
@@ -2460,9 +2619,9 @@ public:
   }
   
 
-  int run_s3select_on_object(std::string &result,
-        std::function<int(std::string&)> fp_s3select_result_format,
-        std::function<int(std::string&)> fp_s3select_header_format)
+  int run_s3select_on_object(s3select_result &result,
+        std::function<int(s3select_result&)> fp_s3select_result_format,
+        std::function<int(s3select_result&)> fp_s3select_header_format)
   {
     int status = 0;
 
@@ -2564,7 +2723,7 @@ private:
   JsonParserHandler JsonHandler;
   size_t m_processed_bytes;
   bool m_end_of_stream;
-  std::string s3select_result;
+  s3select_result m_result;
   size_t m_row_count;
   bool star_operation_ind;
   std::string m_error_description;
@@ -2633,23 +2792,23 @@ private:
       //execute statement on row 
       //create response (TODO callback)
 
-      size_t result_len = s3select_result.size();
+      size_t result_len = m_result.size();
       int status=0;
       try{
-	status = getMatchRow(s3select_result);
+	status = getMatchRow(m_result);
       }
       catch(s3selectEngine::base_s3select_exception& e)
       {
-	sql_error_handling(e,s3select_result);
+	sql_error_handling(e,m_result.str());
 	status = -1;
       }
 
       m_sa->clear_data(); 
-      if(star_operation_ind && (s3select_result.size() != result_len))
+      if(star_operation_ind && (m_result.size() != result_len))
       {//as explained above the star-operation is displayed differently
 	std::string end_of_row;
 	end_of_row = "#=== " + std::to_string(m_row_count++) + " ===#\n";
-	s3select_result.append(end_of_row);
+	m_result.append(end_of_row);
       }
       return status;
   }
@@ -2674,10 +2833,10 @@ private:
     //the error-handling takes care of the error flow.
     m_error_description = e.what();
     m_error_count++;
-    s3select_result.append(std::to_string(m_error_count));
-    s3select_result += " : ";
-    s3select_result.append(m_error_description);
-    s3select_result += m_csv_defintion.output_row_delimiter;
+    m_result.append(std::to_string(m_error_count));
+    m_result.append(std::string(" : "));
+    m_result.append(m_error_description);
+    m_result.append(&m_csv_defintion.output_row_delimiter,1);
   }
 
 public:
@@ -2686,21 +2845,21 @@ public:
   {
     int status=0;
     m_processed_bytes += stream_length;
-    s3select_result.clear();
+    m_result.clear();
 
     if(!stream_length || !json_stream)//TODO m_processed_bytes(?)
     {//last processing cycle
       JsonHandler.process_json_buffer(0, 0, true);//TODO end-of-stream = end-of-row
       m_end_of_stream = true;
       sql_execution_on_row_cb();
-      result = s3select_result;
+      result = m_result.str();
       return 0;
     }
 
     try{
     //the handler is processing any buffer size and return results per each buffer
       status = JsonHandler.process_json_buffer((char*)json_stream, stream_length);
-      result = s3select_result;//TODO remove this result copy
+      result = m_result.str();//TODO remove this result copy
     }
     catch(std::exception &e)
     {
@@ -2718,6 +2877,92 @@ public:
   }
 
   ~json_object() = default;
+
+};
+
+class merge_results : public base_s3object
+{//purpose: upon processing several stream on a single aggregate query, this object should merge results.
+
+  private:
+
+  bool m_end_of_stream;
+  s3select_result m_result;
+  std::function<int(value)> publish_results;
+
+  public:
+
+  std::vector<s3selectEngine::s3select*> m_all_processing_object;
+
+  void set_all_processing_objects(std::vector<s3selectEngine::s3select*> objs)
+  {
+    m_all_processing_object = objs;
+  }
+
+  virtual bool is_end_of_stream()
+  {
+    return m_end_of_stream;
+  }
+
+  virtual void row_fetch_data()
+  {
+    if(m_all_processing_object.size() == 0)
+    {//it means all rows are processed, it's time to sum-up.
+      m_end_of_stream = true;
+      m_is_to_aggregate = true;
+      return;
+    }
+    
+    //each item of m_all_processing_object contain results of some data portion
+    //these results consider as a single row.
+    //the row is processed by *this object(with the rest of the rows), the AST node state is set to <SECOND_PHASE>
+    s3selectEngine::s3select* q = m_all_processing_object.back();
+    m_all_processing_object.pop_back();
+    m_s3_select->get_scratch_area()->set_aggregation_results(q->get_scratch_area()->get_aggregation_results());	
+  }
+   
+  s3select_result& get_result()
+  {//TODO should use std::function
+    return m_result;
+  }
+
+  int execute_query()
+  {
+    do
+    {
+
+      int num = 0;
+      try
+      {
+        num = getMatchRow(m_result);
+      }
+      catch (base_s3select_exception& e)
+      {
+	std::cout << "error while processing::" << e.what() << std::endl;
+#if 0
+        m_error_description = e.what();
+        m_error_count ++;
+        if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL || m_error_count>100 || (m_stream>=m_end_stream))//abort query execution
+        {
+          return -1;
+        }
+#endif
+
+      }
+
+      if (num < 0)
+      {
+        break;
+      }
+
+    }
+    while (true);
+
+    return 0;
+  }
+
+  merge_results(s3selectEngine::s3select* q):base_s3object(q),m_end_of_stream(false){}
+
+  ~merge_results(){}
 };
 
 }; // namespace s3selectEngine

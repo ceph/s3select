@@ -1105,6 +1105,9 @@ private:
   uint16_t buff_loc;
   int max_json_idx;
 
+  /// for saving aggregation results between phases of multiple streams executions.
+  std::vector<value*> m_aggregation_results;
+
 public:
 
   typedef std::pair<std::vector<std::string>,value> json_key_value_t;
@@ -1261,10 +1264,57 @@ public:
   }
 #endif // _ARROW_EXIST
 
+  void push_aggregation_result(value* v)
+  {
+    m_aggregation_results.push_back(v);
+  }
+
+  void pop_saved_result(value& v)
+  {//TODO check size
+    v = *m_aggregation_results.front();
+    m_aggregation_results.erase( m_aggregation_results.begin() ); 
+  }
+
+  std::vector<value*>& get_aggregation_results()
+  {
+    return m_aggregation_results;
+  }
+
+  void set_aggregation_results(std::vector<value*>& aggregation_results)
+  {
+    m_aggregation_results = aggregation_results;
+  }
+
+  void clear_aggregation_results()
+  {
+    m_aggregation_results.clear();
+  }
 };
 
 class base_statement
 {
+public:
+
+  enum class multiple_executions_en
+  {//upon aggregation flow across multiple executions, results are produced(first_phase) and later merged(second_phase).
+   //aggregate functions should be aware to this state.
+    FIRST_PHASE,SECOND_PHASE,NA
+  };
+
+  bool is_first_phase() const
+  {
+    return execution_phase == multiple_executions_en::FIRST_PHASE;
+  }
+
+  bool is_second_phase() const
+  {
+    return execution_phase == multiple_executions_en::SECOND_PHASE;
+  }
+
+  void set_phase(multiple_executions_en phase)
+  {
+    execution_phase = phase;
+  }
 
 protected:
 
@@ -1282,7 +1332,10 @@ protected:
 
 public:
   base_statement():m_scratch(nullptr), is_last_call(false), m_is_cache_result(false),
-  m_projection_alias(nullptr), m_eval_stack_depth(0), m_skip_non_aggregate_op(false),m_json_statement(false) {}
+  m_projection_alias(nullptr), m_eval_stack_depth(0), m_skip_non_aggregate_op(false),
+  execution_phase(multiple_executions_en::NA){}
+
+  multiple_executions_en execution_phase;
 
   virtual value& eval()
   {
@@ -1348,6 +1401,20 @@ public:
     if (right())
     {
       right()->set_skip_non_aggregate(m_skip_non_aggregate_op);
+    }
+  }
+
+  virtual void set_phase_state(multiple_executions_en phase) 
+  {
+    execution_phase = phase;
+
+    if (left())
+    {
+      left()->set_phase_state(phase);
+    }
+    if (right())
+    {
+      right()->set_phase_state(phase);
     }
   }
 
@@ -2145,12 +2212,14 @@ class base_function
 
 protected:
   bool aggregate;
+  base_statement::multiple_executions_en execution_phase;
+  scratch_area* m_scratch_area;
 
 public:
   //TODO add semantic to base-function , it operate once on function creation
   // validate semantic on creation instead on run-time
   virtual bool operator()(bs_stmt_vec_t* args, variable* result) = 0;
-  base_function() : aggregate(false) {}
+  base_function() : aggregate(false),execution_phase(base_statement::multiple_executions_en::NA),m_scratch_area(nullptr) {}
   bool is_aggregate() const
   {
     return aggregate == true;
@@ -2164,6 +2233,25 @@ public:
     this->~base_function();
   }
 
+  void set_execution_phase(base_statement::multiple_executions_en phase)
+  {
+    execution_phase = phase;
+  }
+  
+  void set_scratch_area(scratch_area* sa)
+  {
+    m_scratch_area = sa;
+  }
+
+  bool is_first_phase()
+  {
+    return execution_phase == base_statement::multiple_executions_en::FIRST_PHASE;
+  }
+
+  bool is_second_phase()
+  {
+    return execution_phase == base_statement::multiple_executions_en::SECOND_PHASE;
+  }
 };
 
 class base_date_extract : public base_function

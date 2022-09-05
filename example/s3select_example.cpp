@@ -18,7 +18,7 @@ class awsCli_handler {
 private:
   std::unique_ptr<s3selectEngine::s3select> s3select_syntax;
   std::string m_s3select_query;
-  std::string m_result;
+  s3select_result m_result;
   std::unique_ptr<s3selectEngine::csv_object> m_s3_csv_object;
   std::string m_column_delimiter;//TODO remove
   std::string m_quot;//TODO remove
@@ -156,7 +156,7 @@ public:
 
   std::string get_result()
   {
-    return m_result;
+    return m_result.str();
   }
 
   int run_s3select(const char *query, const char *input, size_t input_length, size_t object_size)
@@ -229,7 +229,7 @@ public:
     if (m_result.size() > strlen(PAYLOAD_LINE))
     {
       m_result.append(END_PAYLOAD_LINE);
-      create_message(m_result, m_result.size() - 12, header_size);
+      create_message(m_result.str(), m_result.size() - 12, header_size);
       //s->formatter->write_bin_data(m_result.data(), buff_len);
       //if (op_ret < 0)
       //{
@@ -304,12 +304,12 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
   rgw.set_get_size_api(fp_get_size);
   rgw.set_range_req_api(fp_range_req);
   
-  std::function<int(std::string&)> fp_s3select_result_format = [](std::string& result){std::cout << result;result.clear();return 0;};
-  std::function<int(std::string&)> fp_s3select_header_format = [](std::string& result){result="";return 0;};
+  std::function<int(s3select_result&)> fp_s3select_result_format = [](s3select_result& result){std::cout << result;result.clear();return 0;};
+  std::function<int(s3select_result&)> fp_s3select_header_format = [](s3select_result& result){result="";return 0;};
 
   parquet_object parquet_processor(input_file,&s3select_syntax,&rgw);
 
-  std::string result;
+  s3select_result result;
 
   do
   {
@@ -455,9 +455,10 @@ int run_on_localFile(char* input_query)
 
   lstat(object_name.c_str(), &statbuf);
 
-  std::string s3select_result;
+  s3select_result result;
   s3selectEngine::csv_object::csv_defintions csv;
   csv.use_header_info = false;
+  bool do_aggregate = false;
   //csv.column_delimiter='|';
   //csv.row_delimiter='\t';
 
@@ -477,7 +478,21 @@ int run_on_localFile(char* input_query)
   {
     size_t input_sz = fread(buff, 1, BUFF_SIZE, fp);
     char* in=buff;
-    status = s3_csv_object.run_s3select_on_stream(s3select_result, in, input_sz, statbuf.st_size);
+
+    if (!input_sz || feof(fp)) 
+    {
+        do_aggregate = true;
+    }
+
+    int status;
+    if(do_aggregate == true)
+    {
+      status = s3_csv_object.run_s3select_on_object(result, in, input_sz, false, false, do_aggregate);
+    }
+    else
+    {
+      status = s3_csv_object.run_s3select_on_stream(result, in, input_sz, __INT64_MAX__);
+    }
 
     if(status<0)
     {
@@ -485,12 +500,12 @@ int run_on_localFile(char* input_query)
       break;
     }
 
-    if(s3select_result.size()>0)
+    if(result.size()>0)
     {
-      std::cout << s3select_result;
+      std::cout << result;
     }
 
-    s3select_result = "";
+    result = "";
     if(!input_sz || feof(fp))
     {
       break;
@@ -521,7 +536,6 @@ int run_on_single_query(const char* fname, const char* query)
 
   if (is_parquet_file(fname))
   {
-    std::string result;
     int status = run_query_on_parquet_file(query, fname);
     return status;
   }
