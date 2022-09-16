@@ -458,7 +458,7 @@ public:
   {
     __val.num = n;
   }
-  explicit value(bool b) : type(value_En_t::DECIMAL)
+  explicit value(bool b) : type(value_En_t::BOOL)
   {
     __val.num = (int64_t)b;
   }
