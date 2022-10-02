@@ -1,50 +1,53 @@
-# s3select
-**The purpose of s3select engine** is to create an efficient pipe between user client to storage node (the engine should be as close as possible to storage, "moving computation into storage").
+# s3select 
 
-It enables the user to define the exact portion of data should received by his side.
+<br />The s3select is another S3 request, that enables the client to push down an SQL statement(according to [spec](https://docs.ceph.com/en/latest/radosgw/s3select/#features-support)) into CEPH storage.
+<br />The s3select is an implementation of a push-down paradigm.
+<br />The push-down paradigm is about moving(“pushing”) the operation close to the data.
+<br />It's contrary to what is commonly done, i.e. moving the data to the “place” of operation.
+<br />In a big-data ecosystem, it makes a big difference. 
+<br />In order to execute __“select sum( x + y) from s3object where a + b > c”__ 
+<br />It needs to fetch the entire object to the client side, and only then execute the operation with an analytic application,
+<br />With push-down(s3-select) the entire operation is executed on the server side, and only the result is returned to the client side.
 
-It also enables for higher level analytic-applications (such as SPARK-SQL) , using that feature to improve their latency and throughput.
 
-https://aws.amazon.com/blogs/aws/s3-glacier-select/
+## Analyzing huge amount of cold/warm data without moving or converting 
+<br />The s3-storage is reliable, efficient, cheap, and already contains a huge amount of objects, It contains many CSV, JSON, and Parquet objects, and these objects contain a huge amount of data to analyze.
+<br />An ETL may convert these objects into Parquet and then run queries on these converted objects.
+<br />But it comes with an expensive price, downloading all of these objects close to the analytic application.
 
-https://www.qubole.com/blog/amazon-s3-select-integration/
+<br />The s3select-engine that resides on s3-storage can do these jobs for many use cases, saving time and resources. 
 
-The engine is using boost::spirit to define the grammar , and by that building the AST (abstract-syntax-tree). upon statement is accepted by the grammar it create a tree of objects.
 
-The hierarchy(levels) of the different objects also define their role, i.e. function could be a finite expression, or an argument for an expression, or an argument for other functions, and so forth.
+## The s3select engine stands by itself 
+<br />The engine resides on a dedicated GitHub repo, and it is also capable to execute SQL statements on standard input or files residing on a local file system.
+<br />Users may clone and build this repo, and execute various SQL statements as CLI.
 
-Bellow is an example for “SQL” statement been parsed and transform into AST.
-![alt text](/s3select-parse-s.png)
+## A docker image containing a development environment
+An immediate way for a quick start is available using the following container.
+That container already contains the cloned repo, enabling code review and modification.
 
-The where-clause is boolean expression made of arithmetic expression building blocks.
+### Running the s3select container image
+`sudo docker run -w /s3select -it galsl/ubunto_arrow_parquet_s3select:dev`
 
-Projection is a list of arithmetic expressions
+### Running google test suite, it contains hundreads of queries
+`./test/s3select_test`
 
-I created a container (**sudo docker run -it galsl/boost:latest /bin/bash/**) built with boost libraries , for building and running the s3select demo application.
+### Running SQL statements using CLI on standard input
+`./example/s3select_example`, is a small demo app, it lets you run queries on local file or standard input.
+for one example, the following runs the engine on standard input.
+`seq 1 1000 | ./example/s3select_example -q 'select count(0) from stdin;'`
 
-**The demo can run on CSV files only, as follow. (folder s3select_demo)**
-* bash> s3select -q ‘select _1 +_2,_5 * 3 from /...some..full-path/csv.txt where _1 > _2;’
+#### SQL statement on ps command (standard input)
+>`ps -ef | tr -s ' ' | CSV_COLUMN_DELIMETER=' ' CSV_HEADER_INFO= ./example/s3select_example  -q 'select PID,CMD from stdin where PPID="1";'`
 
-* bash> cat /...some..full-path/csv.txt | s3select -q ‘select _1,_5 from stdin where _1 > _2;’
+#### SQL statement processed by the container, the input-data pipe into the container.
+> `seq 1 1000000 | sudo docker run -w /s3select -i galsl/ubunto_arrow_parquet_s3select:dev 
+bash -c "./example/s3select_example -q 'select count(0) from stdin;'"`
+### Running SQL statements using CLI on local file
+it possible to run a query on local file, as follows.
 
-* bash> cat /...some..full-path/csv.txt | s3select -q ‘select c1,c5 from stdin where c1 > c2;’ -s ‘c1,c2,c3,c4,c5’
+`./example/s3select_example -q 'select count(0) from /full/path/file_name;'`
+#### SQL statement processed by the container, the input-data is mapped to container FS.
+>`sudo docker run -w /s3select -v /home/gsalomon/work:/work -it galsl/ubunto_arrow_parquet_s3select:dev bash -c "./example/s3select_example -q 'select count(*) from /work/datatime.csv;'"`
 
-* bash> cat /...some..full-path/csv.txt | s3select -q 'select min(int(substr(_1,1,1))) from  stdin where  substr(_1,1,1) ==  substr(_2,1,1);'
 
--s flag is defining a schema (no type only names) , without schema each column can be accessed with _N (_1 is the first column).
-
--q flag is for the query.
-
-the engine supporting the following arithmetical operations +,-,*,/,^ , ( ) , and also the logical operators and,or.
-
-s3select is supporting float,decimal,string; it also supports aggregation functions such as max,min,sum,count; the input stream is accepted as string attributes, to operate arithmetical operation it need to CAST, i.e. int(_1) is converting text to integer.
-
-The demo-app is producing CSV format , thus it can be piped into another s3select statement.
-
-there is a small app /generate_rand_csv {number-of-rows} {number-of-columns}/ , which generate CSV rows containing only numbers.
-
-the random numbers are produced with same seed number.
-
-since it works with STDIN , it possible to concatenate several files into single stream.
-
-cat file1 file2 file1 file2 | s3select -q ‘ ….. ‘
