@@ -10,7 +10,6 @@
 #include <iostream>
 #include <string>
 #include <list>
-#include "s3select_oper.h"
 #include "s3select_functions.h"
 #include "s3select_csv_parser.h"
 #include "s3select_json_parser.h"
@@ -63,6 +62,8 @@ struct actionQ
   projection_alias alias_map;
   std::string from_clause;
   std::vector<std::string> json_from_clause;
+  bool limit_op;
+  unsigned long limit;
   std::string column_prefix;
   std::string table_alias;
   s3select_projections  projections;
@@ -74,7 +75,7 @@ struct actionQ
 
   std::vector<std::vector<std::string>> json_variables;//contains all key-path according to sql statement
 
-  actionQ(): inMainArg(0),from_clause("##"),column_prefix("##"),table_alias("##"),projection_or_predicate_state(true),first_when_then_expr(nullptr){}
+  actionQ(): inMainArg(0),from_clause("##"),limit_op(false),column_prefix("##"),table_alias("##"),projection_or_predicate_state(true),first_when_then_expr(nullptr){}
 
   std::map<const void*,std::vector<const char*> *> x_map;
 
@@ -131,6 +132,12 @@ struct push_json_from_clause : public base_ast_builder
   void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_json_from_clause g_push_json_from_clause;
+
+struct push_limit_clause : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_limit_clause g_push_limit_clause;
 
 struct push_number : public base_ast_builder
 {
@@ -554,6 +561,16 @@ public:
     return m_actionQ.from_clause;
   }
 
+  bool is_limit()
+  {
+    return m_actionQ.limit_op;
+  }
+
+  unsigned long get_limit()
+  {
+    return m_actionQ.limit;
+  }
+
   void load_schema(std::vector< std::string>& scm)
   {
     int i = 0;
@@ -629,7 +646,11 @@ public:
     {
       ///// s3select syntax rules and actions for building AST
 
-      select_expr =  (select_expr_base >> ';') | select_expr_base;
+      select_expr =  (select_expr_base_ >> ';') | select_expr_base_;
+
+      select_expr_base_ = select_expr_base >> S3SELECT_KW("limit") >> (limit_number)[BOOST_BIND_ACTION(push_limit_clause)] | select_expr_base;
+
+      limit_number = bsc::uint_p;
 
       select_expr_base =  S3SELECT_KW("select") >> projections >> S3SELECT_KW("from") >> (from_expression)[BOOST_BIND_ACTION(push_from_clause)] >> !where_clause ;
 
@@ -779,7 +800,7 @@ public:
     }
 
 
-    bsc::rule<ScannerT> cast, data_type, variable, json_variable_name, variable_name, select_expr, select_expr_base, s3_object, where_clause, number, float_number, string, from_expression;
+    bsc::rule<ScannerT> cast, data_type, variable, json_variable_name, variable_name, select_expr, select_expr_base, select_expr_base_, s3_object, where_clause, limit_number, number, float_number, string, from_expression;
     bsc::rule<ScannerT> cmp_operand, arith_cmp, condition_expression, arithmetic_predicate, logical_predicate, factor; 
     bsc::rule<ScannerT> trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside, trim_type, trim_remove_type, substr, substr_from, substr_from_for;
     bsc::rule<ScannerT> datediff, dateadd, extract, date_part, date_part_extract, time_to_string_constant, time_to_string_dynamic;
@@ -863,6 +884,25 @@ void push_json_from_clause::builder(s3select* self, const char* a, const char* b
   }
 
   self->getAction()->json_from_clause = variable_key_path;
+}
+
+void push_limit_clause::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+
+  self->getAction()->limit_op = true;
+  try
+  {
+    self->getAction()->limit = std::stoul(token);
+  }
+  catch(std::invalid_argument& e)
+  {
+    throw base_s3select_exception(std::string("Invalid argument "), base_s3select_exception::s3select_exp_en_t::FATAL);
+  }
+  catch(std::out_of_range& e)
+  {
+    throw base_s3select_exception(std::string("Out of range "), base_s3select_exception::s3select_exp_en_t::FATAL);
+  }
 }
 
 void push_number::builder(s3select* self, const char* a, const char* b) const
@@ -1953,6 +1993,9 @@ protected:
   base_statement* m_where_clause;
   s3select* m_s3_select;
   size_t m_error_count;
+  bool m_is_limit_on;
+  unsigned long m_limit;
+  unsigned long m_processed_rows;
 
 public:
   s3select_csv_definitions m_csv_defintion;//TODO add method for modify
@@ -1976,6 +2019,14 @@ public:
     }
     m_is_to_aggregate = true;//TODO not correct. should be set upon end-of-stream
     m_aggr_flow = m_s3_select->is_aggregate_query();
+
+    m_is_limit_on = m_s3_select->is_limit();
+    if(m_is_limit_on)
+    {
+        m_limit = m_s3_select->get_limit();
+    }
+
+    m_processed_rows = 0;
   }
 
   base_s3object():m_sa(nullptr),m_is_to_aggregate(false),m_where_clause(nullptr),m_s3_select(nullptr),m_error_count(0){}
@@ -2030,13 +2081,18 @@ public:
   int getMatchRow( std::string& result)
   {
     multi_values projections_resuls;
+
+    if (m_is_limit_on && m_processed_rows == m_limit)
+    {
+      return 2;
+    }
     
     if (m_aggr_flow == true)
     {
       do
       {
         row_fetch_data();
-	columnar_fetch_where_clause_columns(); 
+        columnar_fetch_where_clause_columns();
         if (is_end_of_stream())
         {
           if (m_is_to_aggregate)
@@ -2052,6 +2108,7 @@ public:
           return -1;
         }
 
+        m_processed_rows++;
         if ((*m_projections.begin())->is_set_last_call())
         {
           //should validate while query execution , no update upon nodes are marked with set_last_call
@@ -2074,6 +2131,20 @@ public:
           }
 	}
 
+        if(m_is_limit_on && m_processed_rows == m_limit)
+        {
+          for (auto& i : m_projections)
+          {
+            i->set_last_call();
+            i->set_skip_non_aggregate(false);//projection column is set to be runnable
+
+            projections_resuls.push_value( &(i->eval()) );
+          }
+
+	  result_values_to_string(projections_resuls,result);
+          return 2;
+        }
+
       }
       while (multiple_row_processing());
     }
@@ -2088,14 +2159,19 @@ public:
           return -1;
         }
 
+        m_processed_rows++;
         row_update_data();
         for (auto& a : *m_s3_select->get_aliases()->get())
         {
           a.second->invalidate_cache_result();
         }
-
       }
-      while (multiple_row_processing() && m_where_clause && !m_where_clause->eval().is_true());
+      while (multiple_row_processing() && m_where_clause && !m_where_clause->eval().is_true() && !(m_is_limit_on && m_processed_rows == m_limit));
+
+      if(m_where_clause && !m_where_clause->eval().is_true() && m_is_limit_on && m_processed_rows == m_limit)
+      {
+          return 2;
+      }
 
       bool found = multiple_row_processing();
 
@@ -2388,7 +2464,6 @@ public:
 
     do
     {
-
       int num = 0;
       try
       {
@@ -2407,6 +2482,10 @@ public:
       if (num < 0)
       {
         break;
+      }
+      else if (num == 2) // limit reached
+      {
+        return 2;
       }
 
     } while (true);
@@ -2550,7 +2629,7 @@ public:
         }
       }
 
-      if (status < 0 || is_end_of_stream())
+      if (status < 0 || is_end_of_stream() || status == 2)
       {
         break;
       }

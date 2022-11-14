@@ -336,6 +336,11 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
 
     std::cout << result << std::endl;
 
+    if(status == 2) // limit reached
+    {
+      break;
+    }
+
   } while (0);
 
   return 0;
@@ -520,6 +525,11 @@ int run_on_localFile(char* input_query)
     if(s3select_result.size()>0)
     {
       std::cout << s3select_result;
+    }
+
+    if(!input_sz || feof(fp) || status == 2)
+    {
+      break;
     }
 
     s3select_result.clear();
