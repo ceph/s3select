@@ -1521,6 +1521,7 @@ public:
     STRING,
     INT32,
     INT64,
+    FLOAT,
     DOUBLE,
     TIMESTAMP,
     PARQUET_NULL
@@ -1630,6 +1631,11 @@ private:
 
       case parquet::Type::type::INT64:
         elm = std::pair<std::string, column_reader_wrap::parquet_type>(m_file_metadata->schema()->Column(i)->name(), column_reader_wrap::parquet_type::INT64);
+        m_schm.push_back(elm);
+        break;
+
+      case parquet::Type::type::FLOAT:
+        elm = std::pair<std::string, column_reader_wrap::parquet_type>(m_file_metadata->schema()->Column(i)->name(), column_reader_wrap::parquet_type::FLOAT);
         m_schm.push_back(elm);
         break;
 
@@ -1744,6 +1750,7 @@ private:
   {
     parquet::Int32Reader* int32_reader;
     parquet::Int64Reader* int64_reader;
+    parquet::FloatReader* float_reader;
     parquet::DoubleReader* double_reader;
     parquet::ByteArrayReader* byte_array_reader;
 
@@ -1759,6 +1766,11 @@ private:
       return int64_reader->HasNext();
       break;
 
+    case parquet::Type::type::FLOAT:
+      float_reader = static_cast<parquet::FloatReader *>(m_ColumnReader.get());
+      return float_reader->HasNext();
+      break;
+
     case parquet::Type::type::DOUBLE:
       double_reader = static_cast<parquet::DoubleReader *>(m_ColumnReader.get());
       return double_reader->HasNext();
@@ -1770,6 +1782,11 @@ private:
       break;
 
     default:
+
+        std::stringstream err;
+        err << "HasNext():" << "wrong type or type not exist" << std::endl;
+        throw std::runtime_error(err.str());
+
       return false;
       //TODO throw exception
     }
@@ -1782,6 +1799,7 @@ private:
   {
     parquet::Int32Reader* int32_reader;
     parquet::Int64Reader* int64_reader;
+    parquet::FloatReader* float_reader;
     parquet::DoubleReader* double_reader;
     parquet::ByteArrayReader* byte_array_reader;
 
@@ -1830,7 +1848,33 @@ private:
 		values->type = column_reader_wrap::parquet_type::PARQUET_NULL;
       	} else
       	{
-      		values->type = column_reader_wrap::parquet_type::INT64;
+		auto logical_type = m_parquet_reader->metadata()->schema()->Column(m_col_id)->logical_type();
+
+                if (logical_type.get()->type() == parquet::LogicalType::Type::type::TIMESTAMP) //TODO missing sub-type (milli,micro)
+                        values->type = column_reader_wrap::parquet_type::TIMESTAMP;
+                else
+                        values->type = column_reader_wrap::parquet_type::INT64;
+      	}
+      }
+      catch(std::exception &e)
+      {
+         throw std::runtime_error(error_msg(e).str());
+      }
+      break;
+
+    case parquet::Type::type::FLOAT:
+        float_reader = static_cast<parquet::FloatReader *>(m_ColumnReader.get());
+      try{
+	float data_source_float = 0;
+      	rows_read = float_reader->ReadBatch(1, &defintion_level, &repeat_level, &data_source_float , values_read);//TODO proper cast
+      	if(defintion_level == 0)
+      	{
+		values->type = column_reader_wrap::parquet_type::PARQUET_NULL;
+      	} else
+      	{
+      		values->type = column_reader_wrap::parquet_type::DOUBLE;
+		values->dbl = data_source_float;
+
       	}
       }
       catch(std::exception &e)
@@ -1894,6 +1938,7 @@ private:
     parquet::Int32Reader* int32_reader;
     parquet::Int64Reader* int64_reader;
     parquet::DoubleReader* double_reader;
+    parquet::FloatReader* float_reader;
     parquet::ByteArrayReader* byte_array_reader;
 
     parquet::ByteArray str_value;
@@ -1924,6 +1969,17 @@ private:
       int64_reader = static_cast<parquet::Int64Reader *>(m_ColumnReader.get());
       try{
         rows_read = int64_reader->Skip(rows_to_skip);
+      }
+      catch(std::exception &e)
+      {
+        throw std::runtime_error(error_msg(e).str());
+      }
+      break;
+
+    case parquet::Type::type::FLOAT:
+      float_reader = static_cast<parquet::FloatReader *>(m_ColumnReader.get());
+      try {
+        rows_read = float_reader->Skip(rows_to_skip);
       }
       catch(std::exception &e)
       {
@@ -1973,6 +2029,7 @@ private:
     { //should skip
       m_read_last_value = false;
 
+      //TODO what about Skip(0)
       uint64_t skipped_rows = Skip(rownum - m_rownum -1);
       m_rownum += skipped_rows;
 

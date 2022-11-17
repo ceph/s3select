@@ -1105,6 +1105,7 @@ private:
   char str_buff[4096];
   uint16_t buff_loc;
   int max_json_idx;
+  timestamp_t tmstmp;
 
 public:
 
@@ -1208,6 +1209,10 @@ public:
   }
 
 #ifdef _ARROW_EXIST
+
+#define S3SELECT_MICROSEC (1000*1000)
+#define S3SELECT_MILLISEX (1000)
+
   int update(std::vector<parquet_file_parser::parquet_value_t> &parquet_row_value, parquet_file_parser::column_pos_t &column_positions)
   {
     //TODO no need for copy , possible to save referece (its save last row for calculation)
@@ -1252,8 +1257,22 @@ public:
               (*m_schema_values)[ *column_pos_iter ].setnull();
 	      break;
 
+        case  parquet_file_parser::parquet_type::TIMESTAMP: //TODO mili-sec, micro-sec, nano-sec
+              //TODO waste of CPU
+	      {
+		//int64_t tm = value( v.num ).i64();
+		auto tm_sec = v.num/S3SELECT_MICROSEC; //TODO what is the unit?
+		boost::posix_time::ptime new_ptime = boost::posix_time::from_time_t( tm_sec ); 
+		boost::posix_time::time_duration td_zero((tm_sec/3600)%24,(tm_sec/60)%24,tm_sec%60);
+		tmstmp = std::make_tuple(new_ptime, td_zero, (char)'Z');
+              	(*m_schema_values)[ *column_pos_iter ] = &tmstmp;
+	      }
+              break;
+
         default:
-        return -1;
+      		throw base_s3select_exception("wrong parquet type for conversion.");
+
+        //return -1;//TODO exception
       }
       m_upper_bound = *column_pos_iter+1;
       column_pos_iter ++;
