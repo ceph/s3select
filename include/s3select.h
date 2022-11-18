@@ -2611,15 +2611,15 @@ private:
   std::string m_error_description;
 
 public:
-    
-  json_object(s3select* query):base_s3object(query),m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false)
+
+  void set_json(s3select* query)
   {
     std::function<int(void)> f_sql = [this](void){auto res = sql_execution_on_row_cb();return res;};
     std::function<int(s3selectEngine::value&, int)> 
       f_push_to_scratch = [this](s3selectEngine::value& value,int json_var_idx){return push_into_scratch_area_cb(value,json_var_idx);};
     std::function <int(s3selectEngine::scratch_area::json_key_value_t&)>
       f_push_key_value_into_scratch_area_per_star_operation = [this](s3selectEngine::scratch_area::json_key_value_t& key_value)
-								{return push_key_value_into_scratch_area_per_star_operation(key_value);};
+                {return push_key_value_into_scratch_area_per_star_operation(key_value);};
 
     //setting the container for all exact-filters, to be extracted by the json reader    
     JsonHandler.set_exact_match_filters(query->get_json_variables_key_path());
@@ -2641,8 +2641,8 @@ public:
     {
       if(p->is_statement_contain_star_operation())
       {
-	star_operation_ind=true;
-	break;
+        star_operation_ind=true;
+        break;
       }
     }
 
@@ -2656,6 +2656,13 @@ public:
 
     m_sa->set_parquet_type();//TODO json type
   }
+    
+  json_object(s3select* query):base_s3object(query),m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false)
+  {
+    set_json(query);
+  }
+
+json_object(): base_s3object(nullptr), m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false) {}
 
 private:
 
@@ -2756,6 +2763,19 @@ public:
     }
  
     return status; 
+  }
+
+  void set_json_query(s3select* s3_query)
+  {
+    
+    set_base_defintions(s3_query);
+
+    set_json(s3_query);
+  }
+
+  std::string get_error_description()
+  {
+    return m_error_description;
   }
 
   ~json_object() = default;
