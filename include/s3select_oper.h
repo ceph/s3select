@@ -1228,18 +1228,15 @@ public:
       switch( v.type )
       {
         case  parquet_file_parser::parquet_type::INT32:
-              //TODO waste of CPU
-              (*m_schema_values)[ *column_pos_iter ] = value( v.num ).i64();
+              (*m_schema_values)[ *column_pos_iter ] = v.num;
               break;
 
         case  parquet_file_parser::parquet_type::INT64:
-              //TODO waste of CPU
-              (*m_schema_values)[ *column_pos_iter ] = value( v.num ).i64();
+              (*m_schema_values)[ *column_pos_iter ] = v.num;
               break;
 
         case  parquet_file_parser::parquet_type::DOUBLE:
-              //TODO waste of CPU
-              (*m_schema_values)[ *column_pos_iter ] = value( v.dbl ).dbl();
+              (*m_schema_values)[ *column_pos_iter ] =  v.dbl;
               break;
 
         case  parquet_file_parser::parquet_type::STRING:
@@ -1257,11 +1254,9 @@ public:
               (*m_schema_values)[ *column_pos_iter ].setnull();
 	      break;
 
-        case  parquet_file_parser::parquet_type::TIMESTAMP: //TODO mili-sec, micro-sec, nano-sec
-              //TODO waste of CPU
+        case  parquet_file_parser::parquet_type::TIMESTAMP: //TODO milli-sec, micro-sec, nano-sec
 	      {
-		//int64_t tm = value( v.num ).i64();
-		auto tm_sec = v.num/S3SELECT_MICROSEC; //TODO what is the unit?
+		auto tm_sec = v.num/S3SELECT_MICROSEC; //TODO should use the correct unit 
 		boost::posix_time::ptime new_ptime = boost::posix_time::from_time_t( tm_sec ); 
 		boost::posix_time::time_duration td_zero((tm_sec/3600)%24,(tm_sec/60)%24,tm_sec%60);
 		tmstmp = std::make_tuple(new_ptime, td_zero, (char)'Z');
