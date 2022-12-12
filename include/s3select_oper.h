@@ -1179,7 +1179,7 @@ public:
   }
 
   void get_column_value(uint16_t column_pos, value &v)
-  {
+  {// TODO handle out of boundaries
     v = (*m_schema_values)[ column_pos ];
   }
 

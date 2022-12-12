@@ -73,6 +73,12 @@ struct actionQ
   std::vector<base_statement*> projections_columns; 
   base_statement* first_when_then_expr;
 
+  std::string json_array_name; // _1.a[  ]    json_array_name = "a";  upon parser is scanning a correct json-path; json_array_name will contain the array name. 
+  std::string json_object_name; // _1.b json_object_name = "b" ; upon parser is scanning a correct json-path; json_object_name will contain the object name.
+  int json_array_index_number; //  _1.a.c[ some integer number >=0 ]; upon parser is scanning a correct json-path; json_array_index_number will contain the array index.
+			     
+  json_variable_access json_var_md;
+
   std::vector<std::pair<json_variable_access*,size_t>> json_statement_variables_match_expression;//contains all statement variables and their search-expression for locating the correct values in input document
 
   actionQ(): inMainArg(0),from_clause("##"),limit_op(false),column_prefix("##"),table_alias("##"),projection_or_predicate_state(true),first_when_then_expr(nullptr){}
@@ -420,6 +426,24 @@ struct push_time_to_string_dynamic : public base_ast_builder
   void builder(s3select* self, const char* a, const char* b) const;
 };
 static push_time_to_string_dynamic g_push_time_to_string_dynamic;
+
+struct push_array_number :  public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_array_number g_push_array_number;
+
+struct push_json_array_name :  public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_json_array_name g_push_json_array_name;
+
+struct push_json_object :  public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_json_object g_push_json_object;
 
 struct s3select : public bsc::grammar<s3select>
 {
@@ -796,7 +820,11 @@ public:
 
       variable = (variable_name >> "." >> variable_name) | variable_name;
 
-      json_variable_name = bsc::str_p("_1") >> +("." >> variable_name);
+      json_variable_name = bsc::str_p("_1") >> +("." >> (json_array | json_object) );
+
+      json_object = (variable_name)[BOOST_BIND_ACTION(push_json_object)]; 
+
+      json_array = (variable_name >> bsc::str_p("[") >> number[BOOST_BIND_ACTION(push_array_number)] >> bsc::str_p("]"))[BOOST_BIND_ACTION(push_json_array_name)]; ///TODO push state with number 
     }
 
 
@@ -806,7 +834,7 @@ public:
     bsc::rule<ScannerT> datediff, dateadd, extract, date_part, date_part_extract, time_to_string_constant, time_to_string_dynamic;
     bsc::rule<ScannerT> special_predicates, between_predicate, not_between, in_predicate, like_predicate, like_predicate_escape, like_predicate_no_escape, is_null, is_not_null;
     bsc::rule<ScannerT> muldiv_operator, addsubop_operator, function, arithmetic_expression, addsub_operand, list_of_function_arguments, arithmetic_argument, mulldiv_operand, reserved_function_names;
-    bsc::rule<ScannerT> fs_type, object_path,json_s3_object,json_path_element;
+    bsc::rule<ScannerT> fs_type, object_path,json_s3_object,json_path_element,json_object,json_array;
     bsc::rule<ScannerT> projections, projection_expression, alias_name, column_pos,column_pos_name;
     bsc::rule<ScannerT> when_case_else_projection, when_case_value_when, when_stmt, when_value_then;
     bsc::rule<ScannerT> logical_and,and_op,or_op;
@@ -1007,28 +1035,6 @@ void push_json_variable::builder(s3select* self, const char* a, const char* b) c
   std::string token(a, b);
   std::vector<std::string> variable_key_path;
 
-  if(token.find("_1") != std::string::npos)
-  {//TODO handle the use case upon no "_1"
-    token = token.substr(token.find("_1")+3);
-  }
-
-  while(token.size())
-  {
-      auto pos = token.find(".");
-      if(pos != std::string::npos)
-      {
-	variable_key_path.push_back(token.substr(0,pos));
-	token = token.substr(pos+1,token.size());
-      }
-      else
-      {
-	variable_key_path.push_back(token);
-	token = "";
-      }
-  }
-
-  variable* v = nullptr;
-
   //the following flow determine the index per json variable reside on statement.
   //per each discovered json_variable, it search the json-variables-vector whether it already exists.
   //in case it is exist, it uses its index (position in vector)
@@ -1036,14 +1042,51 @@ void push_json_variable::builder(s3select* self, const char* a, const char* b) c
   //the json-index is used upon updating the scratch area or searching for a specific json-variable value.
 
   size_t json_index=self->getAction()->json_statement_variables_match_expression.size();
-
-  json_variable_access* ja = new (json_variable_access);//TODO S3SELECT_NEW
-  ja->push_variable_state(variable_key_path,-1);
+  variable* v = nullptr;
+  json_variable_access* ja = S3SELECT_NEW(self, json_variable_access);
+  *ja = self->getAction()->json_var_md;
   self->getAction()->json_statement_variables_match_expression.push_back(std::pair<json_variable_access*,size_t>(ja,json_index));
   
   v = S3SELECT_NEW(self, variable, token, variable::var_t::JSON_VARIABLE, json_index);
-
   self->getAction()->exprQ.push_back(v);
+
+  self->getAction()->json_var_md.clear();
+}
+
+void push_array_number::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+  self->getAction()->json_array_index_number = atoi(token.c_str());
+}
+
+void push_json_array_name::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+  size_t found = token.find("[");
+  std::string array_name = token.substr(0,found);
+
+  //remove white-space
+  array_name.erase(std::remove_if(array_name.begin(),
+  		array_name.end(),
+  		[](unsigned char x){return std::isspace(x);}),
+  		array_name.end());
+
+  std::vector<std::string> json_path;
+  std::vector<std::string> empty = {};
+  json_path.push_back(array_name);
+
+  self->getAction()->json_var_md.push_variable_state(json_path, -1);//pushing the array-name, {-1} means, search for object-name
+  self->getAction()->json_var_md.push_variable_state(empty, self->getAction()->json_array_index_number);//pushing empty and number>=0, means array-access
+}
+
+void push_json_object::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token(a, b);
+  self->getAction()->json_object_name = token;
+  std::vector<std::string> json_path;
+  json_path.push_back(token);
+
+  self->getAction()->json_var_md.push_variable_state(json_path, -1);
 }
 
 void push_addsub::builder(s3select* self, const char* a, const char* b) const

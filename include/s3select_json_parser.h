@@ -198,6 +198,11 @@ void init(
   //loop on variable_states compute required_depth_size
 }
 
+void clear()
+{
+	variable_states.clear();
+}
+
 void debug_info()
 {
   auto f = [](std::vector<std::string> x){std::string res;for(auto i : x){res.append(i);res.append(".");};return res;};

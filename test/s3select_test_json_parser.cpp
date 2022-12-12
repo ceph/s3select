@@ -1727,7 +1727,7 @@ TEST(TestS3selectJsonParser, array_access)
                     },
 		    { "name":"acamol" } 
 		    ],
-                    "associatedDrug#2":[{
+                    "associatedDrug2":[{
                         "name":"somethingElse",
                         "dose":"",
                         "strength":"500 mg"
@@ -1739,7 +1739,7 @@ TEST(TestS3selectJsonParser, array_access)
                         "dose":"",
                         "strength":"500 mg"
                     }],
-                    "associatedDrug#2":[{
+                    "associatedDrug2":[{
                         "name":"somethingElse",
                         "dose":"",
                         "strength":"500 mg"
