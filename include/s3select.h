@@ -10,6 +10,8 @@
 #include <iostream>
 #include <string>
 #include <list>
+#include <deque>
+#include "s3select_oper.h"
 #include "s3select_functions.h"
 #include "s3select_csv_parser.h"
 #include "s3select_json_parser.h"
@@ -75,7 +77,8 @@ struct actionQ
 
   std::string json_array_name; // _1.a[  ]    json_array_name = "a";  upon parser is scanning a correct json-path; json_array_name will contain the array name. 
   std::string json_object_name; // _1.b json_object_name = "b" ; upon parser is scanning a correct json-path; json_object_name will contain the object name.
-  int json_array_index_number; //  _1.a.c[ some integer number >=0 ]; upon parser is scanning a correct json-path; json_array_index_number will contain the array index.
+  std::deque<size_t> json_array_index_number; //  _1.a.c[ some integer number >=0 ]; upon parser is scanning a correct json-path; json_array_index_number will contain the array index.
+					       //  or in the case of multidimensional contain seiries of index number
 			     
   json_variable_access json_var_md;
 
@@ -824,7 +827,7 @@ public:
 
       json_object = (variable_name)[BOOST_BIND_ACTION(push_json_object)]; 
 
-      json_array = (variable_name >> bsc::str_p("[") >> number[BOOST_BIND_ACTION(push_array_number)] >> bsc::str_p("]"))[BOOST_BIND_ACTION(push_json_array_name)]; ///TODO push state with number 
+      json_array = (variable_name >> +(bsc::str_p("[") >> number[BOOST_BIND_ACTION(push_array_number)] >> bsc::str_p("]")) )[BOOST_BIND_ACTION(push_json_array_name)];
     }
 
 
@@ -1056,7 +1059,9 @@ void push_json_variable::builder(s3select* self, const char* a, const char* b) c
 void push_array_number::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
-  self->getAction()->json_array_index_number = atoi(token.c_str());
+  //DEBUG - TEMP std::cout << "push_array_number " << token << std::endl;
+
+  self->getAction()->json_array_index_number.push_back(std::stoll(token.c_str()));
 }
 
 void push_json_array_name::builder(s3select* self, const char* a, const char* b) const
@@ -1064,6 +1069,8 @@ void push_json_array_name::builder(s3select* self, const char* a, const char* b)
   std::string token(a, b);
   size_t found = token.find("[");
   std::string array_name = token.substr(0,found);
+
+  //DEBUG - TEMP std::cout << "push_json_array_name " << array_name << std::endl;
 
   //remove white-space
   array_name.erase(std::remove_if(array_name.begin(),
@@ -1076,12 +1083,20 @@ void push_json_array_name::builder(s3select* self, const char* a, const char* b)
   json_path.push_back(array_name);
 
   self->getAction()->json_var_md.push_variable_state(json_path, -1);//pushing the array-name, {-1} means, search for object-name
-  self->getAction()->json_var_md.push_variable_state(empty, self->getAction()->json_array_index_number);//pushing empty and number>=0, means array-access
+
+  while(self->getAction()->json_array_index_number.size())
+  {
+  	self->getAction()->json_var_md.push_variable_state(empty, self->getAction()->json_array_index_number.front());//pushing empty and number>=0, means array-access
+	self->getAction()->json_array_index_number.pop_front();
+  }	
 }
 
 void push_json_object::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
+
+  //DEBUG - TEMP std::cout << "push_json_object " << token << std::endl;
+
   self->getAction()->json_object_name = token;
   std::vector<std::string> json_path;
   json_path.push_back(token);

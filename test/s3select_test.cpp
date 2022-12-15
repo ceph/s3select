@@ -3166,7 +3166,7 @@ TEST(TestS3selectFunctions, json_queries_with_multi_dimensional_array)
   std::string expected_result;
   std::string input_query;
 
-  return; //the syntax parser should be modified to accept array[1][2][3] 
+  //return; //the syntax parser should be modified to accept array[1][2][3] 
 
 std::string input_json_data = R"(
 {
@@ -3227,11 +3227,38 @@ std::string input_json_data = R"(
 }
 )";
 
+#if 0
+  //TODO error phoneNumbers[12][2][2] = null, to check what happen upon reaching the final state
+  expected_result=R"(post 3D
+)";
+  input_query = "select _1.phoneNumbers[12][2][2] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+#endif 
+
+  //the following tests ia about accessing multi-dimension array
   expected_result=R"(55
 )";
-  //accessing multi-dimension array
   input_query = "select _1.phoneNumbers[12][2][1] from s3object[*];";
   run_json_query(input_query.c_str(), input_json_data, result);
   ASSERT_EQ(result,expected_result);
 
-}
+
+  expected_result=R"(post 3D
+)";
+  input_query = "select _1.phoneNumbers[12][3] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(11
+)";
+  input_query = "select _1.phoneNumbers[12][0] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(element-11
+)";
+  input_query = "select _1.phoneNumbers[11] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+ }
