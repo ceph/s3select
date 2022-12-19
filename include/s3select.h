@@ -2049,7 +2049,13 @@ public:
   s3select_csv_definitions m_csv_defintion;//TODO add method for modify
 
   void set_base_defintions(s3select* m)
-  {	
+  {
+    if(m_s3_select || !m)
+    {//not to define twice
+     //not to define with null
+  	return;
+    }
+
     m_s3_select=m;
     m_sa=m_s3_select->get_scratch_area();
     m_error_count=0;
@@ -2079,12 +2085,12 @@ public:
 
   base_s3object():m_sa(nullptr),m_is_to_aggregate(false),m_where_clause(nullptr),m_s3_select(nullptr),m_error_count(0){}
 
-  explicit base_s3object(s3select* m)
+  explicit base_s3object(s3select* m):base_s3object()
   {
     if(m)
-	{
+    {
         set_base_defintions(m);
-	}
+    }
   }
 
   virtual bool is_end_of_stream() {return false;}
@@ -2736,11 +2742,15 @@ private:
   size_t m_row_count;
   bool star_operation_ind;
   std::string m_error_description;
+  bool m_init_json_processor_ind;
 
 public:
 
-  void set_json(s3select* query)
+  void init_json_processor(s3select* query)
   {
+    if(m_init_json_processor_ind)
+	    return;
+
     std::function<int(void)> f_sql = [this](void){auto res = sql_execution_on_row_cb();return res;};
     std::function<int(s3selectEngine::value&, int)> 
       f_push_to_scratch = [this](s3selectEngine::value& value,int json_var_idx){return push_into_scratch_area_cb(value,json_var_idx);};
@@ -2784,14 +2794,15 @@ public:
     }
 
     m_sa->set_parquet_type();//TODO json type
+    m_init_json_processor_ind = true;
   }
     
-  json_object(s3select* query):base_s3object(query),m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false)
+  json_object(s3select* query):base_s3object(query),m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false),m_init_json_processor_ind(false)
   {
-    set_json(query);
+    init_json_processor(query);
   }
 
-json_object(): base_s3object(nullptr), m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false) {}
+  json_object(): base_s3object(nullptr), m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false),m_init_json_processor_ind(false) {}
 
 private:
 
@@ -2896,10 +2907,8 @@ public:
 
   void set_json_query(s3select* s3_query)
   {
-    
     set_base_defintions(s3_query);
-
-    set_json(s3_query);
+    init_json_processor(s3_query);
   }
 
   std::string get_error_description()
