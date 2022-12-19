@@ -2594,6 +2594,82 @@ TEST(TestS3selectFunctions, limit)
   std::cout << "Running query: 11 (aggregate_query, where + limit clause, with Large input)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
+
+  std::string json_input=R"(
+{
+"firstName": "Joe",
+"lastName": "Jackson",
+"gender": "male",
+"age": 20,
+"address": {
+"streetAddress": "101",
+"city": "San Diego",
+"state": "CA"
+},
+
+"phoneNumbers": [
+{ "type": "home1", "number": "734928_1","addr": 11 },
+{ "type": "home2", "number": "734928_2","addr": 22 },
+{ "type": "home3", "number": "734928_3","addr": 33 },
+{ "type": "home4", "number": "734928_4","addr": 44 },
+{ "type": "home5", "number": "734928_5","addr": 55 },
+{ "type": "home6", "number": "734928_6","addr": 66 },
+{ "type": "home7", "number": "734928_7","addr": 77 },
+{ "type": "home8", "number": "734928_8","addr": 88 },
+{ "type": "home9", "number": "734928_9","addr": 99 },
+{ "type": "home10", "number": "734928_10","addr": 100 },
+{ "type": "home11", "number": "734928_11","addr": 101 },
+{ "type": "home12", "number": "734928_12","addr": 102 },
+{ "type": "home13", "number": "734928_13","addr": 103 },
+{ "type": "home14", "number": "734928_14","addr": 104 },
+{ "type": "home15", "number": "734928_15","addr": 105 }
+],
+
+"key_after_array": "XXX",
+
+"description" : {
+  "main_desc" : "value_1",
+  "second_desc" : "value_2"
+}
+
+}
+)";
+
+  const char* input_query_json = "select _1.addr from s3object[*].phoneNumbers limit 0;";
+  expected_res = "";
+  std::cout << "Running query: 12 (json, limit is zero)" << std::endl;
+  run_json_query(input_query_json, json_input, s3select_res);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query_json = "select _1.addr from s3object[*].phoneNumbers limit 5;";
+  expected_res = "11\n22\n33\n44\n55\n";
+  std::cout << "Running query: 13 (json, non-aggregate query, limit clause only)" << std::endl;
+  run_json_query(input_query_json, json_input, s3select_res);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query_json = "select _1.addr from s3object[*].phoneNumbers where _1.type like \"%1%\" limit 12;";
+  expected_res = "11\n100\n101\n102\n";
+  std::cout << "Running query: 14 (json, non-aggregate query, where + limit clause)" << std::endl;
+  run_json_query(input_query_json, json_input, s3select_res);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query_json = "select count(0) from s3object[*].phoneNumbers limit 9;";
+  expected_res = "9";
+  std::cout << "Running query: 15 (json, aggregate query, limit clause only, limit reached)" << std::endl;
+  run_json_query(input_query_json, json_input, s3select_res);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query_json = "select count(0) from s3object[*].phoneNumbers limit 18;";
+  expected_res = "15";
+  std::cout << "Running query: 16 (json, aggregate query, limit clause only, end of stream)" << std::endl;
+  run_json_query(input_query_json, json_input, s3select_res);
+  EXPECT_EQ(s3select_res, expected_res);
+
+  input_query_json = "select count(0) from s3object[*].phoneNumbers where _1.type like \"%1_\" limit 10;";
+  expected_res = "1";
+  std::cout << "Running query: 17 (json, aggregate query, where + limit clause)" << std::endl;
+  run_json_query(input_query_json, json_input, s3select_res);
+  EXPECT_EQ(s3select_res, expected_res);
 }
 
 TEST(TestS3selectFunctions, nested_query_single_row_result)
