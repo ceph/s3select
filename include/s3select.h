@@ -2038,6 +2038,12 @@ protected:
   bool m_is_limit_on;
   unsigned long m_limit;
   unsigned long m_processed_rows;
+  enum Status {
+    END_OF_STREAM = -1,
+    INITIAL_STAT = 0,
+    NORMAL_EXIT = 1,
+    LIMIT_REACHED = 2
+  };
 
 public:
   s3select_csv_definitions m_csv_defintion;//TODO add method for modify
@@ -2126,7 +2132,7 @@ public:
 
     if (m_is_limit_on && m_processed_rows == m_limit)
     {
-      return 2;
+      return LIMIT_REACHED;
     }
     
     if (m_aggr_flow == true)
@@ -2147,7 +2153,7 @@ public:
             }
 
           result_values_to_string(projections_resuls,result);
-          return -1;
+          return END_OF_STREAM;
         }
 
         m_processed_rows++;
@@ -2184,7 +2190,7 @@ public:
           }
 
 	  result_values_to_string(projections_resuls,result);
-          return 2;
+          return LIMIT_REACHED;
         }
 
       }
@@ -2198,7 +2204,7 @@ public:
 	columnar_fetch_where_clause_columns();
         if(is_end_of_stream())
         {
-          return -1;
+          return END_OF_STREAM;
         }
 
         m_processed_rows++;
@@ -2212,7 +2218,7 @@ public:
 
       if(m_where_clause && !m_where_clause->eval().is_true() && m_is_limit_on && m_processed_rows == m_limit)
       {
-          return 2;
+          return LIMIT_REACHED;
       }
 
       bool found = multiple_row_processing();
@@ -2235,7 +2241,7 @@ public:
 
     }
 
-    return is_end_of_stream() ? -1 : 1;
+    return is_end_of_stream() ? END_OF_STREAM : NORMAL_EXIT;
     
   }//getMatchRow
 
@@ -2506,10 +2512,10 @@ public:
 
     do
     {
-      int num = 0;
+      int status = INITIAL_STAT;
       try
       {
-        num = getMatchRow(result);
+        status= getMatchRow(result);
       }
       catch (base_s3select_exception& e)
       {
@@ -2521,13 +2527,13 @@ public:
         }
       }
 
-      if (num < 0)
+      if (status == END_OF_STREAM)
       {
         break;
       }
-      else if (num == 2) // limit reached
+      else if (status == LIMIT_REACHED) // limit reached
       {
-        return 2;
+        return status;
       }
 
     } while (true);
@@ -2626,7 +2632,7 @@ public:
         std::function<int(std::string&)> fp_s3select_result_format,
         std::function<int(std::string&)> fp_s3select_header_format)
   {
-    int status = 0;
+    int status = INITIAL_STAT;
 
     do
     {
@@ -2671,7 +2677,7 @@ public:
         }
       }
 
-      if (status < 0 || is_end_of_stream() || status == 2)
+      if (status == END_OF_STREAM || is_end_of_stream() || status == LIMIT_REACHED)
       {
         break;
       }
@@ -2805,7 +2811,7 @@ private:
       //create response (TODO callback)
 
       size_t result_len = s3select_result.size();
-      int status=0;
+      int status = INITIAL_STAT;
       try{
 	status = getMatchRow(s3select_result);
       }
