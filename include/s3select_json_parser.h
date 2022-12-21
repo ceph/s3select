@@ -22,6 +22,8 @@ bool s3select_json_parse_error(const char* error);
 #include "s3select_oper.h"//class value
 #include <boost/algorithm/string/predicate.hpp>
 
+#define JSON_PROCESSING_LIMIT_REACHED 2
+
 //TODO missing s3selectEngine namespace
 
 bool s3select_json_parse_error(bool b)
@@ -505,8 +507,9 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     int m_start_row_depth;   
     int m_current_depth;
     bool m_star_operation;
+    int m_sql_processing_status;
 
-    JsonParserHandler() : prefix_match(false),init_buffer_stream(false),m_start_row_depth(-1),m_current_depth(0),m_star_operation(false)
+    JsonParserHandler() : prefix_match(false),init_buffer_stream(false),m_start_row_depth(-1),m_current_depth(0),m_star_operation(false),m_sql_processing_status(0)
     {
     } 
 
@@ -540,7 +543,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
       } else
       if (prefix_match) {
           if (state == row_state::ARRAY_START_ROW && m_start_row_depth == m_current_depth) {
-	    m_s3select_processing(); //per each element in array
+	    m_sql_processing_status = m_s3select_processing(); //per each element in array
             ++row_count;
           }
       }
@@ -641,7 +644,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
       
       dec_key_path();
       if (state == row_state::OBJECT_START_ROW && (m_start_row_depth > m_current_depth)) {
-	m_s3select_processing();
+	m_sql_processing_status = m_s3select_processing();
 	state = row_state::NA;
       }
       return true; 
@@ -742,6 +745,10 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 		     //TODO save remaining-bytes to internal buffer (or caller will use 2 sets of buffer)
 			    stream_buffer.saveRemainingBytes();
 			    return 0;
+		    }
+		    if(m_sql_processing_status == JSON_PROCESSING_LIMIT_REACHED)//return status(int) from callback
+		    {
+			    return JSON_PROCESSING_LIMIT_REACHED;
 		    }
 
 		    // error message

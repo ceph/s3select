@@ -2038,15 +2038,29 @@ protected:
   bool m_is_limit_on;
   unsigned long m_limit;
   unsigned long m_processed_rows;
-  enum Status {
-    END_OF_STREAM = -1,
-    INITIAL_STAT = 0,
-    NORMAL_EXIT = 1,
-    LIMIT_REACHED = 2
-  };
 
 public:
   s3select_csv_definitions m_csv_defintion;//TODO add method for modify
+
+  enum class Status {
+    END_OF_STREAM,// = -1,
+    INITIAL_STAT,// = 0,
+    NORMAL_EXIT,// = 1,
+    LIMIT_REACHED,// = 2
+    SQL_ERROR
+  };
+
+  Status m_sql_processing_status;
+
+  Status get_sql_processing_status()
+  {
+	  return m_sql_processing_status;
+  }
+
+  bool is_sql_limit_reached()
+  {
+	  return m_sql_processing_status == Status::LIMIT_REACHED;
+  }
 
   void set_base_defintions(s3select* m)
   {
@@ -2083,7 +2097,7 @@ public:
     m_processed_rows = 0;
   }
 
-  base_s3object():m_sa(nullptr),m_is_to_aggregate(false),m_where_clause(nullptr),m_s3_select(nullptr),m_error_count(0){}
+  base_s3object():m_sa(nullptr),m_is_to_aggregate(false),m_where_clause(nullptr),m_s3_select(nullptr),m_error_count(0),m_sql_processing_status(Status::INITIAL_STAT){}
 
   explicit base_s3object(s3select* m):base_s3object()
   {
@@ -2132,13 +2146,13 @@ public:
 	result.append(output_row_delimiter);
   }
 
-  int getMatchRow( std::string& result)
+  Status getMatchRow( std::string& result)
   {
     multi_values projections_resuls;
 
     if (m_is_limit_on && m_processed_rows == m_limit)
     {
-      return LIMIT_REACHED;
+      return m_sql_processing_status = Status::LIMIT_REACHED;
     }
     
     if (m_aggr_flow == true)
@@ -2159,7 +2173,7 @@ public:
             }
 
           result_values_to_string(projections_resuls,result);
-          return END_OF_STREAM;
+          return m_sql_processing_status = Status::END_OF_STREAM;
         }
 
         m_processed_rows++;
@@ -2196,7 +2210,7 @@ public:
           }
 
 	  result_values_to_string(projections_resuls,result);
-          return LIMIT_REACHED;
+          return m_sql_processing_status = Status::LIMIT_REACHED;
         }
 
       }
@@ -2210,7 +2224,7 @@ public:
 	columnar_fetch_where_clause_columns();
         if(is_end_of_stream())
         {
-          return END_OF_STREAM;
+          return m_sql_processing_status = Status::END_OF_STREAM;
         }
 
         m_processed_rows++;
@@ -2224,7 +2238,7 @@ public:
 
       if(m_where_clause && !m_where_clause->eval().is_true() && m_is_limit_on && m_processed_rows == m_limit)
       {
-          return LIMIT_REACHED;
+          return m_sql_processing_status = Status::LIMIT_REACHED;
       }
 
       bool found = multiple_row_processing();
@@ -2247,7 +2261,7 @@ public:
 
     }
 
-    return is_end_of_stream() ? END_OF_STREAM : NORMAL_EXIT;
+    return is_end_of_stream() ? (m_sql_processing_status = Status::END_OF_STREAM) : (m_sql_processing_status = Status::NORMAL_EXIT);
     
   }//getMatchRow
 
@@ -2518,10 +2532,10 @@ public:
 
     do
     {
-      int status = INITIAL_STAT;
+      m_sql_processing_status = Status::INITIAL_STAT;
       try
       {
-        status= getMatchRow(result);
+        getMatchRow(result);
       }
       catch (base_s3select_exception& e)
       {
@@ -2533,13 +2547,13 @@ public:
         }
       }
 
-      if (status == END_OF_STREAM)
+      if (m_sql_processing_status == Status::END_OF_STREAM)
       {
         break;
       }
-      else if (status == LIMIT_REACHED) // limit reached
+      else if (m_sql_processing_status == Status::LIMIT_REACHED) // limit reached
       {
-        return status;
+        break;//user should request for sql_processing_status
       }
 
     } while (true);
@@ -2638,13 +2652,12 @@ public:
         std::function<int(std::string&)> fp_s3select_result_format,
         std::function<int(std::string&)> fp_s3select_header_format)
   {
-    int status = INITIAL_STAT;
-
+	m_sql_processing_status = Status::INITIAL_STAT;
     do
     {
       try
       {
-        status = getMatchRow(result);
+        getMatchRow(result);
       }
       catch (base_s3select_exception &e)
       {
@@ -2683,14 +2696,15 @@ public:
         }
       }
 
-      if (status == END_OF_STREAM || is_end_of_stream() || status == LIMIT_REACHED)
+      //TODO is_end_of_stream() required?
+      if (get_sql_processing_status() == Status::END_OF_STREAM || is_end_of_stream() || get_sql_processing_status() == Status::LIMIT_REACHED)
       {
         break;
       }
 
     } while (1);
 
-    return status;
+    return 0;
   }
 
   void load_meta_data_into_scratch_area()
@@ -2822,14 +2836,19 @@ private:
       //create response (TODO callback)
 
       size_t result_len = s3select_result.size();
-      int status = INITIAL_STAT;
+      int status=0;
       try{
-	status = getMatchRow(s3select_result);
+	getMatchRow(s3select_result);
       }
       catch(s3selectEngine::base_s3select_exception& e)
       {
 	sql_error_handling(e,s3select_result);
 	status = -1;
+      }
+
+      if(is_sql_limit_reached()) 
+      {
+	      status = JSON_PROCESSING_LIMIT_REACHED;//returning number since sql_execution_on_row_cb is a callback; the caller can not access the object
       }
 
       m_sa->clear_data(); 

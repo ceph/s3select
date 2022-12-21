@@ -394,6 +394,11 @@ int process_json_query(const char* input_query,const char* fname)
       std::cout << "failure upon processing " << std::endl;
       return -1;
     } 
+    if(json_query_processor.is_sql_limit_reached())
+    {
+      std::cout << "json processing reached limit " << std::endl;
+      break;
+    }
     read_sz = input_file_stream.readsome(buff.data(),BUFFER_SIZE);  
   }
   json_query_processor.run_s3select_on_stream(result, 0, 0, object_sz);
