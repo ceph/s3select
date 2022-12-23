@@ -87,7 +87,7 @@ struct actionQ
   actionQ(): inMainArg(0),from_clause("##"),limit_op(false),column_prefix("##"),table_alias("##"),projection_or_predicate_state(true),first_when_then_expr(nullptr){}
 
   std::map<const void*,std::vector<const char*> *> x_map;
-
+ 
   ~actionQ()
   {
     for(auto m : x_map)
@@ -658,6 +658,11 @@ public:
       		}
 		//calling to destrcutor of class-function itself, or non-function destructor
 		it->dtor();
+	}
+
+	for(auto x: m_actionQ.json_statement_variables_match_expression)
+	{//the json_variable_access object is allocated by S3SELECT_NEW. this object contains stl-vector that should be free 
+		x.first->~json_variable_access();
 	}
   }
 

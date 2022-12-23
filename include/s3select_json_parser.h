@@ -368,7 +368,6 @@ void new_value(s3selectEngine::value& v,size_t json_index)
   if(is_on_final_state())
   {
     (*m_exact_match_cb)(v, json_index);
-    increase_array_index();
     decrease_current_state();//TODO why decrease? the state-machine reached its final destination, and it should be only one result
   } 
   increase_array_index();//next-value in array
