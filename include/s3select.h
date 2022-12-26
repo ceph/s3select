@@ -682,7 +682,7 @@ public:
 
       select_expr_base_ = select_expr_base >> S3SELECT_KW("limit") >> (limit_number)[BOOST_BIND_ACTION(push_limit_clause)] | select_expr_base;
 
-      limit_number = bsc::uint_p;
+      limit_number = (+bsc::digit_p);
 
       select_expr_base =  S3SELECT_KW("select") >> projections >> S3SELECT_KW("from") >> (from_expression)[BOOST_BIND_ACTION(push_from_clause)] >> !where_clause ;
 
@@ -2043,15 +2043,16 @@ protected:
   bool m_is_limit_on;
   unsigned long m_limit;
   unsigned long m_processed_rows;
+  std::function<void(const char*)> fp_ext_debug_mesg;//dispache debug message into external system
 
 public:
   s3select_csv_definitions m_csv_defintion;//TODO add method for modify
 
   enum class Status {
-    END_OF_STREAM,// = -1,
-    INITIAL_STAT,// = 0,
-    NORMAL_EXIT,// = 1,
-    LIMIT_REACHED,// = 2
+    END_OF_STREAM,
+    INITIAL_STAT,
+    NORMAL_EXIT,
+    LIMIT_REACHED,
     SQL_ERROR
   };
 
@@ -2120,6 +2121,11 @@ public:
   // for the case were the rows are not fetched, but "pushed" by the data-source parser (JSON)
   virtual bool multiple_row_processing(){return true;}
 
+  void set_external_debug_system(std::function<void(const char*)> fp_external)
+  {
+	fp_ext_debug_mesg = fp_external; 
+  }
+
   void result_values_to_string(multi_values& projections_resuls, std::string& result)
   {
     size_t i = 0;
@@ -2128,6 +2134,9 @@ public:
 
     for(auto& res : projections_resuls.values)
     {
+	      if(fp_ext_debug_mesg)
+		      fp_ext_debug_mesg( res->to_string() );
+
             if (m_csv_defintion.quote_fields_always) {
               std::ostringstream quoted_result;
               quoted_result << std::quoted(res->to_string(),m_csv_defintion.output_quot_char, m_csv_defintion.escape_char);
@@ -2602,22 +2611,18 @@ public:
   {
     if(s3_query)
     {
-      m_s3_select = s3_query;
+      set_base_defintions(s3_query);
     }
-
-    m_sa = m_s3_select->get_scratch_area();
-    m_s3_select->get_scratch_area()->set_parquet_type();
     load_meta_data_into_scratch_area();
     for(auto x : m_s3_select->get_projections_list())
-    {
+    {//traverse the AST and extract all columns reside in projection statement.
         x->extract_columns(m_projections_columns,object_reader->get_num_of_columns());
     }
-
+    //traverse the AST and extract all columns reside in where clause. 
     if(m_s3_select->get_filter())
         m_s3_select->get_filter()->extract_columns(m_where_clause_columns,object_reader->get_num_of_columns());
 
-    m_is_to_aggregate = true; //TODO when to set to true
-    not_to_increase_first_time = true;
+     not_to_increase_first_time = true;
   }
 
   ~parquet_object()
@@ -2688,14 +2693,14 @@ public:
       {//AWS-cli limits response size the following callbacks send response upon some threshold
         fp_s3select_result_format(result);
 
-        if (!is_end_of_stream())
+        if (!is_end_of_stream() && (get_sql_processing_status() != Status::LIMIT_REACHED))
         {
           fp_s3select_header_format(result);
         }
       }
       else
       {
-        if (is_end_of_stream())
+        if (is_end_of_stream() || (get_sql_processing_status() == Status::LIMIT_REACHED))
         {
           fp_s3select_result_format(result);
         }

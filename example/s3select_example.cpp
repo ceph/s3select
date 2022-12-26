@@ -306,8 +306,13 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
   
   std::function<int(std::string&)> fp_s3select_result_format = [](std::string& result){std::cout << result;result.clear();return 0;};
   std::function<int(std::string&)> fp_s3select_header_format = [](std::string& result){result="";return 0;};
+  std::function<void(const char*)> fp_debug = [](const char* msg)
+  {
+	  std::cout << "DEBUG: {" <<  msg << "}" << std::endl;
+  };
 
   parquet_object parquet_processor(input_file,&s3select_syntax,&rgw);
+  parquet_processor.set_external_debug_system(fp_debug);
 
   std::string result;
 
@@ -490,6 +495,13 @@ int run_on_localFile(char* input_query)
   }
   	
   s3selectEngine::csv_object  s3_csv_object(&s3select_syntax, csv);
+
+  std::function<void(const char*)> fp_debug = [](const char* msg)
+  {
+          std::cout << "DEBUG" <<  msg << std::endl;
+  };
+
+  s3_csv_object.set_external_debug_system(fp_debug);
 
 #define BUFF_SIZE (1024*1024*4) //simulate 4mb parts in s3 object
   char* buff = (char*)malloc( BUFF_SIZE );
