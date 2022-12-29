@@ -391,7 +391,17 @@ int process_json_query(const char* input_query,const char* fname)
   {
     std::cout << "read next chunk " << read_sz << std::endl;
 
-    status = json_query_processor.run_s3select_on_stream(result, buff.data(), read_sz, object_sz);
+    try{
+    	status = json_query_processor.run_s3select_on_stream(result, buff.data(), read_sz, object_sz);
+  } catch (base_s3select_exception &e)
+  {
+      std::cout << e.what() << std::endl;
+      if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL) //abort query execution
+      {
+        return -1;
+      }
+  }
+
     std::cout << result << std::endl;
  
     if(status<0)
@@ -406,7 +416,17 @@ int process_json_query(const char* input_query,const char* fname)
     }
     read_sz = input_file_stream.readsome(buff.data(),BUFFER_SIZE);  
   }
-  json_query_processor.run_s3select_on_stream(result, 0, 0, object_sz);
+  try{
+  	json_query_processor.run_s3select_on_stream(result, 0, 0, object_sz);
+  } catch (base_s3select_exception &e)
+  {
+      std::cout << e.what() << std::endl;
+      if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL) //abort query execution
+      {
+        return -1;
+      }
+  }
+
   std::cout << result << std::endl;
 
   return 0;

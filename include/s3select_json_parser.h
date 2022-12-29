@@ -30,7 +30,8 @@ bool s3select_json_parse_error(bool b)
 {
   if(!b)
   {
-    std::cout << "failure while processing " << std::endl;
+    	const char* error_str = "failure while processing JSON document";
+	throw s3selectEngine::base_s3select_exception(error_str, s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);
   }
   return false;
 }
@@ -39,7 +40,8 @@ bool s3select_json_parse_error(const char* error)
 {
   if(!error)
   {
-    std::cout << "failure while processing " << std::endl;
+    	const char* error_str = "failure while processing JSON document";
+	throw s3selectEngine::base_s3select_exception(error_str, s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);
   }
   return false;
 }
@@ -166,7 +168,7 @@ std::vector<std::string>* key_path;
 int* m_current_depth;
 std::function <int(s3selectEngine::value&,int)>* m_exact_match_cb;
 //  a state number : (_1).a.b.c[ 17 ].d.e (a.b)=1 (c[)=2  (17)=3 (.d.e)=4
-int current_state;//contain the current state of the state machine for searching-expression (each JSON variable in SQL statement has a searching expression)
+size_t current_state;//contain the current state of the state machine for searching-expression (each JSON variable in SQL statement has a searching expression)
 int nested_array_level;//in the case of array within array it contain the nesting level
 
 struct variable_state_md {
@@ -247,6 +249,12 @@ void push_variable_state(std::vector<std::string>& required_path,int required_ar
 
 struct variable_state_md& reader_position_state()
 {
+	if (current_state>=variable_states.size())
+	{
+		const char* out_of_range = "\nJSON reader failed due to array-out-of-range\n";
+		throw s3selectEngine::base_s3select_exception(out_of_range,s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);
+	}
+
   return variable_states[ current_state ];
 }
 
@@ -756,13 +764,15 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 			    size_t ofs = reader.GetErrorOffset();
 			    std::stringstream error_str;
 			    error_str << "parsing error. code:" << c << " position: " << ofs << std::endl;
-			    std::cout << error_str.str();
+			    throw s3selectEngine::base_s3select_exception(error_str.str(), s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);
 			    return -1;	  
 		    }
 	    }//while reader.IterativeParseComplete
 	}
-        catch(std::exception &e){//TODO specific exception
-                std::cout << "failed to process JSON" << e.what() << std::endl;
+        catch(std::exception &e){
+		std::stringstream error_str;
+                error_str << "failed to process JSON : " << e.what() << std::endl;
+		throw s3selectEngine::base_s3select_exception(error_str.str(), s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);
                 return -1;
         }
 	return 0;
