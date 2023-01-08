@@ -312,7 +312,7 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
   };
 
   parquet_object parquet_processor(input_file,&s3select_syntax,&rgw);
-  parquet_processor.set_external_debug_system(fp_debug);
+  //parquet_processor.set_external_debug_system(fp_debug);
 
   std::string result;
 
@@ -390,6 +390,7 @@ int process_json_query(const char* input_query,const char* fname)
   while(read_sz)
   {
     std::cout << "read next chunk " << read_sz << std::endl;
+    result.clear();
 
     try{
     	status = json_query_processor.run_s3select_on_stream(result, buff.data(), read_sz, object_sz);
@@ -417,6 +418,7 @@ int process_json_query(const char* input_query,const char* fname)
     read_sz = input_file_stream.readsome(buff.data(),BUFFER_SIZE);  
   }
   try{
+    	result.clear();
   	json_query_processor.run_s3select_on_stream(result, 0, 0, object_sz);
   } catch (base_s3select_exception &e)
   {
@@ -521,7 +523,7 @@ int run_on_localFile(char* input_query)
           std::cout << "DEBUG" <<  msg << std::endl;
   };
 
-  s3_csv_object.set_external_debug_system(fp_debug);
+  //s3_csv_object.set_external_debug_system(fp_debug);
 
 #define BUFF_SIZE (1024*1024*4) //simulate 4mb parts in s3 object
   char* buff = (char*)malloc( BUFF_SIZE );

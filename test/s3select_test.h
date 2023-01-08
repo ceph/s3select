@@ -629,8 +629,10 @@ int run_json_query(const char* json_query, std::string& json_input,std::string& 
   }
 
   json_object json_query_processor(&s3select_syntax);
+  result.clear();
   status = json_query_processor.run_s3select_on_stream(result, json_input.data(), json_input.size(), json_input.size());
   std::string prev_result = result;
+  result.clear();
   status = json_query_processor.run_s3select_on_stream(result, 0, 0, json_input.size());
   
   result = prev_result + result;
