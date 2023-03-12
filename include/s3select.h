@@ -2816,6 +2816,14 @@ public:
       f_push_key_value_into_scratch_area_per_star_operation = [this](s3selectEngine::scratch_area::json_key_value_t& key_value)
                 {return push_key_value_into_scratch_area_per_star_operation(key_value);};
 
+    //setting the from clause path 
+    if(query->getAction()->json_from_clause[0] == JSON_ROOT_OBJECT)
+    {
+      query->getAction()->json_from_clause.pop_back();
+    }
+    JsonHandler.set_prefix_match(query->getAction()->json_from_clause);
+
+
     //setting the container for all json-variables, to be extracted by the json reader    
     JsonHandler.set_statement_json_variables(query->get_json_variables_access());
 
@@ -2826,13 +2834,6 @@ public:
     JsonHandler.set_exact_match_callback(f_push_to_scratch);
     //upon star-operation(in statemenet) the callback pushes the key-path and value into scratch-area
     JsonHandler.set_push_per_star_operation_callback(f_push_key_value_into_scratch_area_per_star_operation);
-
-    //setting the from clause path 
-    if(query->getAction()->json_from_clause[0] == JSON_ROOT_OBJECT)
-    {
-      query->getAction()->json_from_clause.pop_back();
-    }
-    JsonHandler.set_prefix_match(query->getAction()->json_from_clause);
 
     for (auto& p : m_projections)
     {

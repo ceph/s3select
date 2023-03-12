@@ -200,6 +200,10 @@ void init(
   current_state = 0;
 
   //loop on variable_states compute required_depth_size
+  for(auto& v : variable_states)
+  {
+      v.required_depth_size = v.required_depth_size + from_clause->size();
+  }
 }
 
 void clear()
