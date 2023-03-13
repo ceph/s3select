@@ -3242,8 +3242,6 @@ TEST(TestS3selectFunctions, json_queries_with_multi_dimensional_array)
   std::string expected_result;
   std::string input_query;
 
-  //return; //the syntax parser should be modified to accept array[1][2][3] 
-
 std::string input_json_data = R"(
 {
 "firstName": "Joe",
@@ -3287,30 +3285,50 @@ std::string input_json_data = R"(
     } 
   ],
   {"classname" : "stam"},
-  { "associatedDrug":[{
+  { 		
+		    "associatedDrug":[{
                         "name":"asprin",
                         "dose":"",
-                        "strength":"500 mg"
+                        "strength":"200 mg"
                     }],
-                    "associatedDrug#2":[{
-                        "name":"somethingElse",
+                    "associatedDrug2":[{
+                        "name":"Alecensa",
                         "dose":"",
                         "strength":"500 mg"
-                    }]
+                    },
+		    {
+                        "name":"Detrol",
+                        "dose":"",
+                        "strength":"800 mg"
+                    }
+		    ]
 }
 ],
 "key_after_array": "XXX"
 }
 )";
 
-#if 0
-  //TODO error phoneNumbers[12][2][2] = null, to check what happen upon reaching the final state
-  expected_result=R"(post 3D
+  //TODO upon accessing phoneNumbers[12][2][2] it should return null instead of an exception
+  
+  //multi-dimensional access to non exist array element
+  expected_result=R"(null
 )";
-  input_query = "select _1.phoneNumbers[12][2][2] from s3object[*];";
+  input_query = "select _1.phoneNumbers[12][2][3] from s3object[*];";
   run_json_query(input_query.c_str(), input_json_data, result);
   ASSERT_EQ(result,expected_result);
-#endif 
+
+  expected_result=R"(asprin
+)";
+  input_query = "select _1.phoneNumbers[14].associatedDrug[0].name from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  //accessing a key/value within object within array within array
+  expected_result=R"(Detrol
+)";
+  input_query = "select _1.phoneNumbers[14].associatedDrug2[1].name from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
 
   //the following tests ia about accessing multi-dimension array
   expected_result=R"(55
@@ -3338,3 +3356,60 @@ std::string input_json_data = R"(
   run_json_query(input_query.c_str(), input_json_data, result);
   ASSERT_EQ(result,expected_result);
  }
+
+
+TEST(TestS3selectFunctions, json_queries_from_clause)
+{
+  // the purpose of the test, is to validate that placing the path differently in from-clause and projection
+  // fetch values correctly.
+  std::string result;
+  std::string expected_result;
+  std::string input_query;
+
+std::string input_json_data = R"(
+{
+  "hello": "world",
+    "t": "true" ,
+    "f": "false",
+    "n": "null",
+    "i": 123,
+    "pi": 3.1416,
+
+    "nested_obj" : {
+      "hello2": "world",
+      "t2": true,
+      "nested2" :
+      {         
+	  "c1" : "c1_value" ,
+	  "array_nested2": [10, 20, 30, 40]       
+      },
+      "nested3" :{
+        "hello3": "world",
+        "t2": true,
+        "nested4" :
+	{           
+	"c1" : "nested3_c1_value" ,
+	"array_nested3": [100, 200, 300, 400]
+	}
+      }
+    },
+    "array_1": [1, 2, 3, 4]
+}
+)";
+
+  expected_result=R"(10
+)";
+  input_query = "select _1.nested_obj.nested2.array_nested2[0] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  input_query = "select _1.nested2.array_nested2[0] from s3object[*].nested_obj;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  input_query = "select _1.array_nested2[0] from s3object[*].nested_obj.nested2;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+}
+
