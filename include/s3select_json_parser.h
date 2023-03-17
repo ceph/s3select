@@ -826,4 +826,3 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 
 
 #endif
-

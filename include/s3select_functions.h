@@ -2586,6 +2586,17 @@ bool base_statement::is_column_reference() const
   return false;
 }
 
+std::string base_statement::get_key_from_projection()
+{
+  variable* v_name = dynamic_cast<variable*>(this);
+
+  if(v_name)  {
+    return v_name->get_name();
+  } else {
+    throw base_s3select_exception("key not present");
+  }
+}
+
 bool base_statement::is_nested_aggregate(bool &aggr_flow) const
 {
   if (is_aggregate())

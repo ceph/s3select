@@ -11,6 +11,9 @@
 using namespace s3selectEngine;
 using namespace BOOST_SPIRIT_CLASSIC_NS;
 
+std::string output_format{};
+std::string header_info{};
+
 class awsCli_handler {
 
 
@@ -196,13 +199,19 @@ public:
       {
         csv.ignore_header_info = true;
       }
-      else if (m_header_info.compare("USE") == 0)
+      else if (header_info.compare("USE") == 0)
       {
         csv.use_header_info = true;
       }
 
-      m_s3_csv_object = std::unique_ptr<s3selectEngine::csv_object>(new s3selectEngine::csv_object(s3select_syntax.get(), csv));
+      if(output_format.compare("JSON") == 0)  {
+        csv.output_json_format = true;
+      }
+
+      m_s3_csv_object = std::unique_ptr<s3selectEngine::csv_object>(new s3selectEngine::csv_object());
+      m_s3_csv_object->set_csv_query(s3select_syntax.get(), csv);
     }
+
 
     if (s3select_syntax->get_error_description().empty() == false)
     {
@@ -363,11 +372,17 @@ int process_json_query(const char* input_query,const char* fname)
 {//purpose: process json query 
 
   s3select s3select_syntax;
+  s3selectEngine::json_object m_s3_json_object;
+  json_object::csv_definitions json;
   int status = s3select_syntax.parse_query(input_query);
   if (status != 0)
   {
     std::cout << "failed to parse query " << s3select_syntax.get_error_description() << std::endl;
     return -1;
+  }
+
+  if(output_format.compare("JSON") == 0)  {
+    json.output_json_format = true;
   }
 
   std::ifstream input_file_stream;
@@ -381,7 +396,7 @@ int process_json_query(const char* input_query,const char* fname)
   }
 
   auto object_sz = boost::filesystem::file_size(fname);
-  json_object json_query_processor(&s3select_syntax);
+  m_s3_json_object.set_json_query(&s3select_syntax, json);
   std::string buff(BUFFER_SIZE,0);
   std::string result;
 
@@ -393,10 +408,11 @@ int process_json_query(const char* input_query,const char* fname)
   {
     bytes_read += read_sz;
     std::cout << "read next chunk " << chunk_count++ << ":" << read_sz << ":" << bytes_read << "\r";
+
     result.clear();
 
     try{
-    	status = json_query_processor.run_s3select_on_stream(result, buff.data(), read_sz, object_sz);
+    	status = m_s3_json_object.run_s3select_on_stream(result, buff.data(), read_sz, object_sz, json.output_json_format);
   } catch (base_s3select_exception &e)
   {
       std::cout << e.what() << std::endl;
@@ -416,7 +432,7 @@ int process_json_query(const char* input_query,const char* fname)
       std::cout << "failure upon processing " << std::endl;
       return -1;
     } 
-    if(json_query_processor.is_sql_limit_reached())
+    if(m_s3_json_object.is_sql_limit_reached())
     {
       std::cout << "json processing reached limit " << std::endl;
       break;
@@ -425,7 +441,7 @@ int process_json_query(const char* input_query,const char* fname)
   }
   try{
     	result.clear();
-  	json_query_processor.run_s3select_on_stream(result, 0, 0, object_sz);
+  	m_s3_json_object.run_s3select_on_stream(result, 0, 0, object_sz, json.output_json_format);
   } catch (base_s3select_exception &e)
   {
       std::cout << e.what() << std::endl;
@@ -499,6 +515,14 @@ int run_on_localFile(char* input_query)
   csv.use_header_info = false;
   csv.quote_fields_always=false;
 
+  if(output_format.compare("JSON") == 0)  {
+    csv.output_json_format = true;
+  }
+
+  if(header_info.compare("USE") == 0)  {
+    csv.use_header_info = true;
+  }
+
 #define CSV_QUOT "CSV_ALWAYS_QUOT"
 #define CSV_COL_DELIM "CSV_COLUMN_DELIMETER"
 #define CSV_ROW_DELIM "CSV_ROW_DELIMITER"
@@ -521,7 +545,8 @@ int run_on_localFile(char* input_query)
 	csv.use_header_info = true;
   }
   	
-  s3selectEngine::csv_object  s3_csv_object(&s3select_syntax, csv);
+  s3selectEngine::csv_object  s3_csv_object;
+  s3_csv_object.set_csv_query(&s3select_syntax, csv);
 
   std::function<void(const char*)> fp_debug = [](const char* msg)
   {
@@ -671,9 +696,21 @@ int main(int argc,char **argv)
 			continue;
 		}
 
+    if (!strcmp(argv[i], "-output"))
+		{//object recieved as CLI parameter
+			output_format = argv[i + 1];
+			continue;
+		}
+
 		if (!strcmp(argv[i], "-q"))
 		{
 			query = argv[i + 1];
+			continue;
+		}
+
+    if (!strcmp(argv[i], "-HeaderInfo"))
+		{
+			header_info = argv[i + 1];
 			continue;
 		}
 

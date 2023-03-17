@@ -1478,6 +1478,7 @@ public:
   const base_statement* get_aggregate() const;
   bool is_nested_aggregate(bool&) const;
   bool is_column_reference() const;
+  std::string get_key_from_projection();
   bool mark_aggreagtion_subtree_to_execute();
   bool is_statement_contain_star_operation() const;
   void push_for_cleanup(std::set<base_statement*>&);
@@ -1714,7 +1715,7 @@ public:
 
   virtual bool is_column() const //is reference to column.
   {
-    if(m_var_type == var_t::VARIABLE_NAME || m_var_type == var_t::POS || m_var_type == var_t::STAR_OPERATION)
+    if(m_var_type == var_t::VARIABLE_NAME || m_var_type == var_t::POS || m_var_type == var_t::STAR_OPERATION || m_var_type == var_t::JSON_VARIABLE)
     {
       return true;
     }
@@ -1817,7 +1818,7 @@ public:
         }
       }
 
-    }
+    } 
 
     if (m_projection_alias)
     {
