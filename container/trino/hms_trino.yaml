@@ -1,0 +1,33 @@
+version: '3'
+services:
+  hms:
+    image: galsl/hms:dev
+    container_name: hms
+    environment:
+      # S3_ENDPOINT the CEPH/RGW end-point 
+      #- S3_ENDPOINT=172.21.48.86
+      - S3_ENDPOINT=10.35.4.88
+    # the container starts with booting the hive metastore
+    command: sh -c '. ~/.bashrc; start_hive_metastore'
+    ports:
+      - 9083:9083
+    networks:
+      - trino_hms
+
+  trino:
+    image: trinodb/trino
+    container_name: trino
+    volumes:
+      # the trino directory contains the necessary configuration
+      # TODO should use the S3_ENDPOINT for hive.s3.endpoint= (@hive.properties)
+      - ./trino:/etc/trino
+      # an optional diretory. 
+      - ./work:/work
+    ports:
+      - 8080:8080
+    networks:
+      - trino_hms
+
+networks:
+  trino_hms:
+
