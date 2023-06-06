@@ -941,8 +941,14 @@ public:
     if (lhs.is_nan() || rhs.is_nan())
     {
       return false;
-    }  
+    }
 
+//  in the case of NULL on right-side or NULL on left-side, the result is false.
+    if(lhs.is_null() || rhs.is_null())
+    {
+      return false;
+    }
+    
     throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
   }
   bool operator<=(const value& v)
@@ -1540,7 +1546,14 @@ public:
       _name = "#";
       m_var_type = tp;
       column_pos = -1;
-      var_value = n.c_str();
+	// upon expression contains an empty string (TODO: tests for empty string)
+      if (n.size() == 0){
+	var_value.setnull(); 
+      }
+      else {
+	var_value = n.c_str();
+      }
+      
     }
     else if (tp ==variable::var_t::STAR_OPERATION)
     {
@@ -1752,8 +1765,9 @@ public:
     {
       m_scratch->get_column_value(column_pos,var_value);
       //in the case of successive column-delimiter {1,some_data,,3}=> third column is NULL 
-      if (var_value.is_string() && (var_value.str()== 0 || (var_value.str() && *var_value.str()==0)))
+      if (var_value.is_string() && (var_value.str()== 0 || (var_value.str() && *var_value.str()==0))){
           var_value.setnull();//TODO is it correct for Parquet
+      }
     }
 
     return var_value;

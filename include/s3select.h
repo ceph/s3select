@@ -542,7 +542,11 @@ public:
 
     try
     {
-      bsc::parse_info<> info = bsc::parse(input_query, *this, bsc::space_p);
+//NOTE: bellow is a temoprary fix(workaround) for a failed syntax parsing(cause a crash)
+// the crash happens in boost-spirit. the reason for thar is not clear, yet.
+      std::string replaced_query = std::regex_replace(input_query, std::regex(" INT"), " int");
+
+      bsc::parse_info<> info = bsc::parse(replaced_query.c_str(), *this, bsc::space_p);
       auto query_parse_position = info.stop;
 
       if (!info.full)
@@ -2240,6 +2244,8 @@ public:
     }
     else
     {
+      //save the where-clause evaluation result (performance perspective)
+      bool where_clause_result = false;
       do
       {
 	row_fetch_data();
@@ -2256,9 +2262,14 @@ public:
           a.second->invalidate_cache_result();
         }
       }
-      while (multiple_row_processing() && m_where_clause && !m_where_clause->eval().is_true() && !(m_is_limit_on && m_processed_rows == m_limit));
+      while (multiple_row_processing() && m_where_clause && !(where_clause_result = m_where_clause->eval().is_true()) && !(m_is_limit_on && m_processed_rows == m_limit));
 
-      if(m_where_clause && !m_where_clause->eval().is_true() && m_is_limit_on && m_processed_rows == m_limit)
+ 	// in the of JSON it needs to evaluate the where-clause(for the first time)
+      if(!multiple_row_processing() && m_where_clause){
+	where_clause_result = m_where_clause->eval().is_true();
+      }
+
+      if(m_where_clause && ! where_clause_result && m_is_limit_on && m_processed_rows == m_limit)
       {
           return m_sql_processing_status = Status::LIMIT_REACHED;
       }
@@ -2267,7 +2278,7 @@ public:
 
       if(!multiple_row_processing())
       {
-		found = !m_where_clause || m_where_clause->eval().is_true();	
+		found = !m_where_clause || where_clause_result;	
       }
   
       if(found)

@@ -1866,7 +1866,7 @@ struct _fn_when_value_then : public base_function {
     when_value = when_expr->eval();
     case_value = case_expr->eval();
     then_value = then_expr->eval();
-    
+
     if (case_value == when_value)
     {
         *result = then_value;
