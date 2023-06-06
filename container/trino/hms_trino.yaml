@@ -19,10 +19,7 @@ services:
     container_name: trino
     volumes:
       # the trino directory contains the necessary configuration
-      # TODO should use the S3_ENDPOINT for hive.s3.endpoint= (@hive.properties)
       - ./trino:/etc/trino
-      # an optional diretory. 
-      - ./work:/work
     ports:
       - 8080:8080
     networks:

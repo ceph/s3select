@@ -20,10 +20,7 @@ modify_end_point_on_hive_properties()
 trino_exec_command()
 {
 ## run SQL statement on trino 
-  root_dir
-  echo $@ > ./container/trino/work/query.trino;
-  sudo docker exec -it trino /bin/bash -c 'time trino --catalog hive --schema cephs3 -f work/query.trino'
-  cd -
+  sudo docker exec -it trino /bin/bash -c "time trino --catalog hive --schema cephs3 --execute \"$@\""
 }
 
 boot_trino_hms()
@@ -38,5 +35,13 @@ shutdown_trino_hms()
   root_dir
   sudo docker compose -f ./container/trino/hms_trino.yaml down
   cd -
+}
+
+trino_create_table()
+{
+table_name=$1
+create_table_comm="create table hive.cephs3.${table_name}(c1 varchar,c2 varchar,c3 varchar,c4 varchar, c5 varchar,c6 varchar,c7 varchar,c8 varchar,c9 varchar,c10 varchar)
+ WITH ( external_location = 's3a://hive/warehouse/cephs3/${table_name}/',format = 'TEXTFILE',textfile_field_separator = ',');"
+sudo docker exec -it trino /bin/bash -c "trino --catalog hive --schema cephs3 --execute \"${create_table_comm}\""
 }
 
