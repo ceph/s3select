@@ -1546,14 +1546,7 @@ public:
       _name = "#";
       m_var_type = tp;
       column_pos = -1;
-	// upon expression contains an empty string (TODO: tests for empty string)
-      if (n.size() == 0){
-	var_value.setnull(); 
-      }
-      else {
-	var_value = n.c_str();
-      }
-      
+      var_value = n.c_str();
     }
     else if (tp ==variable::var_t::STAR_OPERATION)
     {

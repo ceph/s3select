@@ -542,11 +542,7 @@ public:
 
     try
     {
-//NOTE: bellow is a temoprary fix(workaround) for a failed syntax parsing(cause a crash)
-// the crash happens in boost-spirit. the reason for thar is not clear, yet.
-      std::string replaced_query = std::regex_replace(input_query, std::regex(" INT"), " int");
-
-      bsc::parse_info<> info = bsc::parse(replaced_query.c_str(), *this, bsc::space_p);
+      bsc::parse_info<> info = bsc::parse(input_query, *this, bsc::space_p);
       auto query_parse_position = info.stop;
 
       if (!info.full)
@@ -772,9 +768,9 @@ public:
                             (cast) | (substr) | (trim) | (when_case_value_when) | (when_case_else_projection) |
                             (function) | (variable)[BOOST_BIND_ACTION(push_variable)]; //function is pushed by right-term
 
-      cast = (S3SELECT_KW("cast") >> '(' >> factor >> S3SELECT_KW("as") >> (data_type)[BOOST_BIND_ACTION(push_data_type)] >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
+      cast = (S3SELECT_KW("cast") >> '(' >> factor >> S3SELECT_KW("as") >> (data_type) >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
 
-      data_type = (S3SELECT_KW("int") | S3SELECT_KW("float") | S3SELECT_KW("string") |  S3SELECT_KW("timestamp") | S3SELECT_KW("bool") );
+      data_type = (S3SELECT_KW("int") | S3SELECT_KW("float") | S3SELECT_KW("string") |  S3SELECT_KW("timestamp") | S3SELECT_KW("bool") )[BOOST_BIND_ACTION(push_data_type)];
      
       substr = (substr_from) | (substr_from_for);
       
@@ -1761,7 +1757,7 @@ void push_data_type::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
-  auto cast_operator = [&](const char *s){return strncmp(a,s,strlen(s))==0;};
+  auto cast_operator = [&](const char *s){return strncasecmp(a,s,strlen(s))==0;};
 
   if(cast_operator("int"))
   {
