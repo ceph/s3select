@@ -227,6 +227,18 @@ struct push_cast_expr : public base_ast_builder
 };
 static push_cast_expr g_push_cast_expr;
 
+struct push_cast_decimal_expr : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_cast_decimal_expr g_push_cast_decimal_expr;
+
+struct push_decimal_operator : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_decimal_operator g_push_decimal_operator;
+
 struct push_data_type : public base_ast_builder
 {
   void builder(s3select* self, const char* a, const char* b) const;
@@ -768,9 +780,16 @@ public:
                             (cast) | (substr) | (trim) | (when_case_value_when) | (when_case_else_projection) |
                             (function) | (variable)[BOOST_BIND_ACTION(push_variable)]; //function is pushed by right-term
 
-      cast = (S3SELECT_KW("cast") >> '(' >> factor >> S3SELECT_KW("as") >> (data_type) >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
+      cast = cast_as_data_type | cast_as_decimal_expr ;
 
-      data_type = (S3SELECT_KW("int") | S3SELECT_KW("float") | S3SELECT_KW("string") |  S3SELECT_KW("timestamp") | S3SELECT_KW("bool") )[BOOST_BIND_ACTION(push_data_type)];
+      cast_as_data_type = (S3SELECT_KW("cast") >> '(' >> factor >> S3SELECT_KW("as") >> (data_type) >> ')') [BOOST_BIND_ACTION(push_cast_expr)];
+
+      cast_as_decimal_expr = (S3SELECT_KW("cast") >> '(' >> factor >> S3SELECT_KW("as") >> decimal_operator >> ')') [BOOST_BIND_ACTION(push_cast_decimal_expr)];
+
+      decimal_operator = (S3SELECT_KW("decimal") >> '(' >> (number)[BOOST_BIND_ACTION(push_number)] >> ',' >> (number)[BOOST_BIND_ACTION(push_number)] >> ')')
+					[BOOST_BIND_ACTION(push_decimal_operator)];
+
+      data_type = (S3SELECT_KW("int") | S3SELECT_KW("float") | S3SELECT_KW("string") |  S3SELECT_KW("timestamp") | S3SELECT_KW("bool"))[BOOST_BIND_ACTION(push_data_type)];
      
       substr = (substr_from) | (substr_from_for);
       
@@ -808,7 +827,7 @@ public:
 
       float_number = bsc::real_p;
 
-      string = (bsc::str_p("\"") >> *( bsc::anychar_p - bsc::str_p("\"") ) >> bsc::str_p("\"")) | (bsc::str_p("\'") >> *( bsc::anychar_p - bsc::str_p("\'") ) >> bsc::str_p("\'")) ;
+      string = (bsc::str_p("\"") >> *( bsc::anychar_p - bsc::str_p("\"") ) >> bsc::str_p("\"")) | (bsc::str_p("\'") >> *( bsc::anychar_p - bsc::str_p("\'") ) >> bsc::str_p("\'")) | (bsc::str_p("`") >> *( bsc::anychar_p - bsc::str_p("`") ) >> bsc::str_p("`")) ;
 
       column_pos = (variable_name >> "." >> column_pos_name) | column_pos_name; //TODO what about space
 
@@ -836,7 +855,7 @@ public:
     }
 
 
-    bsc::rule<ScannerT> cast, data_type, variable, json_variable_name, variable_name, select_expr, select_expr_base, select_expr_base_, s3_object, where_clause, limit_number, number, float_number, string, from_expression;
+    bsc::rule<ScannerT> cast, data_type, variable, json_variable_name, variable_name, select_expr, select_expr_base, select_expr_base_, s3_object, where_clause, limit_number, number, float_number, string, from_expression, cast_as_data_type, cast_as_decimal_expr, decimal_operator;
     bsc::rule<ScannerT> cmp_operand, arith_cmp, condition_expression, arithmetic_predicate, logical_predicate, factor; 
     bsc::rule<ScannerT> trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside, trim_type, trim_remove_type, substr, substr_from, substr_from_for;
     bsc::rule<ScannerT> datediff, dateadd, extract, date_part, date_part_extract, time_to_string_constant, time_to_string_dynamic;
@@ -1732,6 +1751,65 @@ void push_when_value_then::builder(s3select* self, const char* a, const char* b)
  func->push_argument(when_expr);
   //each when-value-then-value pushed to dedicated queue
  self->getAction()->whenThenQ.push_back(func);
+}
+
+void push_decimal_operator::builder(s3select* self, const char* a, const char* b) const
+{//decimal(integer,integer)
+  std::string token(a, b);
+
+  base_statement* lhs = nullptr;
+  base_statement* rhs = nullptr;
+
+  //right side (decimal operator)
+  if (self->getAction()->exprQ.empty() == false)
+  {
+    rhs = self->getAction()->exprQ.back();
+    self->getAction()->exprQ.pop_back();
+  }
+
+  //left side (decimal operator)
+  if (self->getAction()->exprQ.empty() == false)
+  {
+    lhs = self->getAction()->exprQ.back();
+    self->getAction()->exprQ.pop_back();
+  }
+
+  __function* func = S3SELECT_NEW(self, __function, "#decimal_operator#", self->getS3F());
+
+  func->push_argument(rhs);
+  func->push_argument(lhs);
+
+  self->getAction()->exprQ.push_back(func);
+}
+
+void push_cast_decimal_expr::builder(s3select* self, const char* a, const char* b) const
+{
+  //cast(expression as decimal(x,y))
+  std::string token(a, b);
+
+  base_statement* lhs = nullptr;
+  base_statement* rhs = nullptr;
+
+  //right side (decimal operator)
+  if (self->getAction()->exprQ.empty() == false)
+  {
+    rhs = self->getAction()->exprQ.back();
+    self->getAction()->exprQ.pop_back();
+  }
+
+  //left side - expression
+  if (self->getAction()->exprQ.empty() == false)
+  {
+    lhs = self->getAction()->exprQ.back();
+    self->getAction()->exprQ.pop_back();
+  }
+
+  __function* func = S3SELECT_NEW(self, __function, "#cast_as_decimal#", self->getS3F());
+
+  func->push_argument(rhs);
+  func->push_argument(lhs);
+
+  self->getAction()->exprQ.push_back(func);
 }
 
 void push_cast_expr::builder(s3select* self, const char* a, const char* b) const

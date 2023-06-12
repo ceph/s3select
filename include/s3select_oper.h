@@ -116,7 +116,7 @@ class base_statement;
 //typedef std::vector<base_statement *> bs_stmt_vec_t; //without specific allocator
 
 //ChunkAllocator, prevent allocation from heap.
-typedef std::vector<base_statement*, ChunkAllocator<base_statement*, 256> > bs_stmt_vec_t;
+typedef std::vector<base_statement*, ChunkAllocator<base_statement*, 4096> > bs_stmt_vec_t;
 
 class base_s3select_exception : public std::exception
 {
@@ -436,6 +436,9 @@ private:
   std::string m_str_value;
   //std::basic_string<char,std::char_traits<char>,ChunkAllocator<char,256>> m_str_value;
 
+  int32_t m_precision=-1;
+  int32_t m_scale=-1;
+
 public:
   enum class value_En_t
   {
@@ -556,6 +559,18 @@ public:
     type = value_En_t::S3NULL;
   }
 
+  void set_precision_scale(int32_t* precision, int32_t* scale)
+  {
+    m_precision = *precision;
+    m_scale = *scale;
+  }
+
+  void get_precision_scale(int32_t* precision, int32_t* scale)
+  {
+    *precision = m_precision;
+    *scale = m_scale;
+  }
+
   void set_string_nocopy(char* str)
   {//purpose: value does not own the string
      __val.str = str;
@@ -591,7 +606,16 @@ public:
       }
       else if(type == value_En_t::FLOAT)
       {
-        m_to_string = boost::lexical_cast<std::string>(__val.dbl);
+        if(m_precision != -1 && m_scale != -1)
+        {
+          std::stringstream ss;
+          ss << std::fixed << std::setprecision(m_scale) << __val.dbl;
+          m_to_string = ss.str();
+        }
+        else
+        {
+          m_to_string.assign( boost::lexical_cast<std::string>(__val.dbl) );
+        }
       }
       else if (type == value_En_t::TIMESTAMP)
       {
@@ -1624,6 +1648,11 @@ public:
   void set_null()
   {
     var_value.setnull();
+  }
+
+  void set_precision_scale(int32_t* p, int32_t* s)
+  {
+    var_value.set_precision_scale(p, s);
   }
 
   virtual ~variable() {}

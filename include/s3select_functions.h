@@ -233,7 +233,9 @@ enum class s3select_func_En_t {ADD,
                                STRING,
                                TRIM,
                                LEADING,
-                               TRAILING
+                               TRAILING,
+                               DECIMAL_OPERATOR,
+                               CAST_TO_DECIMAL
                               };
 
 
@@ -302,7 +304,10 @@ private:
     {"string", s3select_func_En_t::STRING},
     {"#trim#", s3select_func_En_t::TRIM},
     {"#leading#", s3select_func_En_t::LEADING},
-    {"#trailing#", s3select_func_En_t::TRAILING}
+    {"#trailing#", s3select_func_En_t::TRAILING},
+    {"#decimal_operator#", s3select_func_En_t::DECIMAL_OPERATOR},
+    {"#cast_as_decimal#", s3select_func_En_t::CAST_TO_DECIMAL}
+
   };
 
 public:
@@ -2077,6 +2082,60 @@ struct _fn_trailing : public base_function {
     }
 }; 
 
+struct _fn_cast_to_decimal : public base_function {
+
+  int32_t precision=-1;
+  int32_t scale=-1;
+
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    //cast(expr as decimal(x,y))
+
+    base_statement* expr = (*args)[1];
+    //expr_val should be float or integer
+    //dynamic value for the decimal operator to get the precision and scale
+    
+    _fn_to_float to_float;
+    bs_stmt_vec_t args_vec;
+    args_vec.push_back(expr);
+    to_float(&args_vec,result);   
+    
+    if (precision == -1 || scale == -1){
+      base_statement* decimal_expr = (*args)[0];
+      decimal_expr->eval().get_precision_scale(&precision,&scale);
+    }
+
+    result->set_precision_scale(&precision,&scale);
+
+    return true;
+  }
+};
+
+struct _fn_decimal_operator : public base_function {
+
+  int32_t precision=-1;
+  int32_t scale=-1;
+
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    //decimal(x,y) operator
+    auto iter = args->begin();
+    base_statement* expr_precision = *iter;
+    value expr_precision_val = expr_precision->eval();
+
+    iter++;
+    base_statement* expr_scale = *iter;
+    value expr_scale_val = expr_scale->eval();
+    
+    precision = expr_precision_val.i64();
+    scale = expr_scale_val.i64();
+
+    result->set_precision_scale(&precision,&scale);
+
+    return true;
+  }
+};
+
 base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt_vec_t &arguments)
 {
   const FunctionLibrary::const_iterator iter = m_functions_library.find(fn_name.data());
@@ -2304,6 +2363,14 @@ base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt
 
   case s3select_func_En_t::TRAILING:  
     return S3SELECT_NEW(this,_fn_trailing);
+    break;
+
+  case  s3select_func_En_t::DECIMAL_OPERATOR:
+    return S3SELECT_NEW(this,_fn_decimal_operator);
+    break;
+
+  case  s3select_func_En_t::CAST_TO_DECIMAL:
+    return S3SELECT_NEW(this,_fn_cast_to_decimal);
     break;
 
   default:
