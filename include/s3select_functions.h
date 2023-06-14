@@ -787,7 +787,7 @@ struct _fn_to_timestamp : public base_function
                                 >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mo)]) >> *(date_separator)
                                 >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &dy)]) >> *(delimiter));
 
-  uint32_t hr = 0, mn = 0, sc = 0,  frac_sec = 0, tz_hr = 0, tz_mn = 0, sign, tm_zone = '0';
+  uint32_t hr = 0, mn = 0, sc = 0,  frac_sec = 0, tz_hr = 0, tz_mn = 0, sign = 0, tm_zone = '0';
 
   #if BOOST_DATE_TIME_POSIX_TIME_STD_CONFIG
     bsc::rule<> fdig9 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];

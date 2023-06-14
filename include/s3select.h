@@ -442,6 +442,12 @@ struct push_time_to_string_dynamic : public base_ast_builder
 };
 static push_time_to_string_dynamic g_push_time_to_string_dynamic;
 
+struct push_string_to_time_constant : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_string_to_time_constant g_push_string_to_time_constant;
+
 struct push_array_number :  public base_ast_builder
 {
   void builder(s3select* self, const char* a, const char* b) const;
@@ -469,8 +475,8 @@ private:
   s3select_functions m_s3select_functions;
   std::string error_description;
   s3select_allocator m_s3select_allocator;
-  bool aggr_flow;
-  bool m_json_query;
+  bool aggr_flow = false;
+  bool m_json_query = false;
   std::set<base_statement*> m_ast_nodes_to_delete;
 
 #define BOOST_BIND_ACTION( push_name ) boost::bind( &push_name::operator(), g_ ## push_name, const_cast<s3select*>(&self), _1, _2)
@@ -776,7 +782,7 @@ public:
 
       arithmetic_argument = (float_number)[BOOST_BIND_ACTION(push_float_number)] |  (number)[BOOST_BIND_ACTION(push_number)] | (json_variable_name)[BOOST_BIND_ACTION(push_json_variable)] |
 			    (column_pos)[BOOST_BIND_ACTION(push_column_pos)] |
-                            (string)[BOOST_BIND_ACTION(push_string)] | (datediff) | (dateadd) | (extract) | (time_to_string_constant) | (time_to_string_dynamic) |
+                            (string)[BOOST_BIND_ACTION(push_string)] | (backtick_string) | (datediff) | (dateadd) | (extract) | (time_to_string_constant) | (time_to_string_dynamic) |
                             (cast) | (substr) | (trim) | (when_case_value_when) | (when_case_else_projection) |
                             (function) | (variable)[BOOST_BIND_ACTION(push_variable)]; //function is pushed by right-term
 
@@ -827,7 +833,9 @@ public:
 
       float_number = bsc::real_p;
 
-      string = (bsc::str_p("\"") >> *( bsc::anychar_p - bsc::str_p("\"") ) >> bsc::str_p("\"")) | (bsc::str_p("\'") >> *( bsc::anychar_p - bsc::str_p("\'") ) >> bsc::str_p("\'")) | (bsc::str_p("`") >> *( bsc::anychar_p - bsc::str_p("`") ) >> bsc::str_p("`")) ;
+      string = (bsc::str_p("\"") >> *( bsc::anychar_p - bsc::str_p("\"") ) >> bsc::str_p("\"")) | (bsc::str_p("\'") >> *( bsc::anychar_p - bsc::str_p("\'") ) >> bsc::str_p("\'"));
+
+      backtick_string = (bsc::str_p("`") >> *( bsc::anychar_p - bsc::str_p("`") ) >> bsc::str_p("`")) [BOOST_BIND_ACTION(push_string_to_time_constant)];
 
       column_pos = (variable_name >> "." >> column_pos_name) | column_pos_name; //TODO what about space
 
@@ -855,7 +863,8 @@ public:
     }
 
 
-    bsc::rule<ScannerT> cast, data_type, variable, json_variable_name, variable_name, select_expr, select_expr_base, select_expr_base_, s3_object, where_clause, limit_number, number, float_number, string, from_expression, cast_as_data_type, cast_as_decimal_expr, decimal_operator;
+    bsc::rule<ScannerT> cast, data_type, variable, json_variable_name, variable_name, select_expr, select_expr_base, select_expr_base_, s3_object, where_clause, limit_number;
+    bsc::rule<ScannerT> number, float_number, string, backtick_string, from_expression, cast_as_data_type, cast_as_decimal_expr, decimal_operator;
     bsc::rule<ScannerT> cmp_operand, arith_cmp, condition_expression, arithmetic_predicate, logical_predicate, factor; 
     bsc::rule<ScannerT> trim, trim_whitespace_both, trim_one_side_whitespace, trim_anychar_anyside, trim_type, trim_remove_type, substr, substr_from, substr_from_for;
     bsc::rule<ScannerT> datediff, dateadd, extract, date_part, date_part_extract, time_to_string_constant, time_to_string_dynamic;
@@ -2079,6 +2088,37 @@ void push_time_to_string_dynamic::builder(s3select* self, const char* a, const c
   func->push_argument(expr);
 
   self->getAction()->exprQ.push_back(func);
+}
+
+void push_string_to_time_constant::builder(s3select* self, const char* a, const char* b) const
+{
+  //token could be a string or a timestamp, we need to check it
+  //upon it is a timestamp format, we need to push the variable as timestamp or else, it as a string
+  //the purpose is to use backticks to convert the string to timestamp in parsing time instead of processing time(Trino uses this approach)
+  
+  a++; //remove the first quote
+  b--;
+  std::string token(a, b);
+
+  _fn_to_timestamp* to_timestamp = S3SELECT_NEW(self, _fn_to_timestamp);//TODO the _fn_to_timestamp should release the memory (cleanup)
+  bs_stmt_vec_t args;
+
+  variable* var_string = S3SELECT_NEW(self, variable, token, variable::var_t::COLUMN_VALUE);
+  variable* timestamp = S3SELECT_NEW(self, variable, token, variable::var_t::COLUMN_VALUE);
+
+  args.push_back(var_string);
+
+  try {
+    (*to_timestamp)(&args, timestamp);
+  }
+  catch(std::exception& e)
+  {
+    //it is not a timestamp, it is a string
+    self->getAction()->exprQ.push_back(var_string);
+    return;
+  }
+
+  self->getAction()->exprQ.push_back(timestamp);
 }
 
 struct s3select_csv_definitions //TODO 
