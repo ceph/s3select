@@ -12,8 +12,10 @@ modify_end_point_on_hive_properties()
   [ $# -lt 1 ] && echo type s3-endpoint-url && return
   root_dir
   export S3_ENDPOINT=$1
-  cat container/trino/trino/catalog/hive.properties  | awk -v x=${S3_ENDPOINT} '{if(/hive.s3.endpoint/){print "hive.s3.endpoint="x"\n";} else {print $0;}}' > /tmp/hive.properties
+  cat container/trino/trino/catalog/hive.properties  | awk -v x=${S3_ENDPOINT:-NO_SET} '{if(/hive.s3.endpoint/){print "hive.s3.endpoint="x"\n";} else {print $0;}}' > /tmp/hive.properties
   cp /tmp/hive.properties container/trino/trino/catalog/hive.properties
+  cat ./container/trino/hms_trino.yaml | awk -v x=${S3_ENDPOINT:-NOT_SET} '{if(/[ *]- S3_ENDPOINT/){print "\t- S3_ENDPOINT="x"\n";} else {print $0;}}' > /tmp/hms_trino.yaml
+  cp /tmp/hms_trino.yaml ./container/trino/hms_trino.yaml
   cd -
 }
 
