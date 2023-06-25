@@ -478,10 +478,21 @@ private:
   bool aggr_flow = false;
   bool m_json_query = false;
   std::set<base_statement*> m_ast_nodes_to_delete;
+  base_function* m_to_timestamp_for_clean = nullptr;
 
 #define BOOST_BIND_ACTION( push_name ) boost::bind( &push_name::operator(), g_ ## push_name, const_cast<s3select*>(&self), _1, _2)
 
 public:
+
+  std::set<base_statement*>& get_ast_nodes_to_delete()
+  {
+    return m_ast_nodes_to_delete;
+  }
+
+  base_function* & get_to_timestamp_for_clean()
+  {
+    return m_to_timestamp_for_clean;
+  }
 
   actionQ* getAction()
   {
@@ -682,6 +693,10 @@ public:
 	{//the json_variable_access object is allocated by S3SELECT_NEW. this object contains stl-vector that should be free 
 		x.first->~json_variable_access();
 	}
+  if(m_to_timestamp_for_clean)
+  { 
+    m_to_timestamp_for_clean->dtor(); //TODO : to use the m_ast_nodes_to_delete vector
+  }
   }
 
 #define JSON_ROOT_OBJECT "s3object[*]"
@@ -2106,6 +2121,10 @@ void push_string_to_time_constant::builder(s3select* self, const char* a, const 
   variable* var_string = S3SELECT_NEW(self, variable, token, variable::var_t::COLUMN_VALUE);
   variable* timestamp = S3SELECT_NEW(self, variable, token, variable::var_t::COLUMN_VALUE);
 
+  (self->get_to_timestamp_for_clean()) = to_timestamp;
+  var_string->push_for_cleanup(self->get_ast_nodes_to_delete());
+  timestamp->push_for_cleanup(self->get_ast_nodes_to_delete());
+  
   args.push_back(var_string);
 
   try {
