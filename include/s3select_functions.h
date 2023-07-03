@@ -419,8 +419,7 @@ public:
     return true;
   }
 
-  __function(const char* fname, s3select_functions* s3f) : name(fname), m_func_impl(nullptr), m_s3select_functions(s3f),m_is_aggregate_function(false) 
-  {}
+  __function(const char* fname, s3select_functions* s3f) : name(fname), m_func_impl(nullptr), m_s3select_functions(s3f),m_is_aggregate_function(false){set_operator_name(fname);}
 
   value& eval() override
   {
