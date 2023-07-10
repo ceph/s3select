@@ -1333,7 +1333,9 @@ public:
 
   void set_operator_name(const char* op)
   {
+#ifdef S3SELECT_PROF
     operator_name = op;
+#endif
   }
 
   virtual value& eval()
