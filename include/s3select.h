@@ -2435,7 +2435,7 @@ public:
 }; //base_s3object
 
 //TODO config / default-value
-#define CSV_INPUT_TYPE_RESPONSE_SIZE_LIMIT (4 * 1024)
+#define CSV_INPUT_TYPE_RESPONSE_SIZE_LIMIT (64 * 1024)
 class csv_object : public base_s3object
 {
 

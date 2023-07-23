@@ -1318,6 +1318,13 @@ TEST(TestS3selectFunctions, test_cast_expressions)
   std::string s3select_result_4 = run_s3select(input_query_4,input);
 
   ASSERT_EQ(s3select_result_3, s3select_result_4);
+
+  //testing the decimal operator for precision setting
+  const std::string input_query_5 = "select cast(1.123456789 as decimal(9,1)) from s3object limit 1;";
+
+  std::string s3select_result_5 = run_s3select(input_query_5,input);
+
+  ASSERT_EQ(s3select_result_5, "1.123456789\n");
 }
 
 TEST(TestS3selectFunctions, test_version)
@@ -1357,6 +1364,14 @@ TEST(TestS3selectFunctions, multirow_datetime_to_string_dynamic)
   const std::string input_query = "select to_string(to_timestamp(_1), _2) from s3object;";
   std::string s3select_result = run_s3select(input_query, input);
   EXPECT_EQ(s3select_result, expected_res);
+}
+
+TEST(TestS3selectFunctions, backtick_on_timestamp)
+{
+  const std::string input = "1994-11-21T11:49:23Z";
+  const std::string input_query = "select count(0) from s3object where cast(_1 as timestamp) = `1994-11-21T11:49:23Z`;";
+  std::string s3select_result = run_s3select(input_query, input);
+  EXPECT_EQ(s3select_result, "1");
 }
 
 TEST(TestS3selectFunctions, test_date_time_expressions)
@@ -2343,7 +2358,7 @@ test_single_column_single_row( "select cast(5.123 as int) from stdin ;" ,"5\n");
 
 TEST(TestS3selectFunctions, castfloat)
 {
-test_single_column_single_row( "select cast(1.234 as float) from stdin ;" ,"1.234\n");
+test_single_column_single_row( "select cast(1.234 as FLOAT) from stdin ;" ,"1.234\n");
 }
 
 TEST(TestS3selectFunctions, castfloatoperation)
