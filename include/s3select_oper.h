@@ -147,7 +147,7 @@ public:
     _msg = n;
   }
 
-  virtual const char* what() const _GLIBCXX_NOTHROW
+  virtual const char* what() const noexcept
   {
     return _msg.c_str();
   }
