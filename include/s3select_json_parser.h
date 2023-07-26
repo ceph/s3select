@@ -515,6 +515,8 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     int m_current_depth;
     bool m_star_operation;
     int m_sql_processing_status;
+    bool m_fatal_initialization_ind = false;
+    std::string m_fatal_initialization_description;
 
     JsonParserHandler() : prefix_match(false),init_buffer_stream(false),m_start_row_depth(-1),m_current_depth(0),m_star_operation(false),m_sql_processing_status(0)
     {
@@ -722,6 +724,11 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     void set_star_operation()
     {
       m_star_operation = true;
+    }
+
+    bool is_fatal_initialization()
+    {
+      return m_fatal_initialization_ind;
     }
 
     int process_json_buffer(char* json_buffer,size_t json_buffer_sz, bool end_of_stream=false)

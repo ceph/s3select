@@ -2953,6 +2953,7 @@ public:
     if(m_init_json_processor_ind)
 	    return;
 
+    m_init_json_processor_ind = true;
     std::function<int(void)> f_sql = [this](void){auto res = sql_execution_on_row_cb();return res;};
     std::function<int(s3selectEngine::value&, int)> 
       f_push_to_scratch = [this](s3selectEngine::value& value,int json_var_idx){return push_into_scratch_area_cb(value,json_var_idx);};
@@ -2970,6 +2971,14 @@ public:
     JsonHandler.set_exact_match_callback(f_push_to_scratch);
     //upon star-operation(in statemenet) the callback pushes the key-path and value into scratch-area
     JsonHandler.set_push_per_star_operation_callback(f_push_key_value_into_scratch_area_per_star_operation);
+
+    //the json-from-clause is unique and should exist. otherwise it's a failure. 
+    if(query->getAction()->json_from_clause.empty())
+    {
+	JsonHandler.m_fatal_initialization_ind = true;
+	JsonHandler.m_fatal_initialization_description = "the SQL statement is not align with the correct syntax of JSON statement. from-clause is missing.";
+	return;
+    }
 
     //setting the from clause path 
     if(query->getAction()->json_from_clause[0] == JSON_ROOT_OBJECT)
@@ -2996,7 +3005,6 @@ public:
     }
 
     m_sa->set_parquet_type();//TODO json type
-    m_init_json_processor_ind = true;
   }
     
   json_object(s3select* query):base_s3object(query),m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false),m_init_json_processor_ind(false)
@@ -3087,6 +3095,11 @@ public:
     int status=0;
     m_processed_bytes += stream_length;
     set_sql_result(result);
+
+    if(JsonHandler.is_fatal_initialization())
+    {
+      throw base_s3select_exception(JsonHandler.m_fatal_initialization_description, base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
 
     if(!stream_length || !json_stream)//TODO m_processed_bytes(?)
     {//last processing cycle
