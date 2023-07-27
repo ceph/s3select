@@ -1175,6 +1175,12 @@ public:
   void update(std::vector<char*>& tokens, size_t num_of_tokens)
   {
     size_t i=0;
+    //increase the Vector::m_schema_values capacity(it should happen few times)
+    if ((*m_schema_values).capacity() < tokens.size())
+    {
+	  (*m_schema_values).resize( tokens.size() * 2 );
+    }
+
     for(auto s : tokens)
     {
       if (i>=num_of_tokens)
@@ -1229,6 +1235,13 @@ public:
     {
       max_json_idx = json_idx;
     }
+
+    //increase the Vector::m_schema_values capacity(it should happen few times)
+    if ((*m_schema_values).capacity() < static_cast<unsigned long long>(max_json_idx))
+    {
+	  (*m_schema_values).resize(max_json_idx * 2);
+    }
+
     (*m_schema_values)[ json_idx ] = v;
 
     if(json_idx>m_upper_bound)
@@ -1250,6 +1263,12 @@ public:
     parquet_file_parser::column_pos_t::iterator column_pos_iter = column_positions.begin();
     m_upper_bound =0;
     buff_loc=0;
+
+    //increase the Vector::m_schema_values capacity(it should happen few times)
+    if ((*m_schema_values).capacity() < parquet_row_value.size())
+    {
+	  (*m_schema_values).resize(parquet_row_value.size() * 2);
+    }
 
     for(auto v : parquet_row_value)
     {
