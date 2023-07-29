@@ -695,7 +695,7 @@ public:
 	}
   if(m_to_timestamp_for_clean)
   { 
-    m_to_timestamp_for_clean->dtor(); //TODO : to use the m_ast_nodes_to_delete vector
+    m_to_timestamp_for_clean->dtor();
   }
   }
 
