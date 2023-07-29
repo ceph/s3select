@@ -1368,7 +1368,7 @@ TEST(TestS3selectFunctions, multirow_datetime_to_string_dynamic)
 
 TEST(TestS3selectFunctions, backtick_on_timestamp)
 {
-  const std::string input = "1994-11-21T11:49:23Z";
+  const std::string input = "1994-11-21T11:49:23Z\n";
   const std::string input_query = "select count(0) from s3object where cast(_1 as timestamp) = `1994-11-21T11:49:23Z`;";
   std::string s3select_result = run_s3select(input_query, input);
   EXPECT_EQ(s3select_result, "1");
