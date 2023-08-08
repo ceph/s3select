@@ -1144,7 +1144,7 @@ public:
   json_star_op_cont_t m_json_star_operation;
 
   scratch_area():m_upper_bound(-1),parquet_type(false),buff_loc(0),max_json_idx(-1)
-  {//TODO it should resize dynamicly
+  {
     m_schema_values = new std::vector<value>(128,value(nullptr));
   }
 
@@ -1215,12 +1215,22 @@ public:
   }
 
   void get_column_value(uint16_t column_pos, value &v)
-  {// TODO handle out of boundaries
+  {
+    if (column_pos > ((*m_schema_values).size()-1))
+    {
+      throw base_s3select_exception("accessing scratch buffer byound its size");
+    }
+
     v = (*m_schema_values)[ column_pos ];
   }
 
   value* get_column_value(uint16_t column_pos)
   {
+    if (column_pos > ((*m_schema_values).size()-1))
+    {
+      throw base_s3select_exception("accessing scratch buffer byound its size");
+    }
+
     return &(*m_schema_values)[ column_pos ];
   }
   
@@ -1268,6 +1278,11 @@ public:
     if ((*m_schema_values).capacity() < parquet_row_value.size())
     {
 	  (*m_schema_values).resize(parquet_row_value.size() * 2);
+    }
+
+    if (*column_pos_iter > ((*m_schema_values).size()-1))
+    {
+      throw base_s3select_exception("accessing scratch buffer byound its size");
     }
 
     for(auto v : parquet_row_value)
