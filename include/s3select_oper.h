@@ -2260,6 +2260,7 @@ public:
   //TODO add semantic to base-function , it operate once on function creation
   // validate semantic on creation instead on run-time
   virtual bool operator()(bs_stmt_vec_t* args, variable* result) = 0;
+  std::string m_function_name;
   base_function() : aggregate(false) {}
   bool is_aggregate() const
   {
@@ -2274,6 +2275,27 @@ public:
     this->~base_function();
   }
 
+  void check_args_size(bs_stmt_vec_t* args, uint16_t required, const char* error_msg)
+  {//verify for atleast required parameters
+    if(args->size() < required)
+    {
+      throw base_s3select_exception(error_msg,base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
+  }
+
+  void check_args_size(bs_stmt_vec_t* args,uint16_t required)
+  {
+    if(args->size() < required)
+    {
+      std::string error_msg = m_function_name + " requires for " + std::to_string(required) + " arguments";
+      throw base_s3select_exception(error_msg,base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
+  }
+
+  void set_function_name(const char* name)
+  {
+    m_function_name.assign(name);
+  }
 };
 
 class base_date_extract : public base_function

@@ -370,7 +370,7 @@ private:
     }
     m_func_impl = f;
     m_is_aggregate_function= m_func_impl->is_aggregate();
-
+    f->set_function_name(name.c_str());
   }
 
 public:
@@ -497,6 +497,8 @@ struct _fn_add : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,2);
+
     auto iter = args->begin();
     base_statement* x =  *iter;
     iter++;
@@ -522,6 +524,8 @@ struct _fn_sum : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     auto iter = args->begin();
     base_statement* x = *iter;
 
@@ -593,6 +597,8 @@ struct _fn_avg : public base_function
 
     bool operator()(bs_stmt_vec_t* args, variable *result) override
     {
+	check_args_size(args,1);
+
         auto iter = args->begin();
         base_statement *x = *iter;
 
@@ -631,6 +637,8 @@ struct _fn_min : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     auto iter = args->begin();
     base_statement* x =  *iter;
 
@@ -661,6 +669,8 @@ struct _fn_max : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     auto iter = args->begin();
     base_statement* x =  *iter;
 
@@ -685,6 +695,8 @@ struct _fn_to_int : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     value v = (*args->begin())->eval();
 
     switch (v.type) {
@@ -730,6 +742,8 @@ struct _fn_to_float : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     value v = (*args->begin())->eval();
 
     switch (v.type) {
@@ -1478,6 +1492,8 @@ struct _fn_isnull : public base_function
   
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     auto iter = args->begin();
     base_statement* expr = *iter;
     value expr_val = expr->eval();
@@ -1516,6 +1532,8 @@ struct _fn_in : public base_function
 
   bool operator()(bs_stmt_vec_t *args, variable *result) override
   {
+    check_args_size(args,1);
+
     int args_size = static_cast<int>(args->size()-1);
     base_statement *main_expr = (*args)[args_size];
     value main_expr_val = main_expr->eval();
@@ -1565,6 +1583,8 @@ struct _fn_like : public base_like
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,3);
+
     auto iter = args->begin();
 
     base_statement* escape_expr = *iter;
@@ -1723,6 +1743,8 @@ struct _fn_charlength : public base_function {
  
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
+	check_args_size(args,1);
+
         auto iter = args->begin();
         base_statement* str =  *iter;
         v_str = str->eval();
@@ -1734,7 +1756,7 @@ struct _fn_charlength : public base_function {
             return true; 
             }
         }
-    };
+};
 
 struct _fn_lower : public base_function {
 
@@ -1743,6 +1765,8 @@ struct _fn_lower : public base_function {
 
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
+	check_args_size(args,1);
+
         auto iter = args->begin();
         base_statement* str = *iter;
         v_str = str->eval();
@@ -1764,6 +1788,8 @@ struct _fn_upper : public base_function {
 
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
+	check_args_size(args,1);
+
         auto iter = args->begin();
         base_statement* str = *iter;
         v_str = str->eval();
@@ -1828,6 +1854,8 @@ struct _fn_when_then : public base_function {
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,2);
+
     auto iter = args->begin();
 
     base_statement* then_expr = *iter;
@@ -1857,6 +1885,8 @@ struct _fn_when_value_then : public base_function {
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,3);
+
     auto iter = args->begin();
 
     base_statement* then_expr = *iter;
@@ -1888,6 +1918,8 @@ struct _fn_case_when_else : public base_function {
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     base_statement* else_expr = *(args->begin());
 
     size_t args_size = args->size() -1;
@@ -1916,6 +1948,8 @@ struct _fn_coalesce : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     auto iter_begin = args->begin();
     int args_size = args->size();
     while (args_size >= 1)
@@ -1941,6 +1975,8 @@ struct _fn_string : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     auto iter = args->begin();
 
     base_statement* expr = *iter;
@@ -1957,6 +1993,8 @@ struct _fn_to_bool : public base_function
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
+    check_args_size(args,1);
+
     int64_t i=0;
     func_arg = (*args->begin())->eval();
 
@@ -1997,6 +2035,8 @@ struct _fn_trim : public base_function {
 
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
+	check_args_size(args,1);
+
     	auto iter = args->begin();
     	int args_size = args->size();
     	base_statement* str = *iter;
@@ -2030,6 +2070,8 @@ struct _fn_leading : public base_function {
 
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
+	check_args_size(args,1);
+
     	auto iter = args->begin();
     	int args_size = args->size();
     	base_statement* str = *iter;
@@ -2062,6 +2104,8 @@ struct _fn_trailing : public base_function {
 
     bool operator()(bs_stmt_vec_t* args, variable* result) override
     {
+	check_args_size(args,1);
+
     	auto iter = args->begin();
     	int args_size = args->size();
     	base_statement* str = *iter;
@@ -2089,6 +2133,7 @@ struct _fn_cast_to_decimal : public base_function {
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     //cast(expr as decimal(x,y))
+    check_args_size(args,2);
 
     base_statement* expr = (*args)[1];
     //expr_val should be float or integer
@@ -2118,6 +2163,8 @@ struct _fn_decimal_operator : public base_function {
   bool operator()(bs_stmt_vec_t* args, variable* result) override
   {
     //decimal(x,y) operator
+    check_args_size(args,2);
+
     auto iter = args->begin();
     base_statement* expr_precision = *iter;
     value expr_precision_val = expr_precision->eval();
