@@ -1218,7 +1218,7 @@ public:
   {
     if (column_pos > ((*m_schema_values).size()-1))
     {
-      throw base_s3select_exception("accessing scratch buffer byound its size");
+      throw base_s3select_exception("accessing scratch buffer beyond its size");
     }
 
     v = (*m_schema_values)[ column_pos ];
@@ -1228,7 +1228,7 @@ public:
   {
     if (column_pos > ((*m_schema_values).size()-1))
     {
-      throw base_s3select_exception("accessing scratch buffer byound its size");
+      throw base_s3select_exception("accessing scratch buffer beyond its size");
     }
 
     return &(*m_schema_values)[ column_pos ];
@@ -1282,7 +1282,7 @@ public:
 
     if (*column_pos_iter > ((*m_schema_values).size()-1))
     {
-      throw base_s3select_exception("accessing scratch buffer byound its size");
+      throw base_s3select_exception("accessing scratch buffer beyond its size");
     }
 
     for(auto v : parquet_row_value)
