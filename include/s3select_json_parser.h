@@ -166,6 +166,7 @@ private:
 std::vector<std::string>* from_clause;
 std::vector<std::string>* key_path;
 int* m_current_depth;
+int* m_current_depth_non_anonymous;
 std::function <int(s3selectEngine::value&,int)>* m_exact_match_cb;
 //  a state number : (_1).a.b.c[ 17 ].d.e (a.b)=1 (c[)=2  (17)=3 (.d.e)=4
 size_t current_state;//contain the current state of the state machine for searching-expression (each JSON variable in SQL statement has a searching expression)
@@ -184,19 +185,21 @@ std::vector<struct variable_state_md> variable_states;//vector is populated upon
 
 public:
 
-json_variable_access():from_clause(nullptr),key_path(nullptr),m_current_depth(nullptr),m_exact_match_cb(nullptr),current_state(-1),nested_array_level(0)
+json_variable_access():from_clause(nullptr),key_path(nullptr),m_current_depth(nullptr),m_current_depth_non_anonymous(nullptr),m_exact_match_cb(nullptr),current_state(-1),nested_array_level(0)
 {}
 
 void init(
 	  std::vector<std::string>* reader_from_clause,
 	  std::vector<std::string>* reader_key_path,
 	  int* reader_current_depth,
+	  int* reader_m_current_depth_non_anonymous,
 	  std::function <int(s3selectEngine::value&,int)>* excat_match_cb)
 {//this routine should be called before scanning the JSON input
   from_clause = reader_from_clause;
   key_path = reader_key_path;
   m_exact_match_cb = excat_match_cb;
   m_current_depth = reader_current_depth;
+  m_current_depth_non_anonymous = reader_m_current_depth_non_anonymous;
   current_state = 0;
 
   //loop on variable_states compute required_depth_size
@@ -249,23 +252,23 @@ void push_variable_state(std::vector<std::string>& required_path,int required_ar
 
 struct variable_state_md& reader_position_state()
 {
-	if (current_state>=variable_states.size())
-	{
-		const char* out_of_range = "\nJSON reader failed due to array-out-of-range\n";
-		throw s3selectEngine::base_s3select_exception(out_of_range,s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);
-	}
+  if (current_state>=variable_states.size())
+  {
+    const char* out_of_range = "\nJSON reader failed due to array-out-of-range\n";
+    throw s3selectEngine::base_s3select_exception(out_of_range,s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);
+  }
 
   return variable_states[ current_state ];
 }
 
 bool is_array_state()
 {
-  return (reader_position_state().required_array_entry_no>=0);
+  return (reader_position_state().required_array_entry_no >= 0);
 }
 
 bool is_reader_located_on_required_depth()
 {
-  return (*m_current_depth == reader_position_state().required_depth_size);
+  return ((*m_current_depth_non_anonymous - static_cast<int>(from_clause->size())) == reader_position_state().required_depth_size);
 }
 
 bool is_on_final_state()
@@ -295,7 +298,7 @@ bool is_reader_located_on_array_according_to_current_state()
 
 bool is_reader_position_depth_lower_than_required()
 {
-  return (*m_current_depth < reader_position_state().required_depth_size);
+  return ( ( (*m_current_depth_non_anonymous - static_cast<int>(from_clause->size())) < reader_position_state().required_depth_size) );
 }
 
 bool is_reader_located_on_array_entry_according_to_current_state()
@@ -432,6 +435,7 @@ class json_variables_operations {
 		  std::vector <std::string>* from_clause,
 		  std::vector<std::string>* key_path,
 		  int* current_depth,
+		  int* current_depth_non_anonymous,
 		  std::function <int(s3selectEngine::value&,int)>* exact_match_cb)
 	{
 	  json_statement_variables = jsv;
@@ -441,6 +445,7 @@ class json_variables_operations {
 	    var.first->init(from_clause,
 		      key_path,
 		      current_depth,
+		      current_depth_non_anonymous,
 		      exact_match_cb);
 	  }
 	}
@@ -513,12 +518,13 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     std::function<int(void)> m_s3select_processing;
     int m_start_row_depth;   
     int m_current_depth;
+    int m_current_depth_non_anonymous;
     bool m_star_operation;
     int m_sql_processing_status;
     bool m_fatal_initialization_ind = false;
     std::string m_fatal_initialization_description;
 
-    JsonParserHandler() : prefix_match(false),init_buffer_stream(false),m_start_row_depth(-1),m_current_depth(0),m_star_operation(false),m_sql_processing_status(0)
+    JsonParserHandler() : prefix_match(false),init_buffer_stream(false),m_start_row_depth(-1),m_current_depth(0),m_current_depth_non_anonymous(0),m_star_operation(false),m_sql_processing_status(0)
     {
     } 
 
@@ -615,7 +621,11 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 
     bool Key(const char* str, rapidjson::SizeType length, bool copy) {
       key_path.push_back(std::string(str));
-      
+     
+      if(!m_current_depth_non_anonymous){
+	m_current_depth_non_anonymous++;
+      } 
+
       if(from_clause.size() == 0 || std::equal(key_path.begin(), key_path.end(), from_clause.begin(), from_clause.end(), iequal_predicate)) {
         prefix_match = true;
       }
@@ -633,9 +643,13 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 	return false;
     }
 
-    bool StartObject() {      
+    bool StartObject() { 
 	json_element_state.push_back(OBJECT_STATE);
 	m_current_depth++;
+	if(key_path.size()){
+	  m_current_depth_non_anonymous++;
+	}
+
         if (prefix_match && !is_already_row_started()) {
           state = row_state::OBJECT_START_ROW;
 	  m_start_row_depth = m_current_depth;
@@ -648,6 +662,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     bool EndObject(rapidjson::SizeType memberCount) {
       json_element_state.pop_back();
       m_current_depth --;
+      m_current_depth_non_anonymous --;
 
       variable_match_operations.end_object();
       
@@ -662,6 +677,10 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     bool StartArray() {
       json_element_state.push_back(ARRAY_STATE);
       m_current_depth++;
+      if(key_path.size()){
+	  m_current_depth_non_anonymous++;
+      }
+
       if (prefix_match && !is_already_row_started()) {
           state = row_state::ARRAY_START_ROW;
 	  m_start_row_depth = m_current_depth;
@@ -675,6 +694,8 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     bool EndArray(rapidjson::SizeType elementCount) { 
       json_element_state.pop_back();
       m_current_depth--;
+      m_current_depth_non_anonymous--;
+
       dec_key_path();
 
       if (state == row_state::ARRAY_START_ROW && (m_start_row_depth > m_current_depth)) {
@@ -703,6 +724,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 			  &from_clause,
 			  &key_path,
 			  &m_current_depth,
+			  &m_current_depth_non_anonymous,
 			  &m_exact_match_cb);
     }
 
