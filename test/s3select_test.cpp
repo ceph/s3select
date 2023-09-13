@@ -3352,4 +3352,34 @@ std::string input_json_data = R"(
   input_query = "select _1.phoneNumbers[11] from s3object[*];";
   run_json_query(input_query.c_str(), input_json_data, result);
   ASSERT_EQ(result,expected_result);
+
+input_json_data = R"(
+[
+  {
+    "authors": [
+      {
+        "id": 2312688602
+      },
+      {
+        "id": 123
+      }
+    ],
+    "wrong" : {"id" : "it-is-wrong"}
+  }
+]
+)";
+
+  expected_result=R"(2312688602
+)";
+  input_query = "select _1.authors[0].id from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(123
+)";
+  input_query = "select _1.authors[1].id from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+
  }
