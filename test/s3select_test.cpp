@@ -3318,14 +3318,12 @@ std::string input_json_data = R"(
 }
 )";
 
-#if 0
-  //TODO error phoneNumbers[12][2][2] = null, to check what happen upon reaching the final state
-  expected_result=R"(post 3D
+  expected_result=R"(null
 )";
+  //phoneNumbers[12][2][2] is not a discrete value, should return null
   input_query = "select _1.phoneNumbers[12][2][2] from s3object[*];";
   run_json_query(input_query.c_str(), input_json_data, result);
   ASSERT_EQ(result,expected_result);
-#endif 
 
   //the following tests ia about accessing multi-dimension array
   expected_result=R"(55

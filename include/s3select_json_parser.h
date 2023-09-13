@@ -176,6 +176,9 @@ std::function <int(s3selectEngine::value&,int)>* m_exact_match_cb;
 //  a state number : (_1).a.b.c[ 17 ].d.e (a.b)=1 (c[)=2  (17)=3 (.d.e)=4
 size_t current_state;//contain the current state of the state machine for searching-expression (each JSON variable in SQL statement has a searching expression)
 int nested_array_level;//in the case of array within array it contain the nesting level
+int m_json_index;
+s3selectEngine::value v_null;
+size_t m_from_clause_size;
 
 struct variable_state_md {
     std::vector<std::string> required_path;//set by the syntax-parser. in the case of array its empty
@@ -190,7 +193,7 @@ std::vector<struct variable_state_md> variable_states;//vector is populated upon
 
 public:
 
-json_variable_access():from_clause(nullptr),key_path(nullptr),m_current_depth(nullptr),m_current_depth_non_anonymous(nullptr),m_exact_match_cb(nullptr),current_state(-1),nested_array_level(0)
+json_variable_access():from_clause(nullptr),key_path(nullptr),m_current_depth(nullptr),m_current_depth_non_anonymous(nullptr),m_exact_match_cb(nullptr),current_state(-1),nested_array_level(0),m_json_index(-1),v_null(nullptr),m_from_clause_size(0)
 {}
 
 void init(
@@ -198,7 +201,8 @@ void init(
 	  std::vector<std::string>* reader_key_path,
 	  int* reader_current_depth,
 	  int* reader_m_current_depth_non_anonymous,
-	  std::function <int(s3selectEngine::value&,int)>* excat_match_cb)
+	  std::function <int(s3selectEngine::value&,int)>* excat_match_cb,
+	  int json_index)
 {//this routine should be called before scanning the JSON input
   from_clause = reader_from_clause;
   key_path = reader_key_path;
@@ -207,6 +211,8 @@ void init(
   m_current_depth = reader_current_depth;
   m_current_depth_non_anonymous = reader_m_current_depth_non_anonymous;
   current_state = 0;
+  m_json_index = json_index;
+  m_from_clause_size = from_clause->size();
 
   //loop on variable_states compute required_depth_size
 }
@@ -259,9 +265,10 @@ void push_variable_state(std::vector<std::string>& required_path,int required_ar
 struct variable_state_md& reader_position_state()
 {
   if (current_state>=variable_states.size())
-  {
-    const char* out_of_range = "\nJSON reader failed due to array-out-of-range\n";
-    throw s3selectEngine::base_s3select_exception(out_of_range,s3selectEngine::base_s3select_exception::s3select_exp_en_t::FATAL);
+  {//in case the state-machine reached a "dead-end", should push a null for that JSON variable
+	//going back one state.
+	(*m_exact_match_cb)(v_null,m_json_index);
+	decrease_current_state();
   }
 
   return variable_states[ current_state ];
@@ -276,22 +283,17 @@ bool is_reader_located_on_required_depth()
 {
   //upon user request `select _1.a.b from s3object[*].c.d;` the c.d sould "cut off" from m_current_depth_non_anonymous
   //to get the correct depth of the state-machine
-  return ((*m_current_depth_non_anonymous - static_cast<int>(from_clause->size())) == reader_position_state().required_depth_size);
+  return ((*m_current_depth_non_anonymous - static_cast<int>(m_from_clause_size)) == reader_position_state().required_depth_size);
 }
 
 bool is_on_final_state()
 {
-  return ((size_t)current_state == (variable_states.size()));  
+  return (current_state == (variable_states.size()));  
 	  //&& *m_current_depth == variable_states[ current_state -1 ].required_depth_size); 
 	  
 	  // NOTE: by ignoring the current-depth, the matcher gives precedence to key-path match, while not ignoring accessing using array
 	  // meaning, upon requeting a.b[12] , the [12] is not ignored, the a<-->b distance should be calculated as key distance, i.e. not counting array/object with *no keys*.
 	  // user may request 'select _1.phonearray.num'; the reader will traverse `num` exist in `phonearray`
-}
-
-bool is_reader_reached_required_array_entry()
-{
- return (reader_position_state().actual_array_entry_no == reader_position_state().required_array_entry_no); 
 }
 
 bool is_reader_passed_required_array_entry()
@@ -308,7 +310,7 @@ bool is_reader_position_depth_lower_than_required()
 {
   //upon user request `select _1.a.b from s3object[*].c.d;` the c.d sould "cut off" from m_current_depth_non_anonymous
   //to have the correct depth of the state-machine
-  return ( ( (*m_current_depth_non_anonymous - static_cast<int>(from_clause->size())) < reader_position_state().required_depth_size) );
+  return ((*m_current_depth_non_anonymous - static_cast<int>(m_from_clause_size)) < reader_position_state().required_depth_size);
 }
 
 bool is_reader_located_on_array_entry_according_to_current_state()
@@ -320,7 +322,7 @@ void increase_current_state()
 {
   DBG
 
-  if((size_t)current_state >= (variable_states.size())) return;
+  if(current_state >= variable_states.size()) return;
   current_state ++;
 }
 
@@ -336,8 +338,8 @@ void key()
 {
   DBG
 
-  if(reader_position_state().required_path.size())//state has a key
-  {// key should match
+  if(reader_position_state().required_path.size())//current state is a key
+  {
     std::vector<std::string>* filter = &reader_position_state().required_path;
     auto required_key_depth_size = reader_position_state().required_key_depth_size;
     if(std::equal((*key_path).begin()+(*from_clause).size() + required_key_depth_size, //key-path-start-point + from-clause-depth-size + key-depth
@@ -345,7 +347,7 @@ void key()
 		  (*filter).begin(),
 		  (*filter).end(), iequal_predicate))
     {
-      increase_current_state();//key match, advancing to next
+      increase_current_state();//key match according to user request, advancing to the next state
     }
   }
 }
@@ -371,7 +373,7 @@ void dec_key()
 
   if(is_reader_located_on_required_depth() && is_array_state())//TODO && is_array_state().  is it necessary?; json_element_state.back() != ARRAY_STATE)
   {//key-path-depth matches, and it an array
-    if(is_reader_reached_required_array_entry())
+    if(is_reader_located_on_array_entry_according_to_current_state())
     {//we reached the required array entry
       increase_current_state();
     } 
@@ -382,14 +384,14 @@ void dec_key()
   }
 }
 
-void new_value(s3selectEngine::value& v,size_t json_index)
+void new_value(s3selectEngine::value& v)
 {
   DBG
 
   if(is_on_final_state())
   {
-    (*m_exact_match_cb)(v, json_index);
-    decrease_current_state();//TODO why decrease? the state-machine reached its final destination, and it should be only one result
+    (*m_exact_match_cb)(v, m_json_index);
+    decrease_current_state();//the state-machine reached its final destination, "going back" one state, upon another match condition the matched value will override the last one
   } 
   increase_array_index();//next-value in array
 }
@@ -449,14 +451,14 @@ class json_variables_operations {
 		  std::function <int(s3selectEngine::value&,int)>* exact_match_cb)
 	{
 	  json_statement_variables = jsv;
-
+	  int i=0;//the index per JSON variable
 	  for(auto& var : json_statement_variables)
 	  {
 	    var.first->init(from_clause,
 		      key_path,
 		      current_depth,
 		      current_depth_non_anonymous,
-		      exact_match_cb);
+		      exact_match_cb,i++);
 	  }
 	}
 
@@ -499,7 +501,7 @@ class json_variables_operations {
 	{
 	    for(auto& j : json_statement_variables)
 	    {
-	      j.first->new_value(v,j.second);
+	      j.first->new_value(v);
 	    }
 	}
 };//json_variables_operations
