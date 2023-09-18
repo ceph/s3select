@@ -2499,6 +2499,7 @@ private:
   std::string m_last_line;
   size_t m_processed_bytes;
   int64_t m_number_of_tokens;
+  size_t m_skip_x_first_bytes=0;
 
   std::function<int(std::string&)> fp_s3select_result_format=nullptr;
   std::function<int(std::string&)> fp_s3select_header_format=nullptr;
@@ -2651,6 +2652,7 @@ private:
       merge_line = m_last_line + tmp_buff + m_csv_defintion.row_delimiter;
       m_previous_line = false;
       m_skip_first_line = true;
+      m_skip_x_first_bytes = tmp_buff.size()+1;
 
       //processing the merged row (previous broken row)
       run_s3select_on_object(result, merge_line.c_str(), merge_line.length(), false, false, false);
@@ -2685,6 +2687,12 @@ public:
     m_is_to_aggregate = do_aggregate;
     m_skip_last_line = skip_last_line;
 
+    if(skip_first_line)
+    {
+      m_stream += m_skip_x_first_bytes;
+      m_skip_x_first_bytes=0;
+    }
+
     CSVParser _csv_parser("csv", m_stream, m_end_stream);
     csv_parser = &_csv_parser;
     csv_parser->set_csv_def(	m_csv_defintion.row_delimiter, 
@@ -2700,12 +2708,6 @@ public:
     {
       extract_csv_header_info();
     }
-
-    if(skip_first_line)
-    {
-      csv_parser->next_line();
-    }
-
     do
     {
       m_sql_processing_status = Status::INITIAL_STAT;
