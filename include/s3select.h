@@ -2689,6 +2689,9 @@ public:
 
     if(skip_first_line)
     {
+      //the stream may start in the middle of a row (maybe in the middle of a quote).
+      //at this point the stream should skip the first row(broken row).
+      //the csv_parser should be init with the fixed stream position. 
       m_stream += m_skip_x_first_bytes;
       m_skip_x_first_bytes=0;
     }
