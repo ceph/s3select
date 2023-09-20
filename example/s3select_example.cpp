@@ -385,11 +385,14 @@ int process_json_query(const char* input_query,const char* fname)
   std::string buff(BUFFER_SIZE,0);
   std::string result;
 
-  size_t read_sz = input_file_stream.readsome(buff.data(),BUFFER_SIZE);
 
+  size_t read_sz = input_file_stream.read(buff.data(),BUFFER_SIZE).gcount();
+  int chunk_count=0;
+  size_t bytes_read=0;
   while(read_sz)
   {
-    std::cout << "read next chunk " << read_sz << std::endl;
+    bytes_read += read_sz;
+    std::cout << "read next chunk " << chunk_count++ << ":" << read_sz << ":" << bytes_read << "\r";
     result.clear();
 
     try{
@@ -403,7 +406,10 @@ int process_json_query(const char* input_query,const char* fname)
       }
   }
 
-    std::cout << result << std::endl;
+    if(result.size())
+    {
+	std::cout << result << std::endl;
+    }
  
     if(status<0)
     {
@@ -415,7 +421,7 @@ int process_json_query(const char* input_query,const char* fname)
       std::cout << "json processing reached limit " << std::endl;
       break;
     }
-    read_sz = input_file_stream.readsome(buff.data(),BUFFER_SIZE);  
+    read_sz = input_file_stream.read(buff.data(),BUFFER_SIZE).gcount();  
   }
   try{
     	result.clear();
@@ -430,7 +436,6 @@ int process_json_query(const char* input_query,const char* fname)
   }
 
   std::cout << result << std::endl;
-
   return 0;
 }
 
@@ -621,7 +626,7 @@ int run_on_single_query(const char* fname, const char* query)
   std::string buff(BUFFER_SIZE,0);
   while (1)
   {
-    size_t read_sz = input_file_stream.readsome(buff.data(),BUFFER_SIZE);
+    size_t read_sz = input_file_stream.read(buff.data(),BUFFER_SIZE).gcount();
 
     status = awscli->run_s3select(query, buff.data(), read_sz, file_sz);
     if(status<0)
