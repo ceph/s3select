@@ -517,9 +517,10 @@ struct _fn_sum : public base_function
 
   value sum;
 
-  _fn_sum() : sum(0)
+  _fn_sum()
   {
     aggregate = true;
+    sum.setnull();
   }
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
@@ -531,6 +532,10 @@ struct _fn_sum : public base_function
 
     try
     {
+      if(sum.is_null())
+      {
+	sum = 0;
+      }
       sum = sum + x->eval();
     }
     catch (base_s3select_exception& e)
@@ -618,7 +623,9 @@ struct _fn_avg : public base_function
     void get_aggregate_result(variable *result) override
     {
         if(count == static_cast<value>(0)) {
-            throw base_s3select_exception("count cannot be zero!");
+            value v_null;
+	    v_null.setnull();
+            *result=v_null;
         } else {
             *result = sum/count ;
         }
@@ -630,9 +637,10 @@ struct _fn_min : public base_function
 
   value min;
 
-  _fn_min():min(__INT64_MAX__)
+  _fn_min()
   {
     aggregate=true;
+    min.setnull();
   }
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
@@ -642,7 +650,7 @@ struct _fn_min : public base_function
     auto iter = args->begin();
     base_statement* x =  *iter;
 
-    if(min > x->eval())
+    if(min.is_null() || min > x->eval())
     {
       min=x->eval();
     }
@@ -662,9 +670,10 @@ struct _fn_max : public base_function
 
   value max;
 
-  _fn_max():max(-__INT64_MAX__)
+  _fn_max()
   {
     aggregate=true;
+    max.setnull();
   }
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
@@ -674,7 +683,7 @@ struct _fn_max : public base_function
     auto iter = args->begin();
     base_statement* x =  *iter;
 
-    if(max < x->eval())
+    if(max.is_null() || max < x->eval())
     {
       max=x->eval();
     }
@@ -694,7 +703,7 @@ struct _fn_to_int : public base_function
   value var_result;
 
   bool operator()(bs_stmt_vec_t* args, variable* result) override
-  {
+  { 
     check_args_size(args,1);
 
     value v = (*args->begin())->eval();

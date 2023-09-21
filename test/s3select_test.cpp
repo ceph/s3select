@@ -988,8 +988,8 @@ TEST(TestS3selectFunctions, avgzero)
         false, // dont skip last line
         true   // aggregate call
         ); 
-    ASSERT_EQ(status, -1);
-    ASSERT_EQ(s3select_result, std::string(""));
+    ASSERT_EQ(status, 0);
+    ASSERT_EQ(s3select_result, std::string("null"));
 }
 
 TEST(TestS3selectFunctions, floatavg)
