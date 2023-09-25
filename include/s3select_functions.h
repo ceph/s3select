@@ -235,7 +235,8 @@ enum class s3select_func_En_t {ADD,
                                LEADING,
                                TRAILING,
                                DECIMAL_OPERATOR,
-                               CAST_TO_DECIMAL
+                               CAST_TO_DECIMAL,
+			       ENGINE_VERSION
                               };
 
 
@@ -306,7 +307,8 @@ private:
     {"#leading#", s3select_func_En_t::LEADING},
     {"#trailing#", s3select_func_En_t::TRAILING},
     {"#decimal_operator#", s3select_func_En_t::DECIMAL_OPERATOR},
-    {"#cast_as_decimal#", s3select_func_En_t::CAST_TO_DECIMAL}
+    {"#cast_as_decimal#", s3select_func_En_t::CAST_TO_DECIMAL},
+    {"engine_version", s3select_func_En_t::ENGINE_VERSION}
 
   };
 
@@ -2191,6 +2193,32 @@ struct _fn_decimal_operator : public base_function {
   }
 };
 
+struct _fn_engine_version : public base_function {
+
+  const char* version_description =R"(PR #137 : 
+the change handle the use cases where the JSON input starts with an anonymous array/object this may cause wrong search result per the user request(SQL statement) 
+
+handle the use-case where the user requests a json-key-path that may point to a non-discrete value. i.e. array or an object. 
+editorial changes.
+
+fix for CSV flow, in the case of a "broken row" (upon processing stream of data) 
+
+null results upon aggregation functions on an empty group (no match for where clause).
+)";
+
+
+  _fn_engine_version()
+  {
+    aggregate = true;
+  }
+
+  bool operator()(bs_stmt_vec_t* args, variable* result) override
+  {
+    result->set_value(version_description);
+    return true;
+  }
+};
+
 base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt_vec_t &arguments)
 {
   const FunctionLibrary::const_iterator iter = m_functions_library.find(fn_name.data());
@@ -2426,6 +2454,10 @@ base_function* s3select_functions::create(std::string_view fn_name,const bs_stmt
 
   case  s3select_func_En_t::CAST_TO_DECIMAL:
     return S3SELECT_NEW(this,_fn_cast_to_decimal);
+    break;
+
+  case  s3select_func_En_t::ENGINE_VERSION:
+    return S3SELECT_NEW(this,_fn_engine_version);
     break;
 
   default:
