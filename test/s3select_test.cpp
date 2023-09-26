@@ -734,6 +734,69 @@ TEST(TestS3selectFunctions, count)
   ASSERT_EQ(s3select_result_1,"128"); 
 }
 
+TEST(TestS3selectFunctions, no_args)
+{//note: engine throw an exception(and description), currently it is not catch in this test-app
+#if 0
+  std::string input;
+  size_t size = 128;
+  generate_columns_csv(input, size);
+  std::string input_query_1 = "select min() from stdin;";
+
+  std::string s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,""); 
+
+  input_query_1 = "select max() from stdin;";
+
+  s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,""); 
+
+  input_query_1 = "select avg() from stdin;";
+
+  s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,""); 
+
+  input_query_1 = "select sum() from stdin;";
+
+  s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,""); 
+#endif
+}
+
+TEST(TestS3selectFunctions, empty_group_upon_aggtegation)
+{
+
+  std::string input;
+  size_t size = 128;
+  generate_columns_csv(input, size);
+  std::string input_query_1 = "select min(cast(_1 as int)) from stdin where 1 = 0;";
+
+  std::string s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,"null"); 
+
+  input_query_1 = "select max(cast(_1 as int)) from stdin where 1 = 0;";
+
+  s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,"null"); 
+
+  input_query_1 = "select sum(cast(_1 as int)) from stdin where 1 = 0;";
+
+  s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,"null"); 
+
+  input_query_1 = "select avg(cast(_1 as int)) from stdin where 1 = 0;";
+
+  s3select_result_1 = run_s3select(input_query_1,input);
+
+  ASSERT_EQ(s3select_result_1,"null"); 
+}
+
 TEST(TestS3selectFunctions, min)
 {
   std::string input;
