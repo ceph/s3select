@@ -7,6 +7,8 @@ root_dir()
 
 modify_end_point_on_hive_properties()
 {
+#not in use
+return;
 #TODO if ./trino/catalog/hive.properties exist
 
   [ $# -lt 1 ] && echo type s3-endpoint-url && return
@@ -28,7 +30,27 @@ trino_exec_command()
 boot_trino_hms()
 {
   root_dir
-  sudo docker compose -f ./container/trino/hms_trino.yaml up -d  
+  [ -z ${S3_ENDPOINT} ] && echo "missing end-variable S3_ENDPOINT (URL)" && return
+  [ -z ${S3_ACCESS_KEY} ] && echo missing end-variable S3_ACCESS_KEY && return
+  [ -z ${S3_SECRET_KEY} ] && echo missing end-variable S3_SECRET_KEY && return
+
+  # modify hms_trino.yaml according to user setup (environment variables)
+  cat ./container/trino/hms_trino.yaml | \
+  awk -v x=${S3_ENDPOINT:-NOT_SET} '{if(/- S3_ENDPOINT/){print "      - S3_ENDPOINT="x;} else {print $0;}}' | \
+  awk -v x=${S3_ACCESS_KEY:-NOT_SET} '{if(/- S3_ACCESS_KEY/){print "      - S3_ACCESS_KEY="x;} else {print $0;}}' | \
+  awk -v x=${S3_SECRET_KEY:-NOT_SET} '{if(/- S3_SECRET_KEY/){print "      - S3_SECRET_KEY="x;} else {print $0;}}' > /tmp/hms_trino.yaml
+  cp /tmp/hms_trino.yaml ./container/trino/hms_trino.yaml
+
+
+
+  # modify hive.properties according to user setup (environment variables)
+  cat container/trino/trino/catalog/hive.properties | \
+  awk -v x=${S3_ENDPOINT:-NO_SET} '{if(/hive.s3.endpoint/){print "hive.s3.endpoint="x"\n";} else {print $0;}}' | \
+  awk -v x=${S3_ACCESS_KEY:-NO_SET} '{if(/hive.s3.aws-access-key/){print "hive.s3.aws-access-key="x;} else {print $0;}}' | \
+  awk -v x=${S3_SECRET_KEY:-NO_SET} '{if(/hive.s3.aws-secret-key/){print "hive.s3.aws-secret-key="x;} else {print $0;}}' > /tmp/hive.properties
+  cp /tmp/hive.properties ./container/trino/trino/catalog/hive.properties
+
+  sudo docker compose -f ./container/trino/hms_trino.yaml up -d
   cd -
 }
 

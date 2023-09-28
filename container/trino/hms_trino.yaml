@@ -4,9 +4,10 @@ services:
     image: galsl/hms:dev
     container_name: hms
     environment:
-      # S3_ENDPOINT the CEPH/RGW end-point 
-      #- S3_ENDPOINT=172.21.48.86
-      - S3_ENDPOINT=10.35.4.88
+      # S3_ENDPOINT the CEPH/RGW end-point-url 
+      - S3_ENDPOINT=http://10.0.209.201:80
+      - S3_ACCESS_KEY=abc1
+      - S3_SECRET_KEY=abc1
     # the container starts with booting the hive metastore
     command: sh -c '. ~/.bashrc; start_hive_metastore'
     ports:
