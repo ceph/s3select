@@ -69,3 +69,18 @@ create_table_comm="create table hive.cephs3.${table_name}(c1 varchar,c2 varchar,
 sudo docker exec -it trino /bin/bash -c "trino --catalog hive --schema cephs3 --execute \"${create_table_comm}\""
 }
 
+tpcds_cli()
+{
+## a CLI example for generating TPCDS data
+sudo docker run --env S3_ENDPOINT=172.17.0.1:8000 --env S3_ACCESS_KEY=b2345678901234567890 --env S3_SECRET_KEY=b234567890123456789012345678901234567890 --env BUCKET_NAME=hive --env SCALE=2 -it galsl/hadoop:tpcds bash -c '/root/run_tpcds_with_scale'
+}
+
+update_table_external_location()
+{
+root_dir
+[ -z ${BUCKET_NAME} ] && echo need to define BUCKET_NAME && return
+[ -z ${SCALE} ] && echo need to define SCALE && return
+
+cat TPCDS/ddl/create_tpcds_tables.sql  | sed "s/tpcds2\/4/${BUCKET_NAME}\/SCALE_${SCALE}/"
+}
+ 
