@@ -1936,7 +1936,7 @@ void push_trim_type::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
 
-  auto trim_option = [&](const char *s){return strncmp(a,s,strlen(s))==0;};
+  auto trim_option = [&](const char *s){return strncasecmp(a,s,strlen(s))==0;};
 
   if(trim_option("leading"))
   {

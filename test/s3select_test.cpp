@@ -2529,6 +2529,16 @@ TEST(TestS3selectFunctions, trim11)
 test_single_column_single_row( "select trim(trailing from trim(leading from \"   foobar   \")) from stdin ;" ,"foobar\n");
 }
 
+TEST(TestS3selectFunctions, trim12)
+{
+test_single_column_single_row( "select trim(LEADING '1' from '111abcdef111')  from s3object ;" ,"abcdef111\n");
+}
+
+TEST(TestS3selectFunctions, trim13)
+{
+test_single_column_single_row( "select trim(TRAILING '1' from '111abcdef111')  from s3object ;" ,"111abcdef\n");
+}
+
 TEST(TestS3selectFunctions, likescape)
 {
   test_single_column_single_row("select \"true\" from stdin where  \"abc_defgh\" like \"abc$_defgh\" escape \"$\";","true\n");
