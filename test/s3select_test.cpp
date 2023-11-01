@@ -880,7 +880,10 @@ void test_single_column_single_row(const char* input_query,const char* expected_
       {
 	  ASSERT_TRUE(false);
       }
-      ASSERT_EQ(s3_csv_object.get_error_description(),error_description);
+      if(s3_csv_object.get_error_description().find(error_description) == std::string::npos )
+      {	
+	FAIL() << "getting error: " << s3_csv_object.get_error_description() << " instead of: " << error_description << std::endl;
+      }
       return;
     }
 

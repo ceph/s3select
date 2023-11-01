@@ -2196,6 +2196,16 @@ public:
 
   Status m_sql_processing_status;
 
+  void set_processing_time_error()
+  {
+    m_sql_processing_status = Status::SQL_ERROR;
+  }
+
+  bool is_processing_time_error()
+  {
+    return m_sql_processing_status == Status::SQL_ERROR;
+  }
+
   Status get_sql_processing_status()
   {
 	  return m_sql_processing_status;
@@ -2277,19 +2287,32 @@ public:
 
     for(auto& res : projections_resuls.values)
     {
+
+  	    std::string column_result;
+
+	    try{
+	      column_result = res->to_string();
+	    }
+	    catch(std::exception& e)
+	    {
+		column_result = "{failed to compute projection: " + std::string(e.what()) + "}";
+		set_processing_time_error();//TODO obsolete ??
+	    }
+	    
+      
 	    if(fp_ext_debug_mesg)
-		      fp_ext_debug_mesg( res->to_string() );
+		      fp_ext_debug_mesg(column_result.data());
 
             if (m_csv_defintion.quote_fields_always) {
               std::ostringstream quoted_result;
-              quoted_result << std::quoted(res->to_string(),m_csv_defintion.output_quot_char, m_csv_defintion.escape_char);
+              quoted_result << std::quoted(column_result,m_csv_defintion.output_quot_char, m_csv_defintion.escape_char);
               result.append(quoted_result.str());
 	      m_returned_bytes_size += quoted_result.str().size();
             }//TODO to add asneeded
 	    else
 	    {
-            	result.append(res->to_string());
-		m_returned_bytes_size += strlen(res->to_string());
+            	result.append(column_result);
+		m_returned_bytes_size += column_result.size();
 	    }
 
             if(!m_csv_defintion.redundant_column) {
@@ -2316,6 +2339,11 @@ public:
     if (m_is_limit_on && m_processed_rows == m_limit)
     {
       return m_sql_processing_status = Status::LIMIT_REACHED;
+    }
+    
+    if(is_processing_time_error())
+    {
+      return m_sql_processing_status = Status::SQL_ERROR;
     }
     
     if (m_aggr_flow == true)
@@ -2623,6 +2651,11 @@ public:
     {
       m_error_description = "with_file_line failure while csv parsing";
       return -1;
+    }
+    catch(std::exception& e)
+    {
+     m_error_description = "error while processing CSV object : " + std::string(e.what());
+     return -1;
     }
 
     return status;
