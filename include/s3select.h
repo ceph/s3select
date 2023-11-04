@@ -2185,6 +2185,7 @@ protected:
 
 public:
   s3select_csv_definitions m_csv_defintion;//TODO add method for modify
+  std::string m_error_description;
 
   enum class Status {
     END_OF_STREAM,
@@ -2296,7 +2297,8 @@ public:
 	    catch(std::exception& e)
 	    {
 		column_result = "{failed to compute projection: " + std::string(e.what()) + "}";
-		set_processing_time_error();//TODO obsolete ??
+		m_error_description = column_result;
+		set_processing_time_error();
 	    }
 	    
       
@@ -2341,11 +2343,6 @@ public:
       return m_sql_processing_status = Status::LIMIT_REACHED;
     }
     
-    if(is_processing_time_error())
-    {
-      return m_sql_processing_status = Status::SQL_ERROR;
-    }
-    
     if (m_aggr_flow == true)
     {
       do
@@ -2364,7 +2361,7 @@ public:
             }
 
           result_values_to_string(projections_resuls,result);
-          return m_sql_processing_status = Status::END_OF_STREAM;
+	  return is_processing_time_error() ? (m_sql_processing_status = Status::SQL_ERROR) : (m_sql_processing_status = Status::END_OF_STREAM);
         }
 
         m_processed_rows++;
@@ -2398,7 +2395,7 @@ public:
 	    projections_resuls.push_value( &(i->eval()) );
 	  }
 	  result_values_to_string(projections_resuls,result);
-	  return m_sql_processing_status = Status::LIMIT_REACHED;
+	  return is_processing_time_error() ? (m_sql_processing_status = Status::SQL_ERROR) : (m_sql_processing_status = Status::LIMIT_REACHED);
         }
       }
       while (multiple_row_processing());
@@ -2454,7 +2451,8 @@ public:
       }
 
     }
-    return is_end_of_stream() ? (m_sql_processing_status = Status::END_OF_STREAM) : (m_sql_processing_status = Status::NORMAL_EXIT);
+    return is_processing_time_error() ? (m_sql_processing_status = Status::SQL_ERROR) : 
+	    (is_end_of_stream() ? (m_sql_processing_status = Status::END_OF_STREAM) : (m_sql_processing_status = Status::NORMAL_EXIT));
     
   }//getMatchRow
 
@@ -2512,7 +2510,6 @@ public:
 
 private:
   bool m_skip_last_line;
-  std::string m_error_description;
   char* m_stream;
   char* m_end_stream;
   std::vector<char*> m_row_tokens;
@@ -2778,6 +2775,10 @@ public:
       {
         break;//user should request for sql_processing_status
       }
+      if(m_sql_processing_status == Status::SQL_ERROR)
+      {
+	return -1;
+      }
 
     } while (true);
 
@@ -2797,7 +2798,6 @@ class parquet_object : public base_s3object
 {
 
 private:
-  std::string m_error_description;
   parquet_file_parser* object_reader;
   parquet_file_parser::column_pos_t m_where_clause_columns;
   parquet_file_parser::column_pos_t m_projections_columns;
@@ -2981,7 +2981,6 @@ private:
   std::string* m_s3select_result = nullptr;
   size_t m_row_count;
   bool star_operation_ind;
-  std::string m_error_description;
   bool m_init_json_processor_ind;
 
 public:
