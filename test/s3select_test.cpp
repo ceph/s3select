@@ -2127,6 +2127,13 @@ TEST(TestS3selectFunctions, isnullnot)
 test_single_column_single_row( "select \"true\" from stdin where not nullif(1,2) is null;" ,"true\n");
 }
 
+TEST(TestS3selectFunctions, case_insensitive_not_null)
+{
+test_single_column_single_row( "select \"false\" from stdin where nullif(1,1) is NOT null;" ,"");
+test_single_column_single_row( "select \"false\" from stdin where nullif(1,1) is not Null;" ,"");
+test_single_column_single_row( "select \"true\" from stdin where nullif(1,1) is  Null;" ,"true\n");
+}
+
 TEST(TestS3selectFunctions, isnull1)
 {
 test_single_column_single_row( "select \"true\" from stdin where 7 + null is null;" ,"true\n");

@@ -154,7 +154,7 @@ public:
 
   //std::string get_error_description(){}
 
-  std::string get_result()
+  std::string& get_result()
   {
     return m_result;
   }
@@ -585,6 +585,14 @@ int run_on_localFile(char* input_query)
     return 0;
 }
 
+std::string get_ranged_string(std::string& inp)
+{
+    size_t startPos = inp.find("<Payload>");
+    size_t endPos = inp.find("</Payload>");
+
+    return inp.substr(startPos,endPos-startPos);
+}
+
 int run_on_single_query(const char* fname, const char* query)
 {
 
@@ -632,11 +640,12 @@ int run_on_single_query(const char* fname, const char* query)
     if(status<0)
     {
       std::cout << "failure on execution " << std::endl;
+      std::cout << get_ranged_string( awscli->get_result() ) << std::endl;
       break;
     }
     else 
     {
-    	std::cout << awscli->get_result() << std::endl;
+    	std::cout << get_ranged_string( awscli->get_result() ) << std::endl;
     }
 
     if(!read_sz || input_file_stream.eof())

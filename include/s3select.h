@@ -1633,8 +1633,10 @@ void push_like_predicate_escape::builder(s3select* self, const char* a, const ch
 
 void push_is_null_predicate::builder(s3select* self, const char* a, const char* b) const
 {
-    //expression is null, is not null 
+  //expression could be is null OR is not null 
   std::string token(a, b);
+  //to_lower enable case insensitive 
+  boost::algorithm::to_lower(token);
   bool is_null = true;
 
   for(size_t i=0;i<token.size();i++)
@@ -2448,6 +2450,10 @@ public:
 	  projections_resuls.push_value( &(i->eval()) );
 	}
 	result_values_to_string(projections_resuls,result);
+	if(m_sql_processing_status == Status::SQL_ERROR)
+	{
+	  return m_sql_processing_status; 
+	}
       }
 
     }
@@ -2664,7 +2670,7 @@ private:
     //purpose: the CSV data is "streaming", it may "cut" rows in the middle, in that case the "broken-line" is stores
     //for later, upon next chunk of data is streaming, the stored-line is merge with current broken-line, and processed.
     std::string tmp_buff;
-	
+    int status = 0;	
     m_processed_bytes += stream_length;
 
     m_skip_first_line = false;
@@ -2685,7 +2691,7 @@ private:
       m_skip_x_first_bytes = tmp_buff.size()+1;
 
       //processing the merged row (previous broken row)
-      run_s3select_on_object(result, merge_line.c_str(), merge_line.length(), false, false, false);
+      status = run_s3select_on_object(result, merge_line.c_str(), merge_line.length(), false, false, false);
     }
 
     if (stream_length && csv_stream[stream_length - 1] != m_csv_defintion.row_delimiter)
@@ -2706,7 +2712,8 @@ private:
       stream_length -= (m_last_line.length());
     }
 
-    return run_s3select_on_object(result, csv_stream, stream_length, m_skip_first_line, m_previous_line, (m_processed_bytes >= obj_size));
+    status = run_s3select_on_object(result, csv_stream, stream_length, m_skip_first_line, m_previous_line, (m_processed_bytes >= obj_size));
+    return status;
   }
 
 public:

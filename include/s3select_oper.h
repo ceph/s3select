@@ -2375,6 +2375,17 @@ class base_date_diff : public base_function
       ptime1 += boost::posix_time::minutes(ts1_td.minutes() * -1);
       ptime2 = ts2_ptime + boost::posix_time::hours(ts2_td.hours() * -1);
       ptime2 += boost::posix_time::minutes(ts2_td.minutes() * -1);
+
+      try{
+	ptime1.date().year();
+	ptime2.date().year();
+      }
+      catch(std::exception& e)
+      {
+	std::string error_msg = "the input timestamp for the diff operation is not correct : " + std::string(e.what());
+        throw base_s3select_exception(error_msg.data(),base_s3select_exception::s3select_exp_en_t::FATAL);
+      }
+
     }
 
 };

@@ -2228,17 +2228,9 @@ struct _fn_decimal_operator : public base_function {
 
 struct _fn_engine_version : public base_function {
 
-  const char* version_description =R"(PR #137 : 
-the change handle the use cases where the JSON input starts with an anonymous array/object this may cause wrong search result per the user request(SQL statement) 
-
-handle the use-case where the user requests a json-key-path that may point to a non-discrete value. i.e. array or an object. 
-editorial changes.
-
-fix for CSV flow, in the case of a "broken row" (upon processing stream of data) 
-
-null results upon aggregation functions on an empty group (no match for where clause).
+  const char* version_description =R"(PR #141 : 
+add exception handling to avoid crashes, and produce informative messages instead
 )";
-
 
   _fn_engine_version()
   {
