@@ -2068,12 +2068,14 @@ struct _fn_to_bool : public base_function
 
 struct _fn_trim : public base_function {
 
+  //TODO base function trim
     std::string input_string;
     value v_remove;
     value v_input;
 
     _fn_trim()
     {
+	//default character to remove is blank
     	v_remove = " "; 
     }
 
@@ -2086,13 +2088,16 @@ struct _fn_trim : public base_function {
     	base_statement* str = *iter;
         v_input = str->eval();
         if(v_input.type != value::value_En_t::STRING) {
-            throw base_s3select_exception("content is not string");
+            throw base_s3select_exception("content type is not a string");
         }
         input_string = v_input.str();
         if (args_size == 2) {
         	iter++;
             base_statement* next = *iter;
             v_remove = next->eval();
+	    if(v_remove.type != value::value_En_t::STRING) {
+	      throw base_s3select_exception("remove type is not a string");
+	    }
         }
         boost::trim_right_if(input_string,boost::is_any_of(v_remove.str()));
         boost::trim_left_if(input_string,boost::is_any_of(v_remove.str()));
@@ -2102,13 +2107,13 @@ struct _fn_trim : public base_function {
 }; 
 
 struct _fn_leading : public base_function {
-
     std::string input_string;
     value v_remove;
     value v_input;
 
     _fn_leading()
     {
+	//default character to remove is blank
     	v_remove = " "; 
     }
 
@@ -2146,6 +2151,7 @@ struct _fn_trailing : public base_function {
 
     _fn_trailing()
     {
+	//default character to remove is blank
     	v_remove = " "; 
     }
 
@@ -2158,13 +2164,16 @@ struct _fn_trailing : public base_function {
     	base_statement* str = *iter;
         v_input = str->eval();
         if(v_input.type != value::value_En_t::STRING) {
-            throw base_s3select_exception("content is not string");
+            throw base_s3select_exception("content type is not a string");
         }
         input_string = v_input.str();
         if (args_size == 2) {
         	iter++;
             base_statement* next = *iter;
             v_remove = next->eval();
+	    if(v_input.type != value::value_En_t::STRING) {
+	      throw base_s3select_exception("remove type is not a string");
+	    }
         }
         boost::trim_right_if(input_string,boost::is_any_of(v_remove.str()));
     	result->set_value(input_string.c_str());
@@ -2219,7 +2228,8 @@ struct _fn_decimal_operator : public base_function {
     iter++;
     base_statement* expr_scale = *iter;
     value expr_scale_val = expr_scale->eval();
-    
+   
+    //parser does the type checking 
     precision = expr_precision_val.i64();
     scale = expr_scale_val.i64();
 
@@ -2231,12 +2241,12 @@ struct _fn_decimal_operator : public base_function {
 
 struct _fn_engine_version : public base_function {
 
-  const char* version_description =R"(PR #141 : 
-add exception handling to avoid crashes, and produce informative messages instead
+  const char* version_description =R"(PR #142 : 
+a fix for missing check-type, which cause a crash(trim operator)
 )";
 
   _fn_engine_version()
-  {
+  {//it means it will return a single result line, in case of multi-rows input object
     aggregate = true;
   }
 
