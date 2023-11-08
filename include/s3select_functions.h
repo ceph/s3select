@@ -2121,13 +2121,16 @@ struct _fn_leading : public base_function {
     	base_statement* str = *iter;
         v_input = str->eval();
         if(v_input.type != value::value_En_t::STRING) {
-            throw base_s3select_exception("content is not string");
+            throw base_s3select_exception("content type is not a string");
         }
         input_string = v_input.str();
         if (args_size == 2) {
         	iter++;
             base_statement* next = *iter;
             v_remove = next->eval();
+	    if(v_remove.type != value::value_En_t::STRING) {
+	      throw base_s3select_exception("remove type is not a string");
+	    }
         }
         boost::trim_left_if(input_string,boost::is_any_of(v_remove.str()));
     	result->set_value(input_string.c_str());
