@@ -2171,7 +2171,7 @@ struct _fn_trailing : public base_function {
         	iter++;
             base_statement* next = *iter;
             v_remove = next->eval();
-	    if(v_input.type != value::value_En_t::STRING) {
+	    if(v_remove.type != value::value_En_t::STRING) {
 	      throw base_s3select_exception("remove type is not a string");
 	    }
         }
