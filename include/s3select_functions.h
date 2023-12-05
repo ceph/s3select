@@ -769,6 +769,10 @@ struct _fn_to_int : public base_function
       var_result = static_cast<int64_t>(v.dbl());
       break;
 
+    case value::value_En_t::S3NULL:
+      var_result.setnull();
+      break;
+
     default:
       var_result = v.i64();
       break;
@@ -813,6 +817,10 @@ struct _fn_to_float : public base_function
 
     case value::value_En_t::FLOAT:
       var_result = v.dbl();
+      break;
+
+    case value::value_En_t::S3NULL:
+      var_result.setnull();
       break;
 
     default:
@@ -2049,6 +2057,11 @@ struct _fn_to_bool : public base_function
     else if (func_arg.type == value::value_En_t::DECIMAL || func_arg.type == value::value_En_t::BOOL)
     {
       i = func_arg.i64();
+    }
+    else if (func_arg.type == value::value_En_t::S3NULL)
+    {
+      result->set_null();
+      return true;
     }
     else
     {

@@ -1733,6 +1733,7 @@ TEST(TestS3selectFunctions, boolcast)
   test_single_column_single_row("select cast(0 as bool) from s3object;","false\n");
   test_single_column_single_row("select cast(true as bool) from s3object;","true\n");
   test_single_column_single_row("select cast('a' as bool) from s3object;","false\n");
+  test_single_column_single_row("select cast(null as bool) from s3object;","null\n");
 }
 
 TEST(TestS3selectFunctions, floatcast)
@@ -1740,6 +1741,7 @@ TEST(TestS3selectFunctions, floatcast)
   test_single_column_single_row("select cast('1234a' as float) from s3object;","#failure#","extra characters after the number");
   test_single_column_single_row("select cast('a1234' as float) from s3object;","#failure#","text cannot be converted to a number");
   test_single_column_single_row("select cast('999e+999' as float) from s3object;","#failure#","converted value would fall out of the range of the result type!");
+  test_single_column_single_row("select cast(null as float) from s3object;","null\n");
 }
 
 TEST(TestS3selectFunctions, intcast)
@@ -1748,6 +1750,7 @@ TEST(TestS3selectFunctions, intcast)
   test_single_column_single_row("select cast('a1234' as int) from s3object;","#failure#","text cannot be converted to a number");
   test_single_column_single_row("select cast('9223372036854775808' as int) from s3object;","#failure#","converted value would fall out of the range of the result type!");
   test_single_column_single_row("select cast('-9223372036854775809' as int) from s3object;","#failure#","converted value would fall out of the range of the result type!");
+  test_single_column_single_row("select cast(null as int) from s3object;","null\n");
 }
 
 TEST(TestS3selectFunctions, predicate_as_projection_column)
