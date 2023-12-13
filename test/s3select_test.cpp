@@ -2070,6 +2070,12 @@ TEST(TestS3selectFunctions, mod)
 test_single_column_single_row( "select 5%2 from stdin;","1\n");
 }
 
+TEST(TestS3selectFunctions, modfloat)
+{
+test_single_column_single_row( "select 5.2%2 from stdin;","1.2000000000000002\n");
+test_single_column_single_row( "select 5.2%2.5 from stdin;","0.20000000000000018\n");
+}
+
 TEST(TestS3selectFunctions, modzero)
 {
 test_single_column_single_row( "select 0%2 from stdin;","0\n");

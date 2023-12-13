@@ -389,7 +389,20 @@ struct binop_modulo
     {
       throw base_s3select_exception("Mod zero is not allowed");
     } else {
-      return a % b;
+      return a % b;     
+    }
+  }
+};
+
+struct binop_float_modulo
+{
+  double operator()(double a, double b)
+  {
+    if (b == 0)
+    {
+      throw base_s3select_exception("Mod zero is not allowed");
+    } else {
+      return fmod(a, b);     
     }
   }
 };
@@ -1098,8 +1111,10 @@ public:
 
   value & operator%(const value &v)
   {
-    if(v.type == value_En_t::DECIMAL) {
+    if(v.type == value_En_t::DECIMAL && this->type == value_En_t::DECIMAL) {
       return compute<binop_modulo>(*this,v);
+    } else if(v.type == value_En_t::FLOAT || this->type == value_En_t::FLOAT) {
+      return compute<binop_float_modulo>(*this,v);
     } else {
       throw base_s3select_exception("wrong use of modulo operation!");
     }
