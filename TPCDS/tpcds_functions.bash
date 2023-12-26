@@ -18,6 +18,23 @@ start_tpcds;'
 
 }
 
+run_tpcds_v2()
+{
+## the following command is using a different container 
+## this container is using a C version for dsdgen(the tpcds data generation application)
+## the container also contains a bash script to run a mulitple instances of dsdgen to accelarate the total throughput 
+
+## the SCALE factor is first and only argument for /run_tpcds.bash script.
+## it need to set the following env-variables S3_ENDPOINT,S3_ACCESS_KEY,S3_SECRET_KEY
+## and to mount the container directory /tpcds_output to the host directory, this directory is for the dsdgen application
+## the generated data is stored there, and later uploaded into S3 storage, and removed.
+
+
+sudo docker run -v /tmp/tpcds_output/:/tpcds_output/ --env S3_ENDPOINT=http://172.17.0.1:8000 --env S3_ACCESS_KEY=b2345678901234567890 \
+--env S3_SECRET_KEY=b234567890123456789012345678901234567890   -it galsl/fedora_38:tpcds_v2 bash -c '/run_tpcds.bash 2'
+
+}
+
 move_from_tpcds_bucket_to_hive_bucket()
 {
 ## for the case it needs to move into different bucket(where trino is point at)
