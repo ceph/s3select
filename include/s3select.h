@@ -1293,11 +1293,11 @@ void push_logical_operator::builder(s3select* self, const char* a, const char* b
   std::string token(a, b);
   logical_operand::oplog_t l = logical_operand::oplog_t::NA;
 
-  if (token == "and")
+  if (boost::iequals(token,"and"))
   {
     l = logical_operand::oplog_t::AND;
   }
-  else if (token == "or")
+  else if (boost::iequals(token,"or")) 
   {
     l = logical_operand::oplog_t::OR;
   }
