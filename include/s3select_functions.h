@@ -2254,8 +2254,16 @@ struct _fn_decimal_operator : public base_function {
 
 struct _fn_engine_version : public base_function {
 
-  const char* version_description =R"(PR #142 : 
-a fix for missing check-type, which cause a crash(trim operator)
+  const char* version_description =R"(
+-- trim operator: case insensitive #140
+-- add exception handling to avoid crashes, and produce informative messages instead #141
+-- case-insensitive in the case of is null or is not null predicates. #141
+-- a fix for missing check-type, which cause a crash(trim operator) #142
+-- cast null operations returned false instead of null. #143
+-- adding another way to generate TPCDS data, this method is faster and efficient, it launches multiple instances of data-generators and uses less disk space #145
+-- the scripts use the dsdgen application resides on https://github.com/galsalomon66/tpc-ds-datagen-to-aws-s3
+the whole system resides in a container [ docker pull galsl/fedora_38:tpcds_v2 ] #146
+-- upon logical_operand(and/or) the parser-builder does not use case-insensitive compare function, resulting in wrong evaluation #147
 )";
 
   _fn_engine_version()
