@@ -34,10 +34,10 @@ jobs:
         sudo curl -L https://dist.apache.org/repos/dist/dev/arrow/KEYS | sudo apt-key add -
         sudo add-apt-repository "deb [arch=amd64] https://apache.jfrog.io/artifactory/arrow/ubuntu focal main"
         sudo apt-get update
-        sudo apt-get install -y -V libarrow-dev
+        sudo apt-get install -y -V libarrow-dev=10.0.1-1
           
     - name: install parquet
-      run: sudo apt-get install -y -V libparquet-dev
+      run: sudo apt-get install -y -V libparquet-dev=10.0.1-1
 
 
     - name: install-gtest
