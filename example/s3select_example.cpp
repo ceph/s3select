@@ -434,10 +434,14 @@ int process_json_query(const char* input_query,const char* fname)
     } 
     if(m_s3_json_object.is_sql_limit_reached())
     {
-      std::cout << "json processing reached limit " << std::endl;
       break;
     }
     read_sz = input_file_stream.read(buff.data(),BUFFER_SIZE).gcount();  
+  }
+  if(m_s3_json_object.is_sql_limit_reached())
+  {
+    std::cout << "json processing reached limit " << std::endl;
+    return 0;
   }
   try{
     	result.clear();

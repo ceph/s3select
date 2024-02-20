@@ -3190,17 +3190,24 @@ private:
 	status = -1;
       }
 
+      ++m_row_count;
+
       if(is_sql_limit_reached()) 
       {
 	      status = JSON_PROCESSING_LIMIT_REACHED;//returning number since sql_execution_on_row_cb is a callback; the caller can not access the object
+        m_sql_processing_status = s3selectEngine::base_s3object::Status::LIMIT_REACHED;
       }
 
       m_sa->clear_data(); 
       if(star_operation_ind && (m_s3select_result->size() != result_len))
       {//as explained above the star-operation is displayed differently
 	std::string end_of_row;
-	end_of_row = "#=== " + std::to_string(m_row_count++) + " ===#\n";
+	end_of_row = "#=== " + std::to_string(m_row_count) + " ===#\n";
 	m_s3select_result->append(end_of_row);
+      }
+
+      if(m_is_limit_on && m_row_count == m_limit) {
+        m_sql_processing_status = s3selectEngine::base_s3object::Status::LIMIT_REACHED;
       }
       return status;
   }
