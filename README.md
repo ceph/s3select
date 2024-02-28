@@ -69,6 +69,6 @@ Trino's query processing scalability is achieved by initiating multiple s3select
 Before executing SQL statements, users must create a bucket, upload objects into it, and define tables within the CEPH cluster. 
 Table definitions allow users to specify structures atop individual objects or directories containing multiple objects.
 
-
+please review the following [script](https://github.com/ceph/s3select/blob/master/TPCDS/ddl/create_tpcds_tables.sql) it demonstrates how to create a table on S3 storage.
 
 
