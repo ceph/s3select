@@ -51,3 +51,24 @@ it possible to run a query on local file, as follows.
 >`sudo docker run -w /s3select -v /home/gsalomon/work:/work -it galsl/ubunto_arrow_parquet_s3select:dev bash -c "./example/s3select_example -q 'select count(*) from /work/datatime.csv;'"`
 
 
+## How to run Trino with CEPH/s3select
+
+The integration of s3select within CEPH offers several advantages, particularly its compatibility with analytical tools like Trino, Presto, and Spark.
+
+Trino facilitates efficient query execution by breaking down the original user SQL statement into multiple s3select requests, which are then executed in parallel within CEPH.
+This parallel execution enhances overall processing efficiency.
+
+To enable interaction between Trino and the CEPH cluster, we've defined a [YAML](https://github.com/ceph/s3select/blob/master/container/trino/hms_trino.yaml) that composes 2 containers. 
+This YAML allows users to deploy Trino and hive-metastore containers and execute SQL statements using the Trino client. 
+To utilize these functionalities, users need to clone the [s3select repository](https://github.com/ceph/s3select/tree/master) and then source the `run_trino_on_ceph.bash` [script](https://github.com/ceph/s3select/blob/master/container/trino/run_trino_on_ceph.bash) located in the `./container/trino` directory.
+
+Upon booting the container using the `boot_trino_hms` bash function, configuration files are modified, and Trino and hive-metastore containers are launched, establishing connections with the CEPH cluster.
+
+Trino's query processing scalability is achieved by initiating multiple s3select requests per SQL statement, a feature customizable through the [Trino-hive connector](https://trino.io/docs/current/connector/hive.html).
+
+Before executing SQL statements, users must create a bucket, upload objects into it, and define tables within the CEPH cluster. 
+Table definitions allow users to specify structures atop individual objects or directories containing multiple objects.
+
+
+
+
