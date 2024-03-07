@@ -13,6 +13,53 @@ namespace io{
                                 , file_line, file_name);
                 }
         };
+
+	struct missmatch_of_begin_end :
+		base,
+                with_file_name,
+                with_file_line{
+		int begin=-1,end=-1;	
+		void set_begin_end(int b,int e){
+		  begin=b;
+		  end=e;
+		}
+
+                void format_error_message()const override{
+                      std::snprintf(error_message_buffer, sizeof(error_message_buffer),
+                      "***missmatch_of_begin_end*** Line number %d in file \"%s\" begin{%d} > end{%d}"
+                      ,file_line, file_name,begin,end);
+                }
+    };
+
+      struct missmatch_end :
+	      base,
+	      with_file_name,
+	      with_file_line{
+	      int end=-1;
+	      int block_size=-1;
+	      void set_end_block(int e,int b){	
+		end = e;
+		block_size = b;	
+	      }
+	      void format_error_message()const override{
+                    std::snprintf(error_message_buffer, sizeof(error_message_buffer),
+                    "***missmatch_end*** Line number %d in file \"%s\" end{%d} block{%d}"
+                    ,file_line, file_name, end, block_size);
+             }
+    };
+    
+
+    struct line_is_null :
+	    base,
+	    with_file_name,
+	    with_file_line{
+	    void format_error_message()const override{
+                    std::snprintf(error_message_buffer, sizeof(error_message_buffer),
+                    "***line is NULL*** Line number %d in file \"%s\"" 
+                    ,file_line, file_name);
+	    }
+    };
+
     }
 
     namespace detail{
@@ -133,7 +180,11 @@ namespace io{
 
         void chop_next_column(char*&line, char*&col_begin, char*&col_end, char& col_delimiter, char& quote, char& escape_char)
         {
-            assert(line != nullptr);
+            if(line == NULL)
+	    {
+	      io::error::line_is_null err;
+	      throw err;
+	    }
 
             col_begin = line;
             // the col_begin + (... - col_begin) removes the constness
@@ -312,8 +363,18 @@ class CSVParser
 
             ++file_line;
 
-            assert(data_begin < data_end);
-            assert(data_end <= block_len*2);
+	    if(data_begin > data_end)
+	    {
+	      io::error::missmatch_of_begin_end err;
+	      err.set_begin_end(data_begin,data_end);
+	      throw err;
+	    }
+	    if(data_end > block_len*2)
+	    {
+	      io::error::missmatch_end err;
+	      err.set_end_block(data_end,block_len*2);
+	      throw err;
+	    }
 
             if(data_begin >= block_len)
             {

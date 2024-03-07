@@ -2730,24 +2730,29 @@ public:
       m_error_description = "escaped_char_missing failure while csv parsing";
       return -1;
     }
-	catch(io::error::escaped_string_not_closed& err)
+    catch(io::error::escaped_string_not_closed& err)
     {
       m_error_description = "escaped_string_not_closed failure while csv parsing";
       return -1;
     }
-	catch(io::error::line_length_limit_exceeded& err)
+    catch(io::error::line_length_limit_exceeded& err)
     {
       m_error_description = "line_length_limit_exceeded failure while csv parsing";
       return -1;
     }
-	catch(io::error::with_file_name& err)
+    catch(io::error::missmatch_of_begin_end& err)
     {
-      m_error_description = "with_file_name failure while csv parsing";
+      m_error_description = "missmatch_of_begin_end failure while csv parsing" + std::string(err.what());
       return -1;
     }
-	catch(io::error::with_file_line& err)
+    catch(io::error::missmatch_end& err)
     {
-      m_error_description = "with_file_line failure while csv parsing";
+      m_error_description = "missmatch_end failure while csv parsing" + std::string(err.what());
+      return -1;
+    }
+    catch(io::error::with_file_name& err)
+    {
+      m_error_description = "with_file_name failure while csv parsing";
       return -1;
     }
     catch(std::exception& e)
@@ -2777,6 +2782,22 @@ private:
       while (*p_obj_chunk != m_csv_defintion.row_delimiter && p_obj_chunk<(csv_stream+stream_length))
       {
         p_obj_chunk++;
+      }
+
+      if(*p_obj_chunk != m_csv_defintion.row_delimiter)
+      {// previous row can not be completed with current chunk
+	if(fp_ext_debug_mesg)
+	{
+	  std::string err_mesg = "** the stream chunk is too small for processing(saved for later) **";
+	  fp_ext_debug_mesg(err_mesg.c_str());
+	}
+	//copy the part to be processed later
+	tmp_buff.assign((char*)csv_stream, (char*)csv_stream + (p_obj_chunk - csv_stream));
+	//saved for later processing
+	m_last_line.append(tmp_buff);
+	m_previous_line = true;//it means to skip last line
+	//skip processing since the row tail is missing.
+	return 0;
       }
 
       tmp_buff.assign((char*)csv_stream, (char*)csv_stream + (p_obj_chunk - csv_stream));
@@ -2828,6 +2849,11 @@ public:
       m_skip_x_first_bytes=0;
     }
 
+    if(m_stream>m_end_stream)
+    {
+      throw base_s3select_exception(std::string("** m_stream > m_end_stream **") + 
+	  std::to_string( (m_stream - m_end_stream) ) ,base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
     CSVParser _csv_parser("csv", m_stream, m_end_stream);
     csv_parser = &_csv_parser;
     csv_parser->set_csv_def(	m_csv_defintion.row_delimiter, 
