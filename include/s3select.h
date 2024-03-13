@@ -3052,18 +3052,21 @@ public:
 #define S3SELECT_RESPONSE_SIZE_LIMIT (4 * 1024 * 1024)
       if (result.size() > S3SELECT_RESPONSE_SIZE_LIMIT)
       {//AWS-cli limits response size the following callbacks send response upon some threshold
-        m_fp_s3select_result_format(result);
+        if(m_fp_s3select_result_format)
+	  m_fp_s3select_result_format(result);
 
         if (!is_end_of_stream() && (get_sql_processing_status() != Status::LIMIT_REACHED))
         {
-          m_fp_s3select_header_format(result);
+          if(m_fp_s3select_header_format)
+	    m_fp_s3select_header_format(result);
         }
       }
       else
       {
         if (is_end_of_stream() || (get_sql_processing_status() == Status::LIMIT_REACHED))
         {
-          m_fp_s3select_result_format(result);
+	  if(m_fp_s3select_result_format)
+	    m_fp_s3select_result_format(result);
         }
       }
 
