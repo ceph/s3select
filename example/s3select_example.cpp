@@ -329,7 +329,7 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
   {
     try
     {
-      status = parquet_processor.run_s3select_on_object(result,fp_s3select_result_format,fp_s3select_header_format);
+      status = parquet_processor.run_s3select_on_object(result);
     }
     catch (base_s3select_exception &e)
     {
