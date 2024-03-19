@@ -577,7 +577,7 @@ struct _fn_sum : public base_function
     {
       if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL)
       {
-        throw;
+        throw e;
       }
     }
 
