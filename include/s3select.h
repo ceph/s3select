@@ -3340,9 +3340,9 @@ public:
 	throw base_s3select_exception(error_description,base_s3select_exception::s3select_exp_en_t::FATAL);
     }
 
-    if(status<0)
+    if(status<0 || m_error_count>100)
     {
-    	std::string error_description = std::string("failure upon JSON processing");
+    	std::string error_description = std::string("failure upon JSON processing:") + m_error_description;
     	throw base_s3select_exception(error_description,base_s3select_exception::s3select_exp_en_t::FATAL);
 	return -1;
     }
