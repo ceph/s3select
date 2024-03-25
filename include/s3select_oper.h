@@ -365,7 +365,7 @@ struct binop_div
       if( std::isnan(a)) {
         return a;
       } else {
-        throw base_s3select_exception("division by zero is not allowed");
+        throw base_s3select_exception("division by zero is not allowed",base_s3select_exception::s3select_exp_en_t::FATAL);
       } 
     } else {
       return a / b;
@@ -387,7 +387,7 @@ struct binop_modulo
   {
     if (b == 0)
     {
-      throw base_s3select_exception("Mod zero is not allowed");
+      throw base_s3select_exception("Mod zero is not allowed",base_s3select_exception::s3select_exp_en_t::FATAL);
     } else {
       return a % b;     
     }
@@ -400,7 +400,7 @@ struct binop_float_modulo
   {
     if (b == 0)
     {
-      throw base_s3select_exception("Mod zero is not allowed");
+      throw base_s3select_exception("Mod zero is not allowed",base_s3select_exception::s3select_exp_en_t::FATAL);
     } else {
       return fmod(a, b);     
     }
@@ -870,7 +870,7 @@ public:
       return false;
     } 
 
-    throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
+    throw base_s3select_exception("operands not of the same type(numeric , string), while comparision",base_s3select_exception::s3select_exp_en_t::FATAL);
   }
 
   bool operator>(const value& v) //basic compare operator , most itensive runtime operation
@@ -919,7 +919,7 @@ public:
       return false;
     }
 
-    throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
+    throw base_s3select_exception("operands not of the same type(numeric , string), while comparision",base_s3select_exception::s3select_exp_en_t::FATAL);
   }
 
   friend bool operator==(const value& lhs, const value& rhs) //basic compare operator , most itensive runtime operation
@@ -986,7 +986,7 @@ public:
       return false;
     }
     
-    throw base_s3select_exception("operands not of the same type(numeric , string), while comparision");
+    throw base_s3select_exception("operands not of the same type(numeric , string), while comparision",base_s3select_exception::s3select_exp_en_t::FATAL);
   }
   bool operator<=(const value& v)
   { 
@@ -1022,11 +1022,11 @@ public:
 
     if (l.is_string() || r.is_string())
     {
-      throw base_s3select_exception("illegal binary operation with string");
+      throw base_s3select_exception("illegal binary operation with string",base_s3select_exception::s3select_exp_en_t::FATAL);
     }
     if (l.is_bool() || r.is_bool())
     {
-      throw base_s3select_exception("illegal binary operation with bool type");
+      throw base_s3select_exception("illegal binary operation with bool type",base_s3select_exception::s3select_exp_en_t::FATAL);
     }
 
     if (l.is_number() && r.is_number())
@@ -1116,7 +1116,7 @@ public:
     } else if(v.type == value_En_t::FLOAT || this->type == value_En_t::FLOAT) {
       return compute<binop_float_modulo>(*this,v);
     } else {
-      throw base_s3select_exception("wrong use of modulo operation!");
+      throw base_s3select_exception("wrong use of modulo operation!",base_s3select_exception::s3select_exp_en_t::FATAL);
     }
   }
 };
