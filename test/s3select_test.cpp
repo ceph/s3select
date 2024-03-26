@@ -1726,6 +1726,7 @@ TEST(TestS3selectFunctions, truefalse)
   test_single_column_single_row("select (not 1 > 2) as a1,cast(a1 as int)*4 from s3object;","true,4\n");
   test_single_column_single_row("select (1 > 2) from s3object;","false\n");
   test_single_column_single_row("select case when (nullif(3,3) is null) = true then \"case-1-1\" else \"case-2-2\"  end, case when (\"a\" in (\"a\",\"b\")) = true then \"case-3-3\" else \"case-4-4\" end, case when 1>3 then \"case_5_5\" else \"case-6-6\" end from s3object where (3*3 = 9);","case-1-1,case-3-3,case-6-6\n");
+  test_single_column_single_row("select (not 'any_string') from s3object;","false\n");
 }
 
 TEST(TestS3selectFunctions, boolcast)

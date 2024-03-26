@@ -2260,6 +2260,10 @@ class negate_function_operation : public base_statement
         res = (bool)1;
       }
     }
+    else if(res.is_string())
+    {
+      res = (bool)false;
+    }
 
     return res;
   }
