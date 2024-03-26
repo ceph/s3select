@@ -2264,6 +2264,10 @@ struct _fn_engine_version : public base_function {
 -- the scripts use the dsdgen application resides on https://github.com/galsalomon66/tpc-ds-datagen-to-aws-s3
 the whole system resides in a container [ docker pull galsl/fedora_38:tpcds_v2 ] #146
 -- upon logical_operand(and/or) the parser-builder does not use case-insensitive compare function, resulting in wrong evaluation #147
+
+-- avoid timeout upon long processing #152
+-- replace assert with an exception to avoid crashing the process #151
+-- fix for the use-case of not-operator on a string #153
 )";
 
   _fn_engine_version()
