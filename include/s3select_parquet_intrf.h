@@ -434,7 +434,7 @@ public:
       #if ARROW_VERSION_MAJOR < 9
       fd_ = -1;
       #else
-      fd_.Close();
+      return fd_.Close();
       #endif
       //RETURN_NOT_OK(::arrow::internal::FileClose(fd));
     }
@@ -1244,9 +1244,13 @@ void SerializedFile::ParseMetaDataOfEncryptedFileWithEncryptedFooter(
                            std::to_string(metadata_buffer->size()) + " bytes)");
   }
 
+#if ARROW_VERSION_MAJOR > 9
+  file_metadata_ =
+      FileMetaData::Make(metadata_buffer->data(), &metadata_len, default_reader_properties(), file_decryptor_);
+#else
   file_metadata_ =
 	FileMetaData::Make(metadata_buffer->data(), &metadata_len, file_decryptor_);
-      	//FileMetaData::Make(metadata_buffer->data(), &metadata_len, default_reader_properties(), file_decryptor_); //version>9
+#endif
 }
 
 void SerializedFile::ParseMetaDataOfEncryptedFileWithPlaintextFooter(
