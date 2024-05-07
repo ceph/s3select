@@ -505,7 +505,7 @@ public:
 
   std::string  print(int ident) override
   {
-    return std::string(0);
+    return std::string{};
   }
 
   void push_argument(base_statement* arg)
