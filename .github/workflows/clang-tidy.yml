@@ -33,10 +33,10 @@ jobs:
         sudo curl -L https://dist.apache.org/repos/dist/dev/arrow/KEYS | sudo apt-key add -
         sudo add-apt-repository "deb [arch=amd64] https://apache.jfrog.io/artifactory/arrow/ubuntu $(lsb_release --codename --short) main"
         sudo apt-get update
-        sudo apt-get install -y -V libarrow-dev=15.0.0-1
+        sudo apt-get install -y -V libarrow-dev=15.0.2-1
           
     - name: install parquet
-      run: sudo apt-get install -y -V libparquet-dev=15.0.0-1
+      run: sudo apt-get install -y -V libparquet-dev=15.0.2-1
 
 
     - name: install-gtest
