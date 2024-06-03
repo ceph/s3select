@@ -8,7 +8,7 @@ env:
 
 jobs:
   clang-tidy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v2
@@ -33,10 +33,10 @@ jobs:
         sudo curl -L https://dist.apache.org/repos/dist/dev/arrow/KEYS | sudo apt-key add -
         sudo add-apt-repository "deb [arch=amd64] https://apache.jfrog.io/artifactory/arrow/ubuntu focal main"
         sudo apt-get update
-        sudo apt-get install -y -V libarrow-dev
+        sudo apt-get install -y -V libarrow-dev=15.0.0-1
           
     - name: install parquet
-      run: sudo apt-get install -y -V libparquet-dev
+      run: sudo apt-get install -y -V libparquet-dev=15.0.0-1
 
 
     - name: install-gtest
