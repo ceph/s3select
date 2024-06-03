@@ -311,7 +311,7 @@ int csv_to_parquet(std::string & csv_object)
 	  ba_writer->WriteBatch(1, &definition_level, nullptr, &ba_value);
 	}
 
-	buffered_values_estimate[col_id] = ba_writer->EstimatedBufferedValueBytes();
+	buffered_values_estimate[col_id] = ba_writer->estimated_buffered_value_bytes();
 
 
       } //end-for columns
@@ -326,7 +326,7 @@ int csv_to_parquet(std::string & csv_object)
 	  int16_t definition_level = 0;
 	  ba_writer->WriteBatch(1, &definition_level, nullptr, nullptr);
 
-	  buffered_values_estimate[col_id] = ba_writer->EstimatedBufferedValueBytes();
+	  buffered_values_estimate[col_id] = ba_writer->estimated_buffered_value_bytes();
 	}
 
       }

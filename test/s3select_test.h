@@ -166,7 +166,7 @@ int csv_to_parquet(std::string & csv_object)
           ba_writer->WriteBatch(1, &definition_level, nullptr, &ba_value);
         }
 
-        buffered_values_estimate[col_id] = ba_writer->EstimatedBufferedValueBytes();
+        buffered_values_estimate[col_id] = ba_writer->estimated_buffered_value_bytes();
 
 
       } //end-for columns
@@ -181,7 +181,7 @@ int csv_to_parquet(std::string & csv_object)
           int16_t definition_level = 0;
           ba_writer->WriteBatch(1, &definition_level, nullptr, nullptr);
 
-          buffered_values_estimate[col_id] = ba_writer->EstimatedBufferedValueBytes();
+          buffered_values_estimate[col_id] = ba_writer->estimated_buffered_value_bytes();
         }
 
       }
@@ -547,6 +547,7 @@ std::string run_s3select(std::string expression)
 
 #ifdef _ARROW_EXIST
   csv_to_parquet(csv_obj);
+  std::cout << "runnning parquet processing on " << expression << std::endl;
   run_query_on_parquet_file(expression.c_str(),PARQUET_FILENAME,parquet_result);
   parquet_result = parquet_result.substr(0, parquet_result.find_first_of(","));
   parquet_result = parquet_result.substr(0, parquet_result.find_first_of("\n"));//remove last \n
