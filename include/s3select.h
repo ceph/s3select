@@ -1394,7 +1394,8 @@ void push_negation::builder(s3select* self, const char* a, const char* b) const
     logical_operand* f = S3SELECT_NEW(self, logical_operand, pred);
     self->getAction()->exprQ.push_back(f);
   }
-  else if (dynamic_cast<__function*>(pred) || dynamic_cast<negate_function_operation*>(pred) || dynamic_cast<variable*>(pred))
+  else if (dynamic_cast<__function*>(pred) || dynamic_cast<negate_function_operation*>(pred) || dynamic_cast<variable*>(pred) 
+	  || dynamic_cast<addsub_operation*>(pred) || dynamic_cast<mulldiv_operation*>(pred))
   {
     negate_function_operation* nf = S3SELECT_NEW(self, negate_function_operation, pred);
     self->getAction()->exprQ.push_back(nf);
