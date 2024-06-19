@@ -45,6 +45,43 @@ public:
 
 static s3select_reserved_word g_s3select_reserve_word;//read-only
 
+struct expr_queue {
+  //purpose: a warpper for std::vector for monitoring the expression queue actions.
+  //upon an SQL expression is resolved by the engine it is pushed into the queue for later operations
+  std::vector<base_statement*> m_expr_queue;
+
+  base_statement* back()
+  {
+    //expression queue must contain an element upon accessing it. upon an empty expression queue to throw an exception.
+    if(m_expr_queue.empty())
+    {
+      throw base_s3select_exception("expression queue is empty, abort parsing.", base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
+    return m_expr_queue.back();
+  }
+
+  void push_back(base_statement* bs)
+  {
+    m_expr_queue.push_back(bs);
+  }
+  
+  void pop_back()
+  {
+    return m_expr_queue.pop_back();
+  }
+
+  bool empty()
+  {
+    return m_expr_queue.empty();
+  }
+
+  void clear()
+  {
+    return m_expr_queue.clear();
+  }
+
+};
+
 struct actionQ
 {
 // upon parser is accepting a token (lets say some number),
@@ -55,7 +92,7 @@ struct actionQ
   std::vector<addsub_operation::addsub_op_t> addsubQ;
   std::vector<arithmetic_operand::cmp_t> arithmetic_compareQ;
   std::vector<logical_operand::oplog_t> logical_compareQ;
-  std::vector<base_statement*> exprQ;
+  expr_queue exprQ;
   std::vector<base_statement*> funcQ;
   std::vector<base_statement*> whenThenQ;
   std::vector<base_statement*> inPredicateQ;
@@ -128,8 +165,6 @@ struct base_ast_builder
   void operator()(s3select* self, const char* a, const char* b) const;
 
   virtual void builder(s3select* self, const char* a, const char* b) const = 0;
-
-  void safety_check_empty_exprQ(s3select* self) const;
   
   virtual ~base_ast_builder() = default;
 };
@@ -906,14 +941,6 @@ public:
   };
 };
 
-void base_ast_builder::safety_check_empty_exprQ(s3select* self) const
-{
-    if(self->getAction()->exprQ.empty())
-    {
-      throw base_s3select_exception("expression queue is empty, abort parsing.", base_s3select_exception::s3select_exp_en_t::FATAL);
-    }
-}
-
 void base_ast_builder::operator()(s3select *self, const char *a, const char *b) const
 {
   //the purpose of the following procedure is to bypass boost::spirit rescan (calling to bind-action more than once per the same text)
@@ -1210,8 +1237,6 @@ void push_addsub_binop::builder(s3select* self, [[maybe_unused]] const char* a,[
 {
   base_statement* l = nullptr, *r = nullptr;
 
-  safety_check_empty_exprQ(self);
-
   r = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   l = self->getAction()->exprQ.back();
@@ -1467,8 +1492,6 @@ void push_projection::builder(s3select* self, const char* a, const char* b) cons
 {
   std::string token(a, b);
 
-  safety_check_empty_exprQ(self);
-
   self->getAction()->projections.get()->push_back(self->getAction()->exprQ.back());
   self->getAction()->exprQ.pop_back();
 }
@@ -1481,8 +1504,6 @@ void push_alias_projection::builder(s3select* self, const char* a, const char* b
   while (*(--p) != ' ')
     ;
   std::string alias_name(p + 1, b);
-  safety_check_empty_exprQ(self);
-
   base_statement* bs = self->getAction()->exprQ.back();
 
   //mapping alias name to base-statement
@@ -1504,19 +1525,13 @@ void push_between_filter::builder(s3select* self, const char* a, const char* b) 
 
   __function* func = S3SELECT_NEW(self, __function, between_function.c_str(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
-
   base_statement* second_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(second_expr);
 
-  safety_check_empty_exprQ(self);
-
   base_statement* first_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(first_expr);
-
-  safety_check_empty_exprQ(self);
 
   base_statement* main_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
@@ -1532,19 +1547,13 @@ void push_not_between_filter::builder(s3select* self, const char* a, const char*
 
   __function* func = S3SELECT_NEW(self, __function, not_between_function.data(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
-
   base_statement* second_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(second_expr);
 
-  safety_check_empty_exprQ(self);
-
   base_statement* first_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(first_expr);
-
-  safety_check_empty_exprQ(self);
 
   base_statement* main_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
@@ -1633,13 +1642,9 @@ void push_like_predicate_no_escape::builder(s3select* self, const char* a, const
   // experimenting valgrind-issue happens only on teuthology
   //self->getS3F()->push_for_cleanup(v);
   
-  safety_check_empty_exprQ(self);
-
   base_statement* like_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(like_expr);  
-
-  safety_check_empty_exprQ(self);
 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
@@ -1656,20 +1661,14 @@ void push_like_predicate_escape::builder(s3select* self, const char* a, const ch
 
   __function* func = S3SELECT_NEW(self, __function, in_function.c_str(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
-
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
   func->push_argument(expr);
 
-  safety_check_empty_exprQ(self);
-
   base_statement* main_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(main_expr);
-
-  safety_check_empty_exprQ(self);
 
   base_statement* escape_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
@@ -1720,12 +1719,8 @@ void push_when_condition_then::builder(s3select* self, const char* a, const char
   // _fn_when_then
   __function* func = S3SELECT_NEW(self, __function, "#when-then#", self->getS3F());
 
-  safety_check_empty_exprQ(self);
-
  base_statement* then_expr = self->getAction()->exprQ.back();
  self->getAction()->exprQ.pop_back();
-
-  safety_check_empty_exprQ(self);
 
  base_statement* when_expr = self->getAction()->exprQ.back();
  self->getAction()->exprQ.pop_back();
@@ -1747,8 +1742,6 @@ void push_case_when_else::builder(s3select* self, const char* a, const char* b) 
 //purpose: provide the execution for complete statement, i.e. (case when {expression} then {expression} else {expression} end)
   std::string token(a, b);
 
-  safety_check_empty_exprQ(self);
-
   base_statement* else_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -1763,8 +1756,6 @@ void push_case_when_else::builder(s3select* self, const char* a, const char* b) 
   while(when_then_func != self->getAction()->first_when_then_expr)
   {
     // poping from whenThen-queue and pushing to function arguments list
-    safety_check_empty_exprQ(self);
-
     when_then_func = self->getAction()->exprQ.back();
     self->getAction()->exprQ.pop_back();
     func->push_argument(when_then_func);
@@ -1780,8 +1771,6 @@ void push_case_value_when_value_else::builder(s3select* self, const char* a, con
 //purpose: provide execution for the complete statement. i.e. case-value-when-value-else-value-end
   std::string token(a, b);
 
-  safety_check_empty_exprQ(self);
-
   base_statement* else_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -1792,8 +1781,6 @@ void push_case_value_when_value_else::builder(s3select* self, const char* a, con
   func->push_argument(else_expr);
 
   // poping the case-value  
-  safety_check_empty_exprQ(self);
-
   base_statement* case_value = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -1826,12 +1813,8 @@ void push_when_value_then::builder(s3select* self, const char* a, const char* b)
 
   __function* func = S3SELECT_NEW(self, __function, "#when-value-then#", self->getS3F());
 
- safety_check_empty_exprQ(self);
-
  base_statement* then_expr = self->getAction()->exprQ.back();
  self->getAction()->exprQ.pop_back();
-
- safety_check_empty_exprQ(self);
 
  base_statement* when_expr = self->getAction()->exprQ.back();
  self->getAction()->exprQ.pop_back();
@@ -1913,8 +1896,6 @@ void push_cast_expr::builder(s3select* self, const char* a, const char* b) const
 
   __function* func = S3SELECT_NEW(self, __function, cast_function.c_str(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(expr);
@@ -1952,8 +1933,6 @@ void push_trim_whitespace_both::builder(s3select* self, const char* a, const cha
 
   __function* func = S3SELECT_NEW(self, __function, "#trim#", self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(expr);
@@ -1972,8 +1951,6 @@ void push_trim_expr_one_side_whitespace::builder(s3select* self, const char* a, 
 
   __function* func = S3SELECT_NEW(self, __function, trim_function.c_str(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* inp_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(inp_expr);
@@ -1992,14 +1969,10 @@ void push_trim_expr_anychar_anyside::builder(s3select* self, const char* a, cons
 
   __function* func = S3SELECT_NEW(self, __function, trim_function.c_str(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(expr);
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* inp_expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
   func->push_argument(inp_expr);
@@ -2031,13 +2004,9 @@ void push_substr_from::builder(s3select* self, const char* a, const char* b) con
 
   __function* func = S3SELECT_NEW(self, __function, "substring", self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* start_position = self->getAction()->exprQ.back();
 
   self->getAction()->exprQ.pop_back();
@@ -2053,18 +2022,12 @@ void push_substr_from_for::builder(s3select* self, const char* a, const char* b)
 
   __function* func = S3SELECT_NEW(self, __function, "substring", self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* start_position = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* end_position = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -2088,13 +2051,9 @@ void push_datediff::builder(s3select* self, const char* a, const char* b) const
 
   __function* func = S3SELECT_NEW(self, __function, date_function.c_str(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* start_position = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -2117,13 +2076,9 @@ void push_dateadd::builder(s3select* self, const char* a, const char* b) const
 
   __function* func = S3SELECT_NEW(self, __function, date_function.c_str(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* start_position = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -2146,8 +2101,6 @@ void push_extract::builder(s3select* self, const char* a, const char* b) const
 
   __function* func = S3SELECT_NEW(self, __function, date_function.c_str(), self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -2169,13 +2122,9 @@ void push_time_to_string_constant::builder(s3select* self, const char* a, const 
 
   __function* func = S3SELECT_NEW(self, __function, "#to_string_constant#", self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* frmt = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
@@ -2192,13 +2141,9 @@ void push_time_to_string_dynamic::builder(s3select* self, const char* a, const c
 
   __function* func = S3SELECT_NEW(self, __function, "#to_string_dynamic#", self->getS3F());
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* expr = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
-  safety_check_empty_exprQ(self);
- 
   base_statement* frmt = self->getAction()->exprQ.back();
   self->getAction()->exprQ.pop_back();
 
