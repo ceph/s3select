@@ -3073,6 +3073,12 @@ TEST(TestS3selectFunctions, csv_chunk_processing)
 	 ASSERT_EQ(result_aggr,input_object);
 }
 
+TEST(TestS3selectFunctions, not_on_addition_multiplication)
+{
+  test_single_column_single_row("select not (1 + '2') from s3object;","#failure#","illegal binary operation with string");
+  test_single_column_single_row("select not (167 * '8882') from s3object;","#failure#","illegal binary operation with string");
+}
+
 // JSON tests
 
 TEST(TestS3selectFunctions, json_queries)

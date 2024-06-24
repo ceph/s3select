@@ -45,6 +45,43 @@ public:
 
 static s3select_reserved_word g_s3select_reserve_word;//read-only
 
+struct expr_queue {
+  //purpose: a warpper for std::vector for monitoring the expression queue actions.
+  //upon an SQL expression is resolved by the engine it is pushed into the queue for later operations
+  std::vector<base_statement*> m_expr_queue;
+
+  base_statement* back()
+  {
+    //expression queue must contain an element upon accessing it. upon an empty expression queue to throw an exception.
+    if(m_expr_queue.empty())
+    {
+      throw base_s3select_exception("expression queue is empty, abort parsing.", base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
+    return m_expr_queue.back();
+  }
+
+  void push_back(base_statement* bs)
+  {
+    m_expr_queue.push_back(bs);
+  }
+  
+  void pop_back()
+  {
+    return m_expr_queue.pop_back();
+  }
+
+  bool empty()
+  {
+    return m_expr_queue.empty();
+  }
+
+  void clear()
+  {
+    return m_expr_queue.clear();
+  }
+
+};
+
 struct actionQ
 {
 // upon parser is accepting a token (lets say some number),
@@ -55,7 +92,7 @@ struct actionQ
   std::vector<addsub_operation::addsub_op_t> addsubQ;
   std::vector<arithmetic_operand::cmp_t> arithmetic_compareQ;
   std::vector<logical_operand::oplog_t> logical_compareQ;
-  std::vector<base_statement*> exprQ;
+  expr_queue exprQ;
   std::vector<base_statement*> funcQ;
   std::vector<base_statement*> whenThenQ;
   std::vector<base_statement*> inPredicateQ;
@@ -513,6 +550,12 @@ public:
 
   int semantic()
   {
+    if(get_projections_list().empty())
+    {
+        error_description = "projections list is empty, AST is wrong,";
+        throw base_s3select_exception(error_description, base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
+
     for (const auto &e : get_projections_list())
     {
       e->resolve_node();
@@ -1385,7 +1428,7 @@ void push_negation::builder(s3select* self, const char* a, const char* b) const
   }
   else
   {
-    throw base_s3select_exception(std::string("failed to create AST for NOT operator"), base_s3select_exception::s3select_exp_en_t::FATAL);
+    throw base_s3select_exception(std::string("failed to create AST for NOT operator, expression is missing."), base_s3select_exception::s3select_exp_en_t::FATAL);
   }
   
   //upon NOT operator, the logical and arithmetical operators are "tagged" to negate result.
@@ -1394,7 +1437,8 @@ void push_negation::builder(s3select* self, const char* a, const char* b) const
     logical_operand* f = S3SELECT_NEW(self, logical_operand, pred);
     self->getAction()->exprQ.push_back(f);
   }
-  else if (dynamic_cast<__function*>(pred) || dynamic_cast<negate_function_operation*>(pred) || dynamic_cast<variable*>(pred))
+  else if (dynamic_cast<__function*>(pred) || dynamic_cast<negate_function_operation*>(pred) || dynamic_cast<variable*>(pred)
+	  || dynamic_cast<addsub_operation*>(pred) || dynamic_cast<mulldiv_operation*>(pred))
   {
     negate_function_operation* nf = S3SELECT_NEW(self, negate_function_operation, pred);
     self->getAction()->exprQ.push_back(nf);
@@ -1406,7 +1450,7 @@ void push_negation::builder(s3select* self, const char* a, const char* b) const
   }
   else
   {
-    throw base_s3select_exception(std::string("failed to create AST for NOT operator"), base_s3select_exception::s3select_exp_en_t::FATAL);
+    throw base_s3select_exception(std::string("failed to create AST for NOT operator, appropiate operator is missing"), base_s3select_exception::s3select_exp_en_t::FATAL);
   }
 }
 
