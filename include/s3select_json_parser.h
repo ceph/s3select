@@ -340,12 +340,12 @@ void key()
 
   if(reader_position_state().required_path.size())//current state is a key
   {
-    std::vector<std::string>* filter = &reader_position_state().required_path;
+    std::vector<std::string>* projection_key_path = &reader_position_state().required_path;
     auto required_key_depth_size = reader_position_state().required_key_depth_size;
     if(std::equal((*key_path).begin()+(*from_clause).size() + required_key_depth_size, //key-path-start-point + from-clause-depth-size + key-depth
 		  (*key_path).end(), 
-		  (*filter).begin(),
-		  (*filter).end(), iequal_predicate))
+		  (*projection_key_path).begin(),
+		  (*projection_key_path).end(), iequal_predicate))
     {
       increase_current_state();//key match according to user request, advancing to the next state
     }
@@ -640,13 +640,24 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 	m_current_depth_non_anonymous++;
       } 
 
+#if 0
       if(from_clause.size() == 0 || std::equal(key_path.begin(), key_path.end(), from_clause.begin(), from_clause.end(), iequal_predicate)) {
         prefix_match = true;
       }
+#endif
 
       variable_match_operations.key();
 
       return true;
+    }
+
+
+    void set_prefix_match(){
+      if(from_clause.size() == 0 || std::equal(key_path.begin(), key_path.end(), from_clause.begin(), from_clause.end(), iequal_predicate)) {
+	std::cout << "prefix_match = true :" << get_key_path() << std::endl;
+        prefix_match = true; //TODO it is not prefix in the case its a key/value . it is a prefix match in case it is key for array of key for object
+	//start-array , start-object can set the prefix match (from-clause match)
+      }
     }
 
     bool is_already_row_started()
@@ -658,6 +669,8 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     }
 
     bool StartObject() { 
+	set_prefix_match();
+
 	json_element_state.push_back(OBJECT_STATE);
 	m_current_depth++;
 	if(key_path.size()){
@@ -690,6 +703,8 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     }
  
     bool StartArray() {
+      set_prefix_match();
+
       json_element_state.push_back(ARRAY_STATE);
       m_current_depth++;
       if(key_path.size()){
