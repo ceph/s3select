@@ -640,12 +640,6 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 	m_current_depth_non_anonymous++;
       } 
 
-#if 0
-      if(from_clause.size() == 0 || std::equal(key_path.begin(), key_path.end(), from_clause.begin(), from_clause.end(), iequal_predicate)) {
-        prefix_match = true;
-      }
-#endif
-
       variable_match_operations.key();
 
       return true;
@@ -654,9 +648,7 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 
     void set_prefix_match(){
       if(from_clause.size() == 0 || std::equal(key_path.begin(), key_path.end(), from_clause.begin(), from_clause.end(), iequal_predicate)) {
-	std::cout << "prefix_match = true :" << get_key_path() << std::endl;
-        prefix_match = true; //TODO it is not prefix in the case its a key/value . it is a prefix match in case it is key for array of key for object
-	//start-array , start-object can set the prefix match (from-clause match)
+        prefix_match = true; //it is not prefix_match in the case its a key/value . it is a prefix match in the case it is a key of array or key of an object
       }
     }
 
