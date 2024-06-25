@@ -594,7 +594,7 @@ public:
 
   void set_json_key_path(std::vector<std::string>& key_path)
   {
-    m_json_key = key_path;
+    m_json_key = key_path;//TODO not efficient 
   }
 
   const char* to_string()  //TODO very intensive , must improve this
@@ -693,9 +693,10 @@ public:
 	m_str_value = o.m_str_value;
 	__val.str = m_str_value.data();
       }
-      else if(o.__val.str)
+      else if(o.__val.str)//it is done upon using the set_string_nocopy 
       {
-	__val.str = o.__val.str;
+	m_str_value.assign(o.__val.str);//need to create a copy for this
+	__val.str = m_str_value.data();
       }
     }
     else
@@ -717,9 +718,10 @@ public:
 	m_str_value = o.m_str_value;
 	__val.str = m_str_value.data();
       }
-      else if(o.__val.str)
+      else if(o.__val.str)//it is done upon using the set_string_nocopy
       {
-	__val.str = o.__val.str;
+	m_str_value.assign(o.__val.str);
+	__val.str = m_str_value.data();
       }
     }
     else
@@ -1857,8 +1859,8 @@ public:
     else
     {
       m_scratch->get_column_value(column_pos,var_value);
-      //in the case of successive column-delimiter {1,some_data,,3}=> third column is NULL 
-      if (var_value.is_string() && (var_value.str()== 0 || (var_value.str() && *var_value.str()==0))){
+      //in the case of successive column-delimiter {1,some_data,,3}=> third column is NULL(CSV data source)
+      if (!is_json_statement() && var_value.is_string() && (var_value.str()== 0 || (var_value.str() && *var_value.str()==0))){
           var_value.setnull();//TODO is it correct for Parquet
       }
     }
