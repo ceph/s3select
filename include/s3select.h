@@ -3225,10 +3225,6 @@ public:
       f_push_key_value_into_scratch_area_per_star_operation = [this](s3selectEngine::scratch_area::json_key_value_t& key_value)
                 {return push_key_value_into_scratch_area_per_star_operation(key_value);};
 
-    //setting the container for all json-variables, to be extracted by the json reader    
-    JsonHandler.set_statement_json_variables(query->get_json_variables_access());
-
-
     //calling to getMatchRow. processing a single row per each call.
     JsonHandler.set_s3select_processing_callback(f_sql);
     //upon excat match between input-json-key-path and sql-statement-variable-path the callback pushes to scratch area 
@@ -3270,6 +3266,9 @@ public:
     }
 
     m_sa->set_parquet_type();//TODO json type
+
+    //setting the container for all json-variables, to be extracted by the json reader    
+    JsonHandler.set_statement_json_variables(query->get_json_variables_access());
   }
     
   json_object(s3select* query):base_s3object(query),m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false),m_init_json_processor_ind(false)

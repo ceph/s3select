@@ -3482,6 +3482,105 @@ input_json_data = R"(
 
  }
 
+TEST(TestS3selectFunctions, json_access_array_with_differential_from_clause)
+{
+//purpose: to test the json-parser matcher(combination of the from-clause and projection variables) whether it
+//access correctly to different key-values in a nested JSON input.
+//the tests, run queries with different combinations of from-clause, and key-path.
+
+
+std::string input_json_data = R"(
+{
+  "root": {
+    "hello": "world",
+    "t": "true",
+    "f": "false",
+    "n": "null",
+    "i": 123,
+    "pi": 3.1416,
+    "nested_obj": {
+      "hello2": "world",
+      "t2": true,
+      "nested2": {
+        "c1": "c1_value",
+        "array_nested2": [
+          10,
+          20,
+          30,
+          40
+        ],
+        "c2": "c2_valuec2_value"
+      },
+      "nested3": {
+        "hello3": "world",
+        "t2": true,
+        "nested4": {
+          "c1": "c1_value",
+          "array_nested3": [
+            100,
+            200,
+            300,
+            400
+          ]
+        }
+      }
+    },
+    "array_1": [
+      1,
+      2,
+      3,
+      4
+    ]
+  }
+}
+)";
+
+  std::string expected_result=R"(100,400,null
+)";
+  std::string input_query = "select _1.array_nested3[0],_1.array_nested3[3],_1.array_nested3[5] from s3object[*].root.nested_obj.nested3.nested4;";
+  std::string result;
+
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(100,400,null
+)";
+  input_query = "select _1.nested3.nested4.array_nested3[0], _1.nested3.nested4.array_nested3[3], _1.nested3.nested4.array_nested3[5] from s3object[*].root.nested_obj;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(10,40,null
+)";
+  input_query = "select _1.array_nested2[0],_1.array_nested2[3],_1.array_nested2[4] from s3object[*].root.nested_obj.nested2;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(10,40,null
+)";
+  input_query = "select _1.nested_obj.nested2.array_nested2[0],_1.nested_obj.nested2.array_nested2[3],_1.nested_obj.nested2.array_nested2[4] from s3object[*].root;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(10,40,null
+)";
+  input_query = "select _1.root.nested_obj.nested2.array_nested2[0],_1.root.nested_obj.nested2.array_nested2[3],_1.root.nested_obj.nested2.array_nested2[4] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(c1_value
+)";
+  input_query = "select _1.root.nested_obj.nested2.c1 from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(c1_value
+)";
+  input_query = "select _1.c1 from s3object[*].root.nested_obj.nested2;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+}
+
  TEST(TestS3selectFunctions, json_queries_format)
 {
   std::string result;
