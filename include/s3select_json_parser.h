@@ -645,9 +645,36 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
       return true;
     }
 
+    template<typename predicate>
+    bool from_clause_matcher(std::vector<std::string>& _key_path,
+                           std::vector<std::string>& _from_clause,
+			   predicate p)
+    {
+	//iterate on both path's
+	//upon a part of from-clause is '*' it consider 'equal' to the counter part (projection), should skip to the next part
+	//
+	//from-clause = a.*.c ; projection-key = a.b.c ; since the '*' is on the secod position
+	//it means b=exists-in-from-clause, it should skip to next part (the third).
+	
+	std::vector<std::string>::iterator it_key_path = _key_path.begin();
+	std::vector<std::string>::iterator it_from_clause = _from_clause.begin();
+
+	while(it_from_clause != _from_clause.end())
+	{
+	  if (it_key_path == _key_path.end()) return false;
+
+	  if ((it_from_clause->compare("*")==0) || p(*it_key_path,*it_from_clause))
+	      {it_key_path++; it_from_clause++;}
+	  else
+	      return false; 
+	};
+	return true;
+
+    };
+
 
     void set_prefix_match(){
-      if(from_clause.size() == 0 || std::equal(key_path.begin(), key_path.end(), from_clause.begin(), from_clause.end(), iequal_predicate)) {
+      if(from_clause.size() == 0 || from_clause_matcher(key_path, from_clause, iequal_predicate)) {
         prefix_match = true; //it is not prefix_match in the case its a key/value . it is a prefix match in the case it is a key of array or key of an object
       }
     }

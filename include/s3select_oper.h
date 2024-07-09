@@ -1157,7 +1157,7 @@ private:
 public:
 
   typedef std::pair<std::vector<std::string>,value> json_key_value_t;
-  typedef std::vector< json_key_value_t > json_star_op_cont_t;
+  typedef std::vector< json_key_value_t > json_star_op_cont_t;//TODO should use a std::map(unique-keys)
   json_star_op_cont_t m_json_star_operation;
 
   scratch_area():m_upper_bound(-1),parquet_type(false),buff_loc(0),max_json_idx(-1)

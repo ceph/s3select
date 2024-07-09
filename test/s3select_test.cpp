@@ -3578,6 +3578,13 @@ std::string input_json_data = R"(
   input_query = "select _1.c1 from s3object[*].root.nested_obj.nested2;";
   run_json_query(input_query.c_str(), input_json_data, result);
   ASSERT_EQ(result,expected_result);
+  
+  //the wildcard in from-clause means to skip a path-part(consider equal to projection counter part)
+  expected_result=R"(c1_value
+)";
+  input_query = "select _1.c1 from s3object[*].*.nested_obj.*.nested4;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
 
 }
 
