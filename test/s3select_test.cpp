@@ -3596,13 +3596,24 @@ std::string input_json_data = R"(
 
 std::string input_json_data = R"(
   {"root" : [
-  {"c1": 891,"c2": 903,"c3": 78,"c4": 566,"c5": 134,"c6": 121,"c7": 203,"c8": 795,"c9": 82,"c10": 135},
-  {"c1": 218,"c2": 881,"c3": 840,"c4": 385,"c5": 385,"c6": 674,"c7": 618,"c8": 99,"c9": 296,"c10": 545},
-  {"c1": 218,"c2": 881,"c3": 840,"c4": 385,"c5": 385,"c6": 674,"c7": 618,"c8": 99,"c9": 296,"c10": 545}
+  {"c1": 891,"c2": 903,"c3": 78,"c4": 566,"c5": 134,"c6": 121,"c7": 203,"c8": 795,"c9": "82","c10": 135},
+  {"c1": 218,"c2": 881,"c3": 840,"c4": 385,"c5": 385,"c6": 674,"c7": 618,"c8": 99,"c9": "","c10": 545},
+  {"c1": 218,"c2": 881,"c3": 840,"c4": 385,"c5": 385,"c6": 674,"c7": 618,"c8": 99,"c9": "296","c10": 545}
   ]
   }
   )";
-  
+ 
+
+  //purpose: upon empty string values, the empty value not override by other values. 
+  expected_result=R"({"c9":82}
+{"c9":}
+{"c9":296}
+)";
+  input_query = "select _1.c9 from s3object[*].root;";
+
+  run_json_query(input_query.c_str(), input_json_data, result, true);
+  ASSERT_EQ(result,expected_result);
+
   expected_result=R"({"_1":1327}
 )";
   input_query = "select sum(_1.c1) from s3object[*].root;";
