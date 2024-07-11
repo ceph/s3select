@@ -3336,18 +3336,10 @@ private:
 
   int push_key_value_into_scratch_area_per_star_operation(s3selectEngine::scratch_area::json_key_value_t& key_value)
   {
-    //TODO this is wrong , equal keys should override each other. i.e. the later key defines the value.
-    // the input below with 'select * from s3object[*];' will keep push new keys, even upon identical keys
-    // pushing with key-path will avoid that (push "endless" identical keys).
-    // there could be a use case where the keys are unique and star-operation must retrieve a huge line
-    // for this we should define a limitation(number of unique keys per a single retrieved row).
-    // { "root" : [
-    //{ "c1":"815", "c2":"113" },
-    //{ "c1":"256", "c2":"342" }
-    //]
-    //}
-
-    m_sa->get_star_operation_cont()->push_back( key_value );
+    //upon star-operation on nested JSON, there could be many keys in a single row (actually, there is no limitation).
+    //for many cases these keys are duplicated in the scope of a single-row (row is defined according to SQL statement).
+    //the following routine saves only unique keys.
+    m_sa->json_push_key_value_per_star_operation(key_value);
     return 0;
   }
 

@@ -3186,53 +3186,21 @@ null,null,null
   run_json_query(input_query, json_input,result);
   ASSERT_EQ(result,expected_result);
 
-  expected_result=R"(firstName. : Joe
-lastName. : Jackson
-gender. : male
-age. : twenty
-address.streetAddress. : 101
-address.city. : San Diego
-address.state. : CA
-firstName. : Joe_2
-lastName. : Jackson_2
-gender. : male
-age. : 21
-address.streetAddress. : 101
-address.city. : San Diego
-address.state. : CA
-phoneNumbers.type. : home1
+
+
+  expected_result=R"(description.main_desc. : value_1
 phoneNumbers.number. : 734928_1
-phoneNumbers.addr. : 11
-phoneNumbers.type. : home2
-phoneNumbers.number. : 734928_2
-phoneNumbers.addr. : 22
-phoneNumbers.type. : home3
-phoneNumbers.number. : 734928_3
-phoneNumbers.addr. : 33
-phoneNumbers.type. : home4
-phoneNumbers.number. : 734928_4
-phoneNumbers.addr. : 44
-phoneNumbers.type. : home5
-phoneNumbers.number. : 734928_5
-phoneNumbers.addr. : 55
-phoneNumbers.type. : home6
-phoneNumbers.number. : 734928_6
-phoneNumbers.addr. : 66
-phoneNumbers.type. : home7
-phoneNumbers.number. : 734928_7
-phoneNumbers.addr. : 77
-phoneNumbers.type. : home8
-phoneNumbers.number. : 734928_8
-phoneNumbers.addr. : 88
-phoneNumbers.type. : home9
-phoneNumbers.number. : 734928_9
-phoneNumbers.addr. : 99
-phoneNumbers.type. : home10
-phoneNumbers.number. : 734928_10
-phoneNumbers.addr. : 100
-key_after_array. : XXX
-description.main_desc. : value_1
+phoneNumbers.type. : home1
+address.state. : CA
 description.second_desc. : value_2
+address.streetAddress. : 101
+phoneNumbers.addr. : 11
+address.city. : San Diego
+age. : twenty
+gender. : male
+key_after_array. : XXX
+lastName. : Jackson
+firstName. : Joe
 #=== 0 ===#
 )";
 
@@ -3241,35 +3209,36 @@ description.second_desc. : value_2
   run_json_query(input_query, json_input,result);
   ASSERT_EQ(result,expected_result);
 
-  expected_result=R"(phoneNumbers.type. : home2
+expected_result=R"(phoneNumbers.addr. : 22
 phoneNumbers.number. : 734928_2
-phoneNumbers.addr. : 22
+phoneNumbers.type. : home2
 #=== 0 ===#
-phoneNumbers.type. : home3
-phoneNumbers.number. : 734928_3
 phoneNumbers.addr. : 33
+phoneNumbers.number. : 734928_3
+phoneNumbers.type. : home3
 #=== 1 ===#
-phoneNumbers.type. : home4
-phoneNumbers.number. : 734928_4
 phoneNumbers.addr. : 44
+phoneNumbers.number. : 734928_4
+phoneNumbers.type. : home4
 #=== 2 ===#
-phoneNumbers.type. : home5
-phoneNumbers.number. : 734928_5
 phoneNumbers.addr. : 55
+phoneNumbers.number. : 734928_5
+phoneNumbers.type. : home5
 #=== 3 ===#
-phoneNumbers.type. : home6
-phoneNumbers.number. : 734928_6
 phoneNumbers.addr. : 66
+phoneNumbers.number. : 734928_6
+phoneNumbers.type. : home6
 #=== 4 ===#
-phoneNumbers.type. : home7
-phoneNumbers.number. : 734928_7
 phoneNumbers.addr. : 77
+phoneNumbers.number. : 734928_7
+phoneNumbers.type. : home7
 #=== 5 ===#
-phoneNumbers.type. : home8
-phoneNumbers.number. : 734928_8
 phoneNumbers.addr. : 88
+phoneNumbers.number. : 734928_8
+phoneNumbers.type. : home8
 #=== 6 ===#
 )";
+
 
   // star-operation on object, from-clause points on array, with where-clause
   input_query = "select * from s3object[*].phonenumbers where _1.addr between 20 and 89;";

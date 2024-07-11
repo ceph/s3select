@@ -402,12 +402,16 @@ int process_json_query(const char* input_query,const char* fname)
 
 
   size_t read_sz = input_file_stream.read(buff.data(),BUFFER_SIZE).gcount();
+#ifdef DEBUG_CHUNK_READ
   int chunk_count=0;
+#endif
   size_t bytes_read=0;
   while(read_sz)
   {
     bytes_read += read_sz;
+#ifdef DEBUG_CHUNK_READ
     std::cout << "read next chunk " << chunk_count++ << ":" << read_sz << ":" << bytes_read << "\r";
+#endif
 
     result.clear();
 
