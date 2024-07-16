@@ -915,6 +915,7 @@ public:
 
       variable = (variable_name >> "." >> variable_name) | variable_name;
 
+      // json_variable_name is the JSON projection, i.e. _1.a.b[10] 
       json_variable_name = bsc::str_p("_1") >> +("." >> (json_array | json_object) );
 
       json_object = (variable_name | string)[BOOST_BIND_ACTION(push_json_object)]; 
@@ -1154,14 +1155,22 @@ void push_array_number::builder(s3select* self, const char* a, const char* b) co
   self->getAction()->json_array_index_number.push_back(std::stoll(token.c_str()));
 }
 
-void push_json_array_name::builder(s3select* self, const char* a, const char* b) const
-{
+std::string json_path_remove_double_quote(const char* a, const char* b) 
+{	
+  //upon query accessing key which contains meta-char, it must use string-assign-construct, 
+  //the engine should remove double quotes for later processing.
   std::string token(a, b);
   if(*a == '"') //TODO single quote ? 
   {
     std::string tmp = token.substr(1,token.find('"',1)-1);
     token = tmp;
   }
+  return token;
+}
+
+void push_json_array_name::builder(s3select* self, const char* a, const char* b) const
+{
+  std::string token = json_path_remove_double_quote(a,b);
   
   size_t found = token.find("[");
   std::string array_name = token.substr(0,found);
@@ -1189,15 +1198,9 @@ void push_json_array_name::builder(s3select* self, const char* a, const char* b)
 
 void push_json_object::builder(s3select* self, const char* a, const char* b) const
 {
-  std::string token(a, b);
+  std::string token = json_path_remove_double_quote(a,b);
 
   //DEBUG - TEMP std::cout << "push_json_object " << token << std::endl;
-
-  if(*a == '"') //TODO single quote ? 
-  {
-    std::string tmp = token.substr(1,token.size()-2);
-    token = tmp;
-  }
 
   self->getAction()->json_object_name = token;
   std::vector<std::string> json_path;

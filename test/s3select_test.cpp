@@ -3583,7 +3583,8 @@ std::string input_json_data = R"(
           30,
           40
         ],
-        "c2": "c2_valuec2_value"
+        "c2": "c2_valuec2_value",
+	"total hits": 1234
       },
       "nested3": {
         "hello3": "world",
@@ -3624,8 +3625,16 @@ std::string input_json_data = R"(
   expected_result=R"(30
 )";
 
-  //the query access a key containing 2 parts that contains meta-chars
-  input_query = "select _1.root.\"nested object\".nested2.\"array.nested2\"[2]  from s3object[*];";
+  //the query access a key containing 2 parts each contains meta-chars
+  input_query = "select _1.root.\"nested object\".nested2.\"array.nested2\"[2] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(1234
+)";
+
+  //the query access a key containing 2 parts each contains meta-chars , the "total hits" is key/value
+  input_query = R"(select _1.root."nested object".nested2."total hits" from s3object[*];)";
   run_json_query(input_query.c_str(), input_json_data, result);
   ASSERT_EQ(result,expected_result);
 
