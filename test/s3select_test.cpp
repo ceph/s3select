@@ -3557,6 +3557,80 @@ std::string input_json_data = R"(
 
 }
 
+TEST(TestS3selectFunctions, json_keys_containing_meta_char)
+{
+//purpose: keys may contain meta-char such as dot{.} or comma,white-space, etc.
+//the syntax parser should process correctly queries containing access to keys with meta-char's.
+//keys of objects or arrays.
+
+std::string input_json_data = R"(
+{
+  "root": {
+    "hello": "world",
+    "t": "true",
+    "f": "false",
+    "n": "null",
+    "i": 123,
+    "pi": 3.1416,
+    "nested object": {
+      "hello2": "world",
+      "t2": true,
+      "nested2": {
+        "c1": "c1_value",
+        "array.nested2": [
+          10,
+          20,
+          30,
+          40
+        ],
+        "c2": "c2_valuec2_value"
+      },
+      "nested3": {
+        "hello3": "world",
+        "t2": true,
+        "nested4": {
+          "c1": "c1_value",
+          "array_nested3": [
+            100,
+            200,
+            300,
+            400
+          ]
+        }
+      }
+    },
+    "array_1": [
+      1,
+      2,
+      3,
+      4
+    ]
+  }
+}
+)";
+
+  std::string result;
+  std::string expected_result;
+  std::string input_query;
+
+  expected_result=R"(100
+)";
+
+  //the query access a key containing white-space
+  input_query = "select _1.root.\"nested object\".nested3.nested4.array_nested3[0] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(30
+)";
+
+  //the query access a key containing 2 parts that contains meta-chars
+  input_query = "select _1.root.\"nested object\".nested2.\"array.nested2\"[2]  from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+}
+
  TEST(TestS3selectFunctions, json_queries_format)
 {
   std::string result;

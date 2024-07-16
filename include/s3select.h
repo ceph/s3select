@@ -789,7 +789,7 @@ public:
 
       json_s3_object = ((S3SELECT_KW(JSON_ROOT_OBJECT)) >> *(bsc::str_p(".") >> json_path_element))[BOOST_BIND_ACTION(push_json_from_clause)];
 
-      json_path_element = bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p("_") | bsc::str_p("*")) ];
+      json_path_element = bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p("_") | bsc::str_p("*") | string) ];//TODO upon it is a string to remove double-qoutes
 
       object_path = "/" >> *( fs_type >> "/") >> fs_type;
 
@@ -917,9 +917,9 @@ public:
 
       json_variable_name = bsc::str_p("_1") >> +("." >> (json_array | json_object) );
 
-      json_object = (variable_name)[BOOST_BIND_ACTION(push_json_object)]; 
+      json_object = (variable_name | string)[BOOST_BIND_ACTION(push_json_object)]; 
 
-      json_array = (variable_name >> +(bsc::str_p("[") >> number[BOOST_BIND_ACTION(push_array_number)] >> bsc::str_p("]")) )[BOOST_BIND_ACTION(push_json_array_name)];
+      json_array = ((variable_name | string) >> +(bsc::str_p("[") >> number[BOOST_BIND_ACTION(push_array_number)] >> bsc::str_p("]")) )[BOOST_BIND_ACTION(push_json_array_name)];
     }
 
 
@@ -982,8 +982,6 @@ void push_from_clause::builder(s3select* self, const char* a, const char* b) con
 void push_json_from_clause::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b),table_name,alias_name;
-
-  //TODO handle the star-operation ('*') in from-clause. build the parameters for json-reader search-api's.
   std::vector<std::string> variable_key_path;
   const char* delimiter = ".";
   auto pos = token.find(delimiter);
@@ -1129,7 +1127,6 @@ void push_json_variable::builder(s3select* self, const char* a, const char* b) c
 {//purpose: handle the use case of json-variable structure (_1.a.b.c)
 
   std::string token(a, b);
-  std::vector<std::string> variable_key_path;
 
   //the following flow determine the index per json variable reside on statement.
   //per each discovered json_variable, it search the json-variables-vector whether it already exists.
@@ -1160,6 +1157,12 @@ void push_array_number::builder(s3select* self, const char* a, const char* b) co
 void push_json_array_name::builder(s3select* self, const char* a, const char* b) const
 {
   std::string token(a, b);
+  if(*a == '"') //TODO single quote ? 
+  {
+    std::string tmp = token.substr(1,token.find('"',1)-1);
+    token = tmp;
+  }
+  
   size_t found = token.find("[");
   std::string array_name = token.substr(0,found);
 
@@ -1189,6 +1192,12 @@ void push_json_object::builder(s3select* self, const char* a, const char* b) con
   std::string token(a, b);
 
   //DEBUG - TEMP std::cout << "push_json_object " << token << std::endl;
+
+  if(*a == '"') //TODO single quote ? 
+  {
+    std::string tmp = token.substr(1,token.size()-2);
+    token = tmp;
+  }
 
   self->getAction()->json_object_name = token;
   std::vector<std::string> json_path;
