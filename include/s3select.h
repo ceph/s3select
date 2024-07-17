@@ -3029,6 +3029,9 @@ private:
 
 public:
 
+  class csv_definitions : public s3select_csv_definitions
+  {};
+
   parquet_object(std::string parquet_file_name, s3select *s3_query,s3selectEngine::rgw_s3select_api* rgw) : base_s3object(s3_query),object_reader(nullptr)
   {
     try{
@@ -3082,10 +3085,10 @@ public:
     return m_s3_select != nullptr; 
   }
 
-  void set_parquet_object(std::string parquet_file_name, s3select *s3_query,s3selectEngine::rgw_s3select_api* rgw) //TODO duplicate code
+  void set_parquet_object(std::string parquet_file_name, s3select *s3_query,s3selectEngine::rgw_s3select_api* rgw,csv_definitions parquet) //TODO duplicate code
   {
     try{
-    
+      m_csv_defintion = parquet;
       object_reader = new parquet_file_parser(parquet_file_name,rgw); //TODO uniq ptr
     } catch(std::exception &e)
     { 
