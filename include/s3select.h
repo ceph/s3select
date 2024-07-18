@@ -181,6 +181,12 @@ struct push_json_from_clause : public base_ast_builder
 };
 static push_json_from_clause g_push_json_from_clause;
 
+struct push_json_from_clause_key_path : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_json_from_clause_key_path g_push_json_from_clause_key_path;
+
 struct push_limit_clause : public base_ast_builder
 {
   void builder(s3select* self, const char* a, const char* b) const;
@@ -789,7 +795,7 @@ public:
 
       json_s3_object = ((S3SELECT_KW(JSON_ROOT_OBJECT)) >> *(bsc::str_p(".") >> json_path_element))[BOOST_BIND_ACTION(push_json_from_clause)];
 
-      json_path_element = bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p("_") | bsc::str_p("*") | string) ];//TODO upon it is a string to remove double-qoutes
+      json_path_element = bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p("_") | bsc::str_p("*") | (string))][BOOST_BIND_ACTION(push_json_from_clause_key_path)];
 
       object_path = "/" >> *( fs_type >> "/") >> fs_type;
 
@@ -980,33 +986,33 @@ void push_from_clause::builder(s3select* self, const char* a, const char* b) con
   self->getAction()->exprQ.clear();
 }
 
+std::string json_path_remove_double_quote(const char* a, const char* b) 
+{	
+  //upon query accessing key which contains meta-char, it must use string-construct(double quotes), 
+  //the engine should remove double quotes for later processing.
+  std::string token(a, b);
+  if(*a == '"') //TODO single quote ? 
+  {
+    std::string tmp = token.substr(1,token.find('"',1)-1);
+    token = tmp;
+  }
+  return token;
+}
+
+void push_json_from_clause_key_path::builder(s3select* self, const char* a, const char* b) const
+{
+
+  std::string token = json_path_remove_double_quote(a,b);
+  self->getAction()->json_from_clause.push_back(token);
+   
+}
+
 void push_json_from_clause::builder(s3select* self, const char* a, const char* b) const
 {
-  std::string token(a, b),table_name,alias_name;
-  std::vector<std::string> variable_key_path;
-  const char* delimiter = ".";
-  auto pos = token.find(delimiter);
-
-  if(pos != std::string::npos)
+  if(self->getAction()->json_from_clause.size() == 0)
   {
-    token = token.substr(strlen(JSON_ROOT_OBJECT)+1,token.size());
-    pos = token.find(delimiter);
-    do
-    {
-      variable_key_path.push_back(token.substr(0,pos));
-      if(pos != std::string::npos)
-	token = token.substr(pos+1,token.size());
-      else 
-	token = "";
-      pos = token.find(delimiter);
-    }while(token.size());
+    self->getAction()->json_from_clause.push_back(JSON_ROOT_OBJECT);
   }
-  else
-  {
-    variable_key_path.push_back(JSON_ROOT_OBJECT);
-  }
-
-  self->getAction()->json_from_clause = variable_key_path;
 }
 
 void push_limit_clause::builder(s3select* self, const char* a, const char* b) const
@@ -1153,19 +1159,6 @@ void push_array_number::builder(s3select* self, const char* a, const char* b) co
   //DEBUG - TEMP std::cout << "push_array_number " << token << std::endl;
 
   self->getAction()->json_array_index_number.push_back(std::stoll(token.c_str()));
-}
-
-std::string json_path_remove_double_quote(const char* a, const char* b) 
-{	
-  //upon query accessing key which contains meta-char, it must use string-assign-construct, 
-  //the engine should remove double quotes for later processing.
-  std::string token(a, b);
-  if(*a == '"') //TODO single quote ? 
-  {
-    std::string tmp = token.substr(1,token.find('"',1)-1);
-    token = tmp;
-  }
-  return token;
 }
 
 void push_json_array_name::builder(s3select* self, const char* a, const char* b) const

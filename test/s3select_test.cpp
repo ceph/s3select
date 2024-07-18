@@ -3638,6 +3638,14 @@ std::string input_json_data = R"(
   run_json_query(input_query.c_str(), input_json_data, result);
   ASSERT_EQ(result,expected_result);
 
+  expected_result=R"(1234
+)";
+
+  //the query has a key access combintion of prjection and from-clause, both parts (projection and from-clause) contains meta-chars
+  input_query = R"(select _1.nested2."total hits" from s3object[*].root."nested object";)";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
 }
 
  TEST(TestS3selectFunctions, json_queries_format)
