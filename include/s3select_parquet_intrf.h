@@ -589,17 +589,12 @@ class ReadableFile::ReadableFileImpl : public ObjectInterface {
  public:
  
   ~ReadableFileImpl()
-  {
-    if(IMPL != nullptr)
-    {
-      delete IMPL;
-    }
-  }
+  {}
 
 #ifdef CEPH_USE_FS
-  explicit ReadableFileImpl(MemoryPool* pool) :  pool_(pool) {IMPL=new OSFile();}
+  explicit ReadableFileImpl(MemoryPool* pool) :  pool_(pool) {IMPL=std::make_unique<OSFile>();}
 #endif
-  explicit ReadableFileImpl(MemoryPool* pool,s3selectEngine::rgw_s3select_api* rgw) :  pool_(pool) {IMPL=new RGWimpl(rgw);}
+  explicit ReadableFileImpl(MemoryPool* pool,s3selectEngine::rgw_s3select_api* rgw) :  pool_(pool) {IMPL=std::make_unique<RGWimpl>(rgw);}
 
   Status Open(const std::string& path) { return IMPL->OpenReadable(path); }
 
@@ -649,7 +644,7 @@ class ReadableFile::ReadableFileImpl : public ObjectInterface {
     return Status::OK();
   }
 
-  ObjectInterface *IMPL;//TODO to declare in ObjectInterface 
+  std::unique_ptr<ObjectInterface> IMPL;
 
  private:
  
@@ -1588,7 +1583,7 @@ private:
   int m_num_row_groups;
   std::shared_ptr<parquet::FileMetaData> m_file_metadata;
   std::unique_ptr<parquet::ceph::ParquetFileReader> m_parquet_reader;
-  std::vector<column_reader_wrap*> m_column_readers;
+  std::vector<std::shared_ptr<column_reader_wrap>> m_column_readers;
   s3selectEngine::rgw_s3select_api* m_rgw_s3select_api;
 
   public:
@@ -1607,12 +1602,7 @@ private:
   }
 
   ~parquet_file_parser()
-  {
-    for(auto r : m_column_readers)
-    {
-      delete r;
-    }
-  }
+  {}
 
   int load_meta_data()
   {
@@ -1662,7 +1652,7 @@ private:
         }
       }
 
-      m_column_readers.push_back(new column_reader_wrap(m_parquet_reader,i));
+      m_column_readers.push_back(std::make_shared<column_reader_wrap>(m_parquet_reader,i));
     }
 
     return 0;

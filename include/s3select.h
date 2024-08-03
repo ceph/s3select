@@ -3020,7 +3020,7 @@ class parquet_object : public base_s3object
 {
 
 private:
-  parquet_file_parser* object_reader;
+  std::unique_ptr<parquet_file_parser> object_reader;
   parquet_file_parser::column_pos_t m_where_clause_columns;
   parquet_file_parser::column_pos_t m_projections_columns;
   std::vector<parquet_file_parser::parquet_value_t> m_predicate_values;
@@ -3032,11 +3032,11 @@ public:
   class csv_definitions : public s3select_csv_definitions
   {};
 
-  parquet_object(std::string parquet_file_name, s3select *s3_query,s3selectEngine::rgw_s3select_api* rgw) : base_s3object(s3_query),object_reader(nullptr)
+  parquet_object(std::string parquet_file_name, s3select *s3_query,s3selectEngine::rgw_s3select_api* rgw) : base_s3object(s3_query)
   {
     try{
     
-      object_reader = new parquet_file_parser(parquet_file_name,rgw); //TODO uniq ptr
+      object_reader = std::make_unique<parquet_file_parser>(parquet_file_name,rgw);
     } catch(std::exception &e)
     { 
       throw base_s3select_exception(std::string("failure while processing parquet meta-data ") + std::string(e.what()) ,base_s3select_exception::s3select_exp_en_t::FATAL);
@@ -3045,7 +3045,7 @@ public:
     parquet_query_setting(nullptr);
   }
 
-  parquet_object() : base_s3object(nullptr),object_reader(nullptr)
+  parquet_object() : base_s3object(nullptr)
   {}
 
   void parquet_query_setting(s3select *s3_query)
@@ -3067,13 +3067,7 @@ public:
   }
 
   ~parquet_object()
-  {
-    if(object_reader != nullptr)
-    {
-      delete object_reader;
-    }
-
-  }
+  {}
 
   std::string get_error_description()
   {
@@ -3089,7 +3083,7 @@ public:
   {
     try{
       m_csv_defintion = parquet;
-      object_reader = new parquet_file_parser(parquet_file_name,rgw); //TODO uniq ptr
+      object_reader = std::make_unique<parquet_file_parser>(parquet_file_name,rgw);
     } catch(std::exception &e)
     { 
       throw base_s3select_exception(std::string("failure while processing parquet meta-data ") + std::string(e.what()) ,base_s3select_exception::s3select_exp_en_t::FATAL);
