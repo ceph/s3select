@@ -181,6 +181,12 @@ struct push_json_from_clause : public base_ast_builder
 };
 static push_json_from_clause g_push_json_from_clause;
 
+struct push_json_from_clause_key_path : public base_ast_builder
+{
+  void builder(s3select* self, const char* a, const char* b) const;
+};
+static push_json_from_clause_key_path g_push_json_from_clause_key_path;
+
 struct push_limit_clause : public base_ast_builder
 {
   void builder(s3select* self, const char* a, const char* b) const;
@@ -789,7 +795,7 @@ public:
 
       json_s3_object = ((S3SELECT_KW(JSON_ROOT_OBJECT)) >> *(bsc::str_p(".") >> json_path_element))[BOOST_BIND_ACTION(push_json_from_clause)];
 
-      json_path_element = bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p("_")) ];
+      json_path_element = (bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p("_") ) ] | bsc::str_p("*") | (string))[BOOST_BIND_ACTION(push_json_from_clause_key_path)];
 
       object_path = "/" >> *( fs_type >> "/") >> fs_type;
 
@@ -915,11 +921,12 @@ public:
 
       variable = (variable_name >> "." >> variable_name) | variable_name;
 
+      // json_variable_name is the JSON projection, i.e. _1.a.b[10] 
       json_variable_name = bsc::str_p("_1") >> +("." >> (json_array | json_object) );
 
-      json_object = (variable_name)[BOOST_BIND_ACTION(push_json_object)]; 
+      json_object = (variable_name | string)[BOOST_BIND_ACTION(push_json_object)]; 
 
-      json_array = (variable_name >> +(bsc::str_p("[") >> number[BOOST_BIND_ACTION(push_array_number)] >> bsc::str_p("]")) )[BOOST_BIND_ACTION(push_json_array_name)];
+      json_array = ((variable_name | string) >> +(bsc::str_p("[") >> number[BOOST_BIND_ACTION(push_array_number)] >> bsc::str_p("]")) )[BOOST_BIND_ACTION(push_json_array_name)];
     }
 
 
@@ -979,35 +986,33 @@ void push_from_clause::builder(s3select* self, const char* a, const char* b) con
   self->getAction()->exprQ.clear();
 }
 
+std::string json_path_remove_double_quote(const char* a, const char* b) 
+{	
+  //upon query accessing key which contains meta-char, it must use string-construct(double quotes), 
+  //the engine should remove double quotes for later processing.
+  std::string token(a, b);
+  if(*a == '"') //TODO single quote ? 
+  {
+    std::string tmp = token.substr(1,token.find('"',1)-1);
+    token = tmp;
+  }
+  return token;
+}
+
+void push_json_from_clause_key_path::builder(s3select* self, const char* a, const char* b) const
+{
+
+  std::string token = json_path_remove_double_quote(a,b);
+  self->getAction()->json_from_clause.push_back(token);
+   
+}
+
 void push_json_from_clause::builder(s3select* self, const char* a, const char* b) const
 {
-  std::string token(a, b),table_name,alias_name;
-
-  //TODO handle the star-operation ('*') in from-clause. build the parameters for json-reader search-api's.
-  std::vector<std::string> variable_key_path;
-  const char* delimiter = ".";
-  auto pos = token.find(delimiter);
-
-  if(pos != std::string::npos)
+  if(self->getAction()->json_from_clause.size() == 0)
   {
-    token = token.substr(strlen(JSON_ROOT_OBJECT)+1,token.size());
-    pos = token.find(delimiter);
-    do
-    {
-      variable_key_path.push_back(token.substr(0,pos));
-      if(pos != std::string::npos)
-	token = token.substr(pos+1,token.size());
-      else 
-	token = "";
-      pos = token.find(delimiter);
-    }while(token.size());
+    self->getAction()->json_from_clause.push_back(JSON_ROOT_OBJECT);
   }
-  else
-  {
-    variable_key_path.push_back(JSON_ROOT_OBJECT);
-  }
-
-  self->getAction()->json_from_clause = variable_key_path;
 }
 
 void push_limit_clause::builder(s3select* self, const char* a, const char* b) const
@@ -1129,7 +1134,6 @@ void push_json_variable::builder(s3select* self, const char* a, const char* b) c
 {//purpose: handle the use case of json-variable structure (_1.a.b.c)
 
   std::string token(a, b);
-  std::vector<std::string> variable_key_path;
 
   //the following flow determine the index per json variable reside on statement.
   //per each discovered json_variable, it search the json-variables-vector whether it already exists.
@@ -1159,7 +1163,8 @@ void push_array_number::builder(s3select* self, const char* a, const char* b) co
 
 void push_json_array_name::builder(s3select* self, const char* a, const char* b) const
 {
-  std::string token(a, b);
+  std::string token = json_path_remove_double_quote(a,b);
+  
   size_t found = token.find("[");
   std::string array_name = token.substr(0,found);
 
@@ -1186,7 +1191,7 @@ void push_json_array_name::builder(s3select* self, const char* a, const char* b)
 
 void push_json_object::builder(s3select* self, const char* a, const char* b) const
 {
-  std::string token(a, b);
+  std::string token = json_path_remove_double_quote(a,b);
 
   //DEBUG - TEMP std::cout << "push_json_object " << token << std::endl;
 
@@ -3222,10 +3227,6 @@ public:
       f_push_key_value_into_scratch_area_per_star_operation = [this](s3selectEngine::scratch_area::json_key_value_t& key_value)
                 {return push_key_value_into_scratch_area_per_star_operation(key_value);};
 
-    //setting the container for all json-variables, to be extracted by the json reader    
-    JsonHandler.set_statement_json_variables(query->get_json_variables_access());
-
-
     //calling to getMatchRow. processing a single row per each call.
     JsonHandler.set_s3select_processing_callback(f_sql);
     //upon excat match between input-json-key-path and sql-statement-variable-path the callback pushes to scratch area 
@@ -3267,6 +3268,9 @@ public:
     }
 
     m_sa->set_parquet_type();//TODO json type
+
+    //setting the container for all json-variables, to be extracted by the json reader    
+    JsonHandler.set_statement_json_variables(query->get_json_variables_access());
   }
     
   json_object(s3select* query):base_s3object(query),m_processed_bytes(0),m_end_of_stream(false),m_row_count(0),star_operation_ind(false),m_init_json_processor_ind(false)
@@ -3334,7 +3338,10 @@ private:
 
   int push_key_value_into_scratch_area_per_star_operation(s3selectEngine::scratch_area::json_key_value_t& key_value)
   {
-    m_sa->get_star_operation_cont()->push_back( key_value );
+    //upon star-operation on nested JSON, there could be many keys in a single row (actually, there is no limitation).
+    //for many cases these keys are duplicated in the scope of a single-row (row is defined according to SQL statement).
+    //the following routine saves only unique keys.
+    m_sa->json_push_key_value_per_star_operation(key_value);
     return 0;
   }
 

@@ -340,12 +340,12 @@ void key()
 
   if(reader_position_state().required_path.size())//current state is a key
   {
-    std::vector<std::string>* filter = &reader_position_state().required_path;
+    std::vector<std::string>* projection_key_path = &reader_position_state().required_path;
     auto required_key_depth_size = reader_position_state().required_key_depth_size;
     if(std::equal((*key_path).begin()+(*from_clause).size() + required_key_depth_size, //key-path-start-point + from-clause-depth-size + key-depth
 		  (*key_path).end(), 
-		  (*filter).begin(),
-		  (*filter).end(), iequal_predicate))
+		  (*projection_key_path).begin(),
+		  (*projection_key_path).end(), iequal_predicate))
     {
       increase_current_state();//key match according to user request, advancing to the next state
     }
@@ -640,13 +640,43 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
 	m_current_depth_non_anonymous++;
       } 
 
-      if(from_clause.size() == 0 || std::equal(key_path.begin(), key_path.end(), from_clause.begin(), from_clause.end(), iequal_predicate)) {
-        prefix_match = true;
-      }
-
       variable_match_operations.key();
 
       return true;
+    }
+
+    template<typename predicate>
+    bool from_clause_matcher(std::vector<std::string>& _key_path,
+                           std::vector<std::string>& _from_clause,
+			   predicate p)
+    {
+	//iterate on both path's
+	//upon a part of from-clause is '*' it consider 'equal' to the counter part (projection), should skip to the next part
+	//
+	//from-clause = a.*.c ; projection-key = a.b.c ; since the '*' is on the secod position
+	//it means b=exists-in-from-clause, it should skip to next part (the third).
+	
+	std::vector<std::string>::iterator it_key_path = _key_path.begin();
+	std::vector<std::string>::iterator it_from_clause = _from_clause.begin();
+
+	while(it_from_clause != _from_clause.end())
+	{
+	  if (it_key_path == _key_path.end()) return false;
+
+	  if ((it_from_clause->compare("*")==0) || p(*it_key_path,*it_from_clause))
+	      {it_key_path++; it_from_clause++;}
+	  else
+	      return false; 
+	};
+	return true;
+
+    };
+
+
+    void set_prefix_match(){
+      if(from_clause.size() == 0 || from_clause_matcher(key_path, from_clause, iequal_predicate)) {
+        prefix_match = true; //it is not prefix_match in the case its a key/value . it is a prefix match in the case it is a key of array or key of an object
+      }
     }
 
     bool is_already_row_started()
@@ -658,6 +688,8 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     }
 
     bool StartObject() { 
+	set_prefix_match();
+
 	json_element_state.push_back(OBJECT_STATE);
 	m_current_depth++;
 	if(key_path.size()){
@@ -690,6 +722,8 @@ class JsonParserHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
     }
  
     bool StartArray() {
+      set_prefix_match();
+
       json_element_state.push_back(ARRAY_STATE);
       m_current_depth++;
       if(key_path.size()){

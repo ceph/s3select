@@ -3186,53 +3186,21 @@ null,null,null
   run_json_query(input_query, json_input,result);
   ASSERT_EQ(result,expected_result);
 
-  expected_result=R"(firstName. : Joe
-lastName. : Jackson
-gender. : male
-age. : twenty
-address.streetAddress. : 101
-address.city. : San Diego
-address.state. : CA
-firstName. : Joe_2
-lastName. : Jackson_2
-gender. : male
-age. : 21
-address.streetAddress. : 101
-address.city. : San Diego
-address.state. : CA
-phoneNumbers.type. : home1
+
+
+  expected_result=R"(description.main_desc. : value_1
 phoneNumbers.number. : 734928_1
-phoneNumbers.addr. : 11
-phoneNumbers.type. : home2
-phoneNumbers.number. : 734928_2
-phoneNumbers.addr. : 22
-phoneNumbers.type. : home3
-phoneNumbers.number. : 734928_3
-phoneNumbers.addr. : 33
-phoneNumbers.type. : home4
-phoneNumbers.number. : 734928_4
-phoneNumbers.addr. : 44
-phoneNumbers.type. : home5
-phoneNumbers.number. : 734928_5
-phoneNumbers.addr. : 55
-phoneNumbers.type. : home6
-phoneNumbers.number. : 734928_6
-phoneNumbers.addr. : 66
-phoneNumbers.type. : home7
-phoneNumbers.number. : 734928_7
-phoneNumbers.addr. : 77
-phoneNumbers.type. : home8
-phoneNumbers.number. : 734928_8
-phoneNumbers.addr. : 88
-phoneNumbers.type. : home9
-phoneNumbers.number. : 734928_9
-phoneNumbers.addr. : 99
-phoneNumbers.type. : home10
-phoneNumbers.number. : 734928_10
-phoneNumbers.addr. : 100
-key_after_array. : XXX
-description.main_desc. : value_1
+phoneNumbers.type. : home1
+address.state. : CA
 description.second_desc. : value_2
+address.streetAddress. : 101
+phoneNumbers.addr. : 11
+address.city. : San Diego
+age. : twenty
+gender. : male
+key_after_array. : XXX
+lastName. : Jackson
+firstName. : Joe
 #=== 0 ===#
 )";
 
@@ -3241,35 +3209,36 @@ description.second_desc. : value_2
   run_json_query(input_query, json_input,result);
   ASSERT_EQ(result,expected_result);
 
-  expected_result=R"(phoneNumbers.type. : home2
+expected_result=R"(phoneNumbers.addr. : 22
 phoneNumbers.number. : 734928_2
-phoneNumbers.addr. : 22
+phoneNumbers.type. : home2
 #=== 0 ===#
-phoneNumbers.type. : home3
-phoneNumbers.number. : 734928_3
 phoneNumbers.addr. : 33
+phoneNumbers.number. : 734928_3
+phoneNumbers.type. : home3
 #=== 1 ===#
-phoneNumbers.type. : home4
-phoneNumbers.number. : 734928_4
 phoneNumbers.addr. : 44
+phoneNumbers.number. : 734928_4
+phoneNumbers.type. : home4
 #=== 2 ===#
-phoneNumbers.type. : home5
-phoneNumbers.number. : 734928_5
 phoneNumbers.addr. : 55
+phoneNumbers.number. : 734928_5
+phoneNumbers.type. : home5
 #=== 3 ===#
-phoneNumbers.type. : home6
-phoneNumbers.number. : 734928_6
 phoneNumbers.addr. : 66
+phoneNumbers.number. : 734928_6
+phoneNumbers.type. : home6
 #=== 4 ===#
-phoneNumbers.type. : home7
-phoneNumbers.number. : 734928_7
 phoneNumbers.addr. : 77
+phoneNumbers.number. : 734928_7
+phoneNumbers.type. : home7
 #=== 5 ===#
-phoneNumbers.type. : home8
-phoneNumbers.number. : 734928_8
 phoneNumbers.addr. : 88
+phoneNumbers.number. : 734928_8
+phoneNumbers.type. : home8
 #=== 6 ===#
 )";
+
 
   // star-operation on object, from-clause points on array, with where-clause
   input_query = "select * from s3object[*].phonenumbers where _1.addr between 20 and 89;";
@@ -3482,6 +3451,203 @@ input_json_data = R"(
 
  }
 
+TEST(TestS3selectFunctions, json_access_array_with_differential_from_clause)
+{
+//purpose: to test the json-parser matcher(combination of the from-clause and projection variables) whether it
+//access correctly to different key-values in a nested JSON input.
+//the tests, run queries with different combinations of from-clause, and key-path.
+
+
+std::string input_json_data = R"(
+{
+  "root": {
+    "hello": "world",
+    "t": "true",
+    "f": "false",
+    "n": "null",
+    "i": 123,
+    "pi": 3.1416,
+    "nested_obj": {
+      "hello2": "world",
+      "t2": true,
+      "nested2": {
+        "c1": "c1_value",
+        "array_nested2": [
+          10,
+          20,
+          30,
+          40
+        ],
+        "c2": "c2_valuec2_value"
+      },
+      "nested3": {
+        "hello3": "world",
+        "t2": true,
+        "nested4": {
+          "c1": "c1_value",
+          "array_nested3": [
+            100,
+            200,
+            300,
+            400
+          ]
+        }
+      }
+    },
+    "array_1": [
+      1,
+      2,
+      3,
+      4
+    ]
+  }
+}
+)";
+
+  std::string expected_result=R"(100,400,null
+)";
+  std::string input_query = "select _1.array_nested3[0],_1.array_nested3[3],_1.array_nested3[5] from s3object[*].root.nested_obj.nested3.nested4;";
+  std::string result;
+
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(100,400,null
+)";
+  input_query = "select _1.nested3.nested4.array_nested3[0], _1.nested3.nested4.array_nested3[3], _1.nested3.nested4.array_nested3[5] from s3object[*].root.nested_obj;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(10,40,null
+)";
+  input_query = "select _1.array_nested2[0],_1.array_nested2[3],_1.array_nested2[4] from s3object[*].root.nested_obj.nested2;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(10,40,null
+)";
+  input_query = "select _1.nested_obj.nested2.array_nested2[0],_1.nested_obj.nested2.array_nested2[3],_1.nested_obj.nested2.array_nested2[4] from s3object[*].root;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(10,40,null
+)";
+  input_query = "select _1.root.nested_obj.nested2.array_nested2[0],_1.root.nested_obj.nested2.array_nested2[3],_1.root.nested_obj.nested2.array_nested2[4] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(c1_value
+)";
+  input_query = "select _1.root.nested_obj.nested2.c1 from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(c1_value
+)";
+  input_query = "select _1.c1 from s3object[*].root.nested_obj.nested2;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+  
+  //the wildcard in from-clause means to skip a path-part(consider equal to projection counter part)
+  expected_result=R"(c1_value
+)";
+  input_query = "select _1.c1 from s3object[*].*.nested_obj.*.nested4;";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+}
+
+TEST(TestS3selectFunctions, json_keys_containing_meta_char)
+{
+//purpose: keys may contain meta-char such as dot{.} or comma,white-space, etc.
+//the syntax parser should process correctly queries containing access to keys with meta-char's.
+//keys of objects or arrays.
+
+std::string input_json_data = R"(
+{
+  "root": {
+    "hello": "world",
+    "t": "true",
+    "f": "false",
+    "n": "null",
+    "i": 123,
+    "pi": 3.1416,
+    "nested object": {
+      "hello2": "world",
+      "t2": true,
+      "nested2": {
+        "c1": "c1_value",
+        "array.nested2": [
+          10,
+          20,
+          30,
+          40
+        ],
+        "c2": "c2_valuec2_value",
+	"total hits": 1234
+      },
+      "nested3": {
+        "hello3": "world",
+        "t2": true,
+        "nested4": {
+          "c1": "c1_value",
+          "array_nested3": [
+            100,
+            200,
+            300,
+            400
+          ]
+        }
+      }
+    },
+    "array_1": [
+      1,
+      2,
+      3,
+      4
+    ]
+  }
+}
+)";
+
+  std::string result;
+  std::string expected_result;
+  std::string input_query;
+
+  expected_result=R"(100
+)";
+
+  //the query access a key containing white-space
+  input_query = "select _1.root.\"nested object\".nested3.nested4.array_nested3[0] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(30
+)";
+
+  //the query access a key containing 2 parts each contains meta-chars
+  input_query = "select _1.root.\"nested object\".nested2.\"array.nested2\"[2] from s3object[*];";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(1234
+)";
+
+  //the query access a key containing 2 parts each contains meta-chars , the "total hits" is key/value
+  input_query = R"(select _1.root."nested object".nested2."total hits" from s3object[*];)";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+  expected_result=R"(1234
+)";
+
+  //the query has a key access combintion of prjection and from-clause, both parts (projection and from-clause) contains meta-chars
+  input_query = R"(select _1.nested2."total hits" from s3object[*].root."nested object";)";
+  run_json_query(input_query.c_str(), input_json_data, result);
+  ASSERT_EQ(result,expected_result);
+
+}
+
  TEST(TestS3selectFunctions, json_queries_format)
 {
   std::string result;
@@ -3490,13 +3656,24 @@ input_json_data = R"(
 
 std::string input_json_data = R"(
   {"root" : [
-  {"c1": 891,"c2": 903,"c3": 78,"c4": 566,"c5": 134,"c6": 121,"c7": 203,"c8": 795,"c9": 82,"c10": 135},
-  {"c1": 218,"c2": 881,"c3": 840,"c4": 385,"c5": 385,"c6": 674,"c7": 618,"c8": 99,"c9": 296,"c10": 545},
-  {"c1": 218,"c2": 881,"c3": 840,"c4": 385,"c5": 385,"c6": 674,"c7": 618,"c8": 99,"c9": 296,"c10": 545}
+  {"c1": 891,"c2": 903,"c3": 78,"c4": 566,"c5": 134,"c6": 121,"c7": 203,"c8": 795,"c9": "82","c10": 135},
+  {"c1": 218,"c2": 881,"c3": 840,"c4": 385,"c5": 385,"c6": 674,"c7": 618,"c8": 99,"c9": "","c10": 545},
+  {"c1": 218,"c2": 881,"c3": 840,"c4": 385,"c5": 385,"c6": 674,"c7": 618,"c8": 99,"c9": "296","c10": 545}
   ]
   }
   )";
-  
+ 
+
+  //purpose: upon empty string values, the empty value not override by other values. 
+  expected_result=R"({"c9":82}
+{"c9":}
+{"c9":296}
+)";
+  input_query = "select _1.c9 from s3object[*].root;";
+
+  run_json_query(input_query.c_str(), input_json_data, result, true);
+  ASSERT_EQ(result,expected_result);
+
   expected_result=R"({"_1":1327}
 )";
   input_query = "select sum(_1.c1) from s3object[*].root;";

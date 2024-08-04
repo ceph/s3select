@@ -592,9 +592,9 @@ public:
 
   value_En_t _type() const { return type; }
 
-  void set_json_key_path(std::vector<std::string>& key_path)
+  void set_json_key_path(const std::vector<std::string>& key_path)
   {
-    m_json_key = key_path;
+    m_json_key = key_path;//TODO not efficient 
   }
 
   const char* to_string()  //TODO very intensive , must improve this
@@ -693,9 +693,10 @@ public:
 	m_str_value = o.m_str_value;
 	__val.str = m_str_value.data();
       }
-      else if(o.__val.str)
+      else if(o.__val.str)//it is done upon using the set_string_nocopy 
       {
-	__val.str = o.__val.str;
+	m_str_value.assign(o.__val.str);//need to create a copy for this
+	__val.str = m_str_value.data();
       }
     }
     else
@@ -717,9 +718,10 @@ public:
 	m_str_value = o.m_str_value;
 	__val.str = m_str_value.data();
       }
-      else if(o.__val.str)
+      else if(o.__val.str)//it is done upon using the set_string_nocopy
       {
-	__val.str = o.__val.str;
+	m_str_value.assign(o.__val.str);
+	__val.str = m_str_value.data();
       }
     }
     else
@@ -1137,6 +1139,54 @@ void multi_values::push_value(value *v)
   }
 }
 
+/////////////////////////
+#include <unordered_map>
+class json_key_value_store 
+{
+//hash function for std::vector<std::string>
+struct VectorStringHash {
+    std::size_t operator()(const std::vector<std::string>& vec) const {
+        std::size_t seed = 0;
+        for (const auto& str : vec) {
+            for (char c : str) {
+		// boost::hash_combine_size_t
+                seed ^= std::hash<char>()(c) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            }
+        }
+        return seed;
+    }
+};
+
+//equality comparison function for std::vector<std::string>
+struct VectorStringEqual {
+    bool operator()(const std::vector<std::string>& lhs, const std::vector<std::string>& rhs) const {
+        return lhs == rhs;
+    }
+};
+
+public:
+
+//NOTE: using unordered_map(and also std::map) means that output result is NOT as the input order (TODO consider using an order column)
+//order means, order of keys, as appear in the input. order has no affect on the correctness of results.
+//the current flow, for identicals keys, save the first key/value and ignore all the rest. 
+//
+//this type of container avoid huge memeory consumption upon a very big row(e.g. { "root" : [ long-and-nested-objects ] } )
+//a 'select * from s3object[*];' has to scan the entire "root" object before returing a result,
+//the star-operation must upload all keys-values for that row.
+//without a unique-key machanism it will consume large amount of memory(entire input JSON object).
+//
+//NOTE: upon huge JSON object containing unique-keys(random names), it will cause high memory consumption.
+//TODO:consider using container size limitation.
+typedef std::unordered_map<std::vector<std::string>, value, VectorStringHash, VectorStringEqual> _unorder_map_t;
+
+_unorder_map_t json_key_value_store;
+
+void insert(const std::vector<std::string>& key,value v)
+{
+  json_key_value_store.emplace( std::pair<std::vector<std::string>,value>(key,v) ); 
+}
+
+};
 
 class scratch_area
 {
@@ -1155,8 +1205,8 @@ private:
 public:
 
   typedef std::pair<std::vector<std::string>,value> json_key_value_t;
-  typedef std::vector< json_key_value_t > json_star_op_cont_t;
-  json_star_op_cont_t m_json_star_operation;
+
+  json_key_value_store m_json_star_operation;
 
   scratch_area():m_upper_bound(-1),parquet_type(false),buff_loc(0),max_json_idx(-1)
   {
@@ -1168,14 +1218,20 @@ public:
     delete m_schema_values;
   }
 
-  json_star_op_cont_t* get_star_operation_cont()
+  json_key_value_store::_unorder_map_t* get_star_operation_cont()
   {
-    return &m_json_star_operation;
+    return &m_json_star_operation.json_key_value_store;
+  }
+ 
+  void json_push_key_value_per_star_operation(json_key_value_t& key_value)
+  {
+    //identical keys(and thier values) are not saved.
+    m_json_star_operation.insert(key_value.first,key_value.second);  
   }
  
   void clear_data()
   {
-    m_json_star_operation.clear();
+    m_json_star_operation.json_key_value_store.clear();
     for(int i=0;i<=max_json_idx;i++)
     {
       (*m_schema_values)[i].setnull();
@@ -1857,8 +1913,8 @@ public:
     else
     {
       m_scratch->get_column_value(column_pos,var_value);
-      //in the case of successive column-delimiter {1,some_data,,3}=> third column is NULL 
-      if (var_value.is_string() && (var_value.str()== 0 || (var_value.str() && *var_value.str()==0))){
+      //in the case of successive column-delimiter {1,some_data,,3}=> third column is NULL(CSV data source)
+      if (!is_json_statement() && var_value.is_string() && (var_value.str()== 0 || (var_value.str() && *var_value.str()==0))){
           var_value.setnull();//TODO is it correct for Parquet
       }
     }
