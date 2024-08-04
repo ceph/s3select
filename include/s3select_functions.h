@@ -2268,6 +2268,17 @@ the whole system resides in a container [ docker pull galsl/fedora_38:tpcds_v2 ]
 -- avoid timeout upon long processing #152
 -- replace assert with an exception to avoid crashing the process #151
 -- fix for the use-case of not-operator on a string #153
+
+-- the negation-operation may cause a wrong-build of the AST, that later may cause a crash. that operation is missing handling of several operators. #160
+-- the crash happened upon calling more than once the parse_query, the second call accessed an incomplete object in the AST. #160
+
+-- fix for identifies key-value as key-object or key-array #161
+-- wrong initialization of the JSON parser engine had caused missing a projection-key-path upon using different combinations of the from-clause path. #161
+-- a fix for copy-constructor, upon a JSON value is an empty string, it causes a wrong result. #161
+-- modification for JSON star operation, the new-type container saves only unique keys, to avoid high memory consumption. #161
+-- the from-clause can handle a wild-card. i.e. upon wild-card(*) it skips the corresponding part in projection-key-path. #161
+-- key-path may include meta-char(like a dot) select _1."i.e."[0] the "i.e." is part of the key-path. #161
+
 )";
 
   _fn_engine_version()
