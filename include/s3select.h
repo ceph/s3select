@@ -795,7 +795,7 @@ public:
 
       json_s3_object = ((S3SELECT_KW(JSON_ROOT_OBJECT)) >> *(bsc::str_p(".") >> json_path_element))[BOOST_BIND_ACTION(push_json_from_clause)];
 
-      json_path_element = bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p("_") | bsc::str_p("*") | (string))][BOOST_BIND_ACTION(push_json_from_clause_key_path)];
+      json_path_element = (bsc::lexeme_d[+( bsc::alnum_p | bsc::str_p("_") ) ] | bsc::str_p("*") | (string))[BOOST_BIND_ACTION(push_json_from_clause_key_path)];
 
       object_path = "/" >> *( fs_type >> "/") >> fs_type;
 
