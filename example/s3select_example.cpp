@@ -320,8 +320,10 @@ int run_query_on_parquet_file(const char* input_query, const char* input_file)
 	  std::cout << "DEBUG: {" <<  msg << "}" << std::endl;
   };
 
+  std::function<void(const char*)> fp_nop = [](const char* msg){};
+  std::function<int(std::string&)> fp_continue_nop = [](std::string& result){return 0;};
   parquet_object parquet_processor(input_file,&s3select_syntax,&rgw);
-  //parquet_processor.set_external_debug_system(fp_debug);
+  parquet_processor.set_external_system_functions(fp_continue_nop, fp_s3select_result_format, fp_s3select_header_format,fp_nop);
 
   std::string result;
 

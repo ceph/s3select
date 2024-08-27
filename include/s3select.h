@@ -2458,6 +2458,7 @@ public:
       }
 
       result.append(res->to_string());
+      //TODO the strlen should replace with the size of the string(performance perspective)
       m_returned_bytes_size += strlen(res->to_string());
       ++j;
       }
@@ -2474,6 +2475,8 @@ public:
     if(m_csv_defintion.output_json_format && projections_resuls.values.size())  {
       json_result_format(projections_resuls, result, output_delimiter);
       result.append(output_row_delimiter);
+      //TODO to add asneeded
+      //TODO "flush" the result string
       return;
     } 
 
@@ -2493,10 +2496,6 @@ public:
 		set_processing_time_error();
 	    }
 	    
-      
-	    if(m_fp_ext_debug_mesg)
-		      m_fp_ext_debug_mesg(column_result.data());
-
             if (m_csv_defintion.quote_fields_always) {
               std::ostringstream quoted_result;
               quoted_result << std::quoted(column_result,m_csv_defintion.output_quot_char, m_csv_defintion.escape_char);
@@ -2524,8 +2523,29 @@ public:
     if(!m_aggr_flow)  {
       result.append(output_row_delimiter);
       m_returned_bytes_size += output_delimiter.size();
-    } 
+    }
+
+
+//TODO config / default-value
+#define CSV_INPUT_TYPE_RESPONSE_SIZE_LIMIT (64 * 1024)
+   if(m_fp_s3select_result_format && m_fp_s3select_header_format)
+   {
+    if (result.size() > CSV_INPUT_TYPE_RESPONSE_SIZE_LIMIT)
+    {//there are systems that might resject the response due to its size.
+      m_fp_s3select_result_format(result);
+      m_fp_s3select_header_format(result);
+    }
+   }
 }
+
+  void flush_sql_result(std::string& result)
+  {//purpose: flush remaining data reside in the buffer
+    if(m_fp_s3select_result_format && m_fp_s3select_header_format)
+    {
+      m_fp_s3select_result_format(result);
+      m_fp_s3select_header_format(result);
+    }	
+  }
 
   Status getMatchRow( std::string& result)
   {
@@ -2670,8 +2690,6 @@ public:
 
 }; //base_s3object
 
-//TODO config / default-value
-#define CSV_INPUT_TYPE_RESPONSE_SIZE_LIMIT (64 * 1024)
 class csv_object : public base_s3object
 {
 
@@ -2984,16 +3002,6 @@ public:
           return -1;
         }
       }
-
-      if(m_fp_s3select_result_format && m_fp_s3select_header_format)
-      {
-      	if (result.size() > CSV_INPUT_TYPE_RESPONSE_SIZE_LIMIT)
-      	{//there are systems that might resject the response due to its size.
-	  m_fp_s3select_result_format(result);
-	  m_fp_s3select_header_format(result);
-      	}
-      }
-
       if (m_sql_processing_status == Status::END_OF_STREAM)
       {
         break;
@@ -3009,12 +3017,7 @@ public:
 
     } while (true);
 
-    if(m_fp_s3select_result_format && m_fp_s3select_header_format)
-    {	//note: it may produce empty response(more the once)
-	//upon empty result, it should return *only* upon last call.
-	m_fp_s3select_result_format(result);
-	m_fp_s3select_header_format(result);
-    }
+    flush_sql_result(result);
 
     return 0;
   }
@@ -3050,7 +3053,7 @@ public:
     parquet_query_setting(nullptr);
   }
 
-  parquet_object() : base_s3object(nullptr)
+  parquet_object() : base_s3object(nullptr), not_to_increase_first_time(true)
   {}
 
   void parquet_query_setting(s3select *s3_query)
@@ -3127,26 +3130,6 @@ public:
         }
       }
 
-#define S3SELECT_RESPONSE_SIZE_LIMIT (4 * 1024 * 1024)
-      if (result.size() > S3SELECT_RESPONSE_SIZE_LIMIT)
-      {//AWS-cli limits response size the following callbacks send response upon some threshold
-        if(m_fp_s3select_result_format)
-	  m_fp_s3select_result_format(result);
-
-        if (!is_end_of_stream() && (get_sql_processing_status() != Status::LIMIT_REACHED))
-        {
-          if(m_fp_s3select_header_format)
-	    m_fp_s3select_header_format(result);
-        }
-      }
-      else
-      {
-        if (is_end_of_stream() || (get_sql_processing_status() == Status::LIMIT_REACHED))
-        {
-	  if(m_fp_s3select_result_format)
-	    m_fp_s3select_result_format(result);
-        }
-      }
 
       //TODO is_end_of_stream() required?
       if (get_sql_processing_status() == Status::END_OF_STREAM || is_end_of_stream() || get_sql_processing_status() == Status::LIMIT_REACHED)
@@ -3156,6 +3139,7 @@ public:
 
     } while (1);
 
+    flush_sql_result(result);
     return 0;
   }
 
