@@ -3084,6 +3084,7 @@ private:
   size_t m_row_count;
   bool star_operation_ind;
   bool m_init_json_processor_ind;
+  std::string m_incomplete_line_buffer;
 
 public:
 
@@ -3271,6 +3272,80 @@ public:
  
     return status; 
   }
+
+  int run_s3select_on_stream_jsonl(std::string& result, const char* json_stream, size_t stream_length, size_t obj_size, bool json_format = false)
+{
+    int status = 0;
+    m_processed_bytes += stream_length;
+    set_sql_result(result);
+
+    if (JsonHandler.is_fatal_initialization())
+    {
+        throw base_s3select_exception(JsonHandler.m_fatal_initialization_description, base_s3select_exception::s3select_exp_en_t::FATAL);
+    }
+
+    if (!stream_length || !json_stream)
+    {
+        if (!m_incomplete_line_buffer.empty())
+        {
+            status = JsonHandler.process_json_buffer(m_incomplete_line_buffer.data(), m_incomplete_line_buffer.size(), true);
+            if (status < 0)
+            {
+                throw base_s3select_exception("Error processing incomplete JSON object at end of stream", base_s3select_exception::s3select_exp_en_t::FATAL);
+            }
+            m_incomplete_line_buffer.clear();
+        }
+
+        m_end_of_stream = true;
+        sql_execution_on_row_cb();
+        return 0;
+    }
+
+    std::string combined_data = m_incomplete_line_buffer + std::string(json_stream, stream_length);
+    size_t start = 0;
+    size_t end = 0;
+    size_t data_length = combined_data.size();
+
+    while (end < data_length)
+    {
+        if (combined_data[end] == '\n')
+        {
+            std::string line = combined_data.substr(start, end - start);
+
+            if (!line.empty())
+            {
+                try
+                {
+                    status = JsonHandler.process_json_buffer(line.data(), line.size());
+                }
+                catch (std::exception &e)
+                {
+                    std::string error_description = "Exception while processing JSON: " + std::string(e.what());
+                    throw base_s3select_exception(error_description, base_s3select_exception::s3select_exp_en_t::FATAL);
+                }
+
+                if (status < 0)
+                {
+                    throw base_s3select_exception("Failure processing JSON line", base_s3select_exception::s3select_exp_en_t::FATAL);
+                }
+            }
+
+            start = end + 1;
+        }
+        end++;
+    }
+
+    if (start < data_length)
+    {
+        m_incomplete_line_buffer = combined_data.substr(start);
+    }
+    else
+    {
+        m_incomplete_line_buffer.clear();
+    }
+
+    return status;
+}
 
   void set_json_query(s3select* s3_query, csv_definitions csv)
   {
