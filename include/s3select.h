@@ -2267,7 +2267,10 @@ protected:
   size_t m_error_count;
   bool m_is_limit_on;
   unsigned long m_limit;
+  //number of rows processed by the query
   unsigned long m_processed_rows;
+  //number of rows returned by the query
+  unsigned long m_returned_rows;
   size_t m_returned_bytes_size;
   std::function<void(const char*)> m_fp_ext_debug_mesg=nullptr;//dispache debug message into external system
   std::vector<std::string> m_projection_keys{};
@@ -2395,6 +2398,7 @@ public:
     }
 
     m_processed_rows = 0;
+    m_returned_rows = 0;
   }
 
   void set_continue_mesg_interval(std::chrono::seconds interval)
@@ -2471,6 +2475,9 @@ public:
 {   
     std::string output_delimiter(1,m_csv_defintion.output_column_delimiter);
     std::string output_row_delimiter(1,m_csv_defintion.output_row_delimiter);
+
+    //each call to this function is a new row
+    m_returned_rows++;
 
     if(m_csv_defintion.output_json_format && projections_resuls.values.size())  {
       json_result_format(projections_resuls, result, output_delimiter);
@@ -2551,7 +2558,7 @@ public:
   {
     multi_values projections_resuls;
 
-    if (m_is_limit_on && m_processed_rows == m_limit)
+    if (m_is_limit_on && m_returned_rows == m_limit)
     {
       return m_sql_processing_status = Status::LIMIT_REACHED;
     }
@@ -2605,7 +2612,7 @@ public:
           }
 	}
 
-        if(m_is_limit_on && m_processed_rows == m_limit)
+        if(m_is_limit_on && m_returned_rows == m_limit)
         {
 	  for (auto& i : m_projections)
 	  {
@@ -2645,14 +2652,14 @@ public:
         }
 
       }
-      while (multiple_row_processing() && m_where_clause && !(where_clause_result = m_where_clause->eval().is_true()) && !(m_is_limit_on && m_processed_rows == m_limit));
+      while (multiple_row_processing() && m_where_clause && !(where_clause_result = m_where_clause->eval().is_true()) && !(m_is_limit_on && m_returned_rows == m_limit));
 
  	// in the of JSON it needs to evaluate the where-clause(for the first time)
       if(!multiple_row_processing() && m_where_clause){
 	where_clause_result = m_where_clause->eval().is_true();
       }
 
-      if(m_where_clause && ! where_clause_result && m_is_limit_on && m_processed_rows == m_limit)
+      if(m_where_clause && ! where_clause_result && m_is_limit_on && m_returned_rows == m_limit)
       {
           return m_sql_processing_status = Status::LIMIT_REACHED;
       }
@@ -2672,11 +2679,11 @@ public:
 	{
 	  projections_resuls.push_value( &(i->eval()) );
 	}
-    result_values_to_string(projections_resuls,result);
-    if(m_sql_processing_status == Status::SQL_ERROR)
-	  {
+	result_values_to_string(projections_resuls,result);
+	if(m_sql_processing_status == Status::SQL_ERROR)
+	{
 	    return m_sql_processing_status; 
-	  }
+	}
       }
     }
 
