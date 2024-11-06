@@ -2648,44 +2648,44 @@ TEST(TestS3selectFunctions, limit)
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 
-  input_query = "select _1 from stdin where _2 > _3 limit 8;";
+  input_query = "select _1 from stdin where _2 > _3 limit 1;";
   expected_res = "7\n";
   std::cout << "Running query: 3 (non-aggregate_query, where + limit clause)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 
-  input_query = "select _1 from stdin where _2 > _3 limit 7;";
+  input_query = "select _1 from stdin where _2 > _3 limit 1;";
   expected_res = "7\n";
   std::cout << "Running query: 4 (non-aggregate_query, where + limit clause)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 
-  input_query = "select _1 from stdin where _2 > _3 limit 6;";
-  expected_res = "";
+  input_query = "select _1 from stdin where _2 < _3 limit 3;";
+  expected_res = "1\n2\n3\n";
   std::cout << "Running query: 5 (non-aggregate_query, where + limit clause)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 
-  input_query = "select count(0) from stdin limit 9;";
-  expected_res = "9";
+  input_query = "select count(0) from stdin limit 9;";//limit X has no affect because it is aggregate query
+  expected_res = "20";
   std::cout << "Running query: 6 (aggregate query, limit clause only)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 
   input_query = "select count(0) from stdin where _2 > _3 limit 8;";
-  expected_res = "1";
+  expected_res = "2";
   std::cout << "Running query: 7 (aggregate_query, where + limit clause)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 
   input_query = "select count(0) from stdin where _2 > _3 limit 7;";
-  expected_res = "1";
+  expected_res = "2";
   std::cout << "Running query: 8 (aggregate_query, where + limit clause)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 
   input_query = "select count(0) from stdin where _2 > _3 limit 6;";
-  expected_res = "0";
+  expected_res = "2";
   std::cout << "Running query: 9 (aggregate_query, where + limit clause)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
@@ -2693,13 +2693,13 @@ TEST(TestS3selectFunctions, limit)
   generate_csv_multirow(input_csv, 10000);
 
   input_query = "select count(0) from stdin limit 90000;";
-  expected_res = "90000";
+  expected_res = "100000";
   std::cout << "Running query: 10 (aggregate_query, limit clause only, with Large input)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
 
   input_query = "select count(0) from stdin where _2 > _3 limit 90000;";
-  expected_res = "9000";
+  expected_res = "10000";
   std::cout << "Running query: 11 (aggregate_query, where + limit clause, with Large input)" << std::endl;
   s3select_res = run_s3select(input_query, input_csv);
   EXPECT_EQ(s3select_res, expected_res);
@@ -2757,13 +2757,13 @@ TEST(TestS3selectFunctions, limit)
   EXPECT_EQ(s3select_res, expected_res);
 
   input_query_json = "select _1.addr from s3object[*].phoneNumbers where _1.type like \"%1%\" limit 12;";
-  expected_res = "11\n100\n101\n102\n";
+  expected_res = "11\n100\n101\n102\n103\n104\n105\n";
   std::cout << "Running query: 14 (json, non-aggregate query, where + limit clause)" << std::endl;
   run_json_query(input_query_json, json_input, s3select_res);
   EXPECT_EQ(s3select_res, expected_res);
 
   input_query_json = "select count(0) from s3object[*].phoneNumbers limit 9;";
-  expected_res = "9";
+  expected_res = "15";
   std::cout << "Running query: 15 (json, aggregate query, limit clause only, limit reached)" << std::endl;
   run_json_query(input_query_json, json_input, s3select_res);
   EXPECT_EQ(s3select_res, expected_res);
@@ -2775,7 +2775,7 @@ TEST(TestS3selectFunctions, limit)
   EXPECT_EQ(s3select_res, expected_res);
 
   input_query_json = "select count(0) from s3object[*].phoneNumbers where _1.type like \"%1_\" limit 10;";
-  expected_res = "1";
+  expected_res = "6";
   std::cout << "Running query: 17 (json, aggregate query, where + limit clause)" << std::endl;
   run_json_query(input_query_json, json_input, s3select_res);
   EXPECT_EQ(s3select_res, expected_res);
