@@ -1,5 +1,9 @@
 #!/bin/bash
 
+CNTR_SYSTEM=${1:-podman}
+[ $CNTR_SYSTEM == "docker" ] && CNTR_COMPOSE_SYSTEM="sudo docker compose" && CNTR_SYSTEM="sudo docker"
+[ $CNTR_SYSTEM == "podman" ] && CNTR_COMPOSE_SYSTEM="podman-compose"
+
 root_dir()
 {
   cd $(git rev-parse --show-toplevel)
@@ -24,7 +28,7 @@ return;
 trino_exec_command()
 {
 ## run SQL statement on trino 
-  sudo docker exec -it trino /bin/bash -c "time trino --catalog hive --schema cephs3 --execute \"$@\""
+  ${CNTR_SYSTEM} exec -it trino /bin/bash -c "time trino --catalog hive --schema cephs3 --execute \"$@\""
 }
 
 boot_trino_hms()
@@ -50,14 +54,15 @@ boot_trino_hms()
   awk -v x=${S3_SECRET_KEY:-NO_SET} '{if(/hive.s3.aws-secret-key/){print "hive.s3.aws-secret-key="x;} else {print $0;}}' > /tmp/hive.properties
   cp /tmp/hive.properties ./container/trino/trino/catalog/hive.properties
 
-  sudo docker compose -f ./container/trino/hms_trino.yaml up -d
+  #sudo docker compose -f ./container/trino/hms_trino.yaml up -d
+  ${CNTR_COMPOSE_SYSTEM} -f ${PWD}/container/trino/hms_trino.yaml up -d
   cd -
 }
 
 shutdown_trino_hms()
 {
   root_dir
-  sudo docker compose -f ./container/trino/hms_trino.yaml down
+  ${CNTR_COMPOSE_SYSTEM} -f ${PWD}/container/trino/hms_trino.yaml down
   cd -
 }
 
@@ -66,13 +71,13 @@ trino_create_table()
 table_name=$1
 create_table_comm="create table hive.cephs3.${table_name}(c1 varchar,c2 varchar,c3 varchar,c4 varchar, c5 varchar,c6 varchar,c7 varchar,c8 varchar,c9 varchar,c10 varchar)
  WITH ( external_location = 's3a://hive/warehouse/cephs3/${table_name}/',format = 'TEXTFILE',textfile_field_separator = ',');"
-sudo docker exec -it trino /bin/bash -c "trino --catalog hive --schema cephs3 --execute \"${create_table_comm}\""
+ ${CNTR_SYSTEM} exec -it trino /bin/bash -c "trino --catalog hive --schema cephs3 --execute \"${create_table_comm}\""
 }
 
 tpcds_cli()
 {
 ## a CLI example for generating TPCDS data
-sudo docker run --env S3_ENDPOINT=172.17.0.1:8000 --env S3_ACCESS_KEY=b2345678901234567890 --env S3_SECRET_KEY=b234567890123456789012345678901234567890 --env BUCKET_NAME=hive --env SCALE=2 -it galsl/hadoop:tpcds bash -c '/root/run_tpcds_with_scale'
+${CNTR_SYSTEM} run --env S3_ENDPOINT=172.17.0.1:8000 --env S3_ACCESS_KEY=b2345678901234567890 --env S3_SECRET_KEY=b234567890123456789012345678901234567890 --env BUCKET_NAME=hive --env SCALE=2 -it galsl/hadoop:tpcds bash -c '/root/run_tpcds_with_scale'
 }
 
 update_table_external_location()
