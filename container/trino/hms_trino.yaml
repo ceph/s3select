@@ -5,9 +5,9 @@ services:
     container_name: hms
     environment:
       # S3_ENDPOINT the CEPH/RGW end-point-url 
-      - S3_ENDPOINT=http://10.0.209.201:80
-      - S3_ACCESS_KEY=abc1
-      - S3_SECRET_KEY=abc1
+      - S3_ENDPOINT=192.168.122.1:8000
+      - S3_ACCESS_KEY=b2345678901234567890
+      - S3_SECRET_KEY=b234567890123456789012345678901234567890
     # the container starts with booting the hive metastore
     command: sh -c '. ~/.bashrc; start_hive_metastore'
     ports:
@@ -16,11 +16,11 @@ services:
       - trino_hms
 
   trino:
-    image: trinodb/trino
+    image: trinodb/trino:405
     container_name: trino
     volumes:
       # the trino directory contains the necessary configuration
-      - ./trino:/etc/trino
+      - ./trino:/etc/trino:Z
     ports:
       - 8080:8080
     networks:
