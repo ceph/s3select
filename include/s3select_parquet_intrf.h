@@ -1002,6 +1002,7 @@ class SerializedRowGroup : public RowGroupReader::Contents {
       throw ParquetException("Encrypted files cannot contain more than 32767 row groups");
     }
 
+#if ARROW_VERSION_MAJOR < 20
     // The column is encrypted
     std::shared_ptr<::parquet::Decryptor> meta_decryptor;
     std::shared_ptr<Decryptor> data_decryptor;
@@ -1035,6 +1036,25 @@ class SerializedRowGroup : public RowGroupReader::Contents {
                             false,
     #endif
                             properties_.memory_pool(), &ctx);
+#else
+    // Arrow 20+ version uses factory functions instead of shared_ptr for decryptors
+    std::function<std::unique_ptr<Decryptor>()> meta_decryptor_factory =
+        InternalFileDecryptor::GetColumnMetaDecryptorFactory(file_decryptor_.get(), crypto_metadata.get());
+    std::function<std::unique_ptr<Decryptor>()> data_decryptor_factory =
+        InternalFileDecryptor::GetColumnDataDecryptorFactory(file_decryptor_.get(), crypto_metadata.get());
+
+    const CryptoContext ctx {
+        col->has_dictionary_page(),
+        row_group_ordinal_,
+        static_cast<int16_t>(i),
+        meta_decryptor_factory,
+        data_decryptor_factory,
+    };
+
+    return PageReader::Open(stream, col->num_values(), col->compression(),
+                            false,
+                            properties_.memory_pool(), &ctx);
+#endif
   }
 
  private:
@@ -1071,7 +1091,9 @@ class SerializedFile : public ParquetFileReader::Contents {
   }
 
   void Close() override {
+#if ARROW_VERSION_MAJOR < 20
     if (file_decryptor_) file_decryptor_->WipeOutDecryptionKeys();
+#endif
   }
 
   std::shared_ptr<RowGroupReader> GetRowGroup(int i) override {
@@ -1249,9 +1271,17 @@ void SerializedFile::ParseMetaDataOfEncryptedFileWithEncryptedFooter(
   // Handle AAD prefix
   EncryptionAlgorithm algo = file_crypto_metadata->encryption_algorithm();
   std::string file_aad = HandleAadPrefix(file_decryption_properties, algo);
+#if ARROW_VERSION_MAJOR < 20
   file_decryptor_ = std::make_shared<::parquet::InternalFileDecryptor>(
       file_decryption_properties, file_aad, algo.algorithm,
       file_crypto_metadata->key_metadata(), properties_.memory_pool());
+#else
+  // Arrow 20+ takes a shared_ptr to FileDecryptionProperties
+  file_decryptor_ = std::make_shared<::parquet::InternalFileDecryptor>(
+      std::shared_ptr<FileDecryptionProperties>(file_decryption_properties),
+      file_aad, algo.algorithm,
+      file_crypto_metadata->key_metadata(), properties_.memory_pool());
+#endif
 
   int64_t metadata_offset = source_size_ - kFooterSize - footer_len + crypto_metadata_len;
   uint32_t metadata_len = footer_len - crypto_metadata_len;
@@ -1282,9 +1312,18 @@ void SerializedFile::ParseMetaDataOfEncryptedFileWithPlaintextFooter(
     EncryptionAlgorithm algo = file_metadata_->encryption_algorithm();
     // Handle AAD prefix
     std::string file_aad = HandleAadPrefix(file_decryption_properties, algo);
+#if ARROW_VERSION_MAJOR < 20
     file_decryptor_ = std::make_shared<::parquet::InternalFileDecryptor>(
         file_decryption_properties, file_aad, algo.algorithm,
         file_metadata_->footer_signing_key_metadata(), properties_.memory_pool());
+#else
+    // Arrow 20+ takes a shared_ptr to FileDecryptionProperties
+    file_decryptor_ = std::make_shared<::parquet::InternalFileDecryptor>(
+        std::shared_ptr<FileDecryptionProperties>(file_decryption_properties),
+        file_aad, algo.algorithm,
+        file_metadata_->footer_signing_key_metadata(), properties_.memory_pool());
+    // In Arrow 20+, no need to set file_decryptor in metadata
+#endif
     // set the InternalFileDecryptor in the metadata as well, as it's used
     // for signature verification and for ColumnChunkMetaData creation.
 #if GAL_set_file_decryptor_declare_private
