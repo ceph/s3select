@@ -2725,7 +2725,7 @@ public:
     m_skip_first_line(false),
     m_processed_bytes(0) {}
 
-  void set_csv_query(s3select* s3_query,csv_defintions csv)
+  void set_csv_query(s3select* s3_query,const csv_defintions& csv)
   {
     if(m_s3_select != nullptr) 
     {
