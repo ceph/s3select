@@ -1065,7 +1065,7 @@ class SerializedRowGroup : public RowGroupReader::Contents {
   FileMetaData* file_metadata_;
   std::unique_ptr<RowGroupMetaData> row_group_metadata_;
   ReaderProperties properties_;
-  int row_group_ordinal_;
+  int16_t row_group_ordinal_;
   std::shared_ptr<InternalFileDecryptor> file_decryptor_;
 };
 
